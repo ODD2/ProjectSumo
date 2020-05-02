@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 05/03/20 04:10:16 by Eclipse SUMO GUI Version 1.5.0
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="D:/Sumo/osm/osm.net.xml"/>
+        <route-files value="D:/Sumo/osm/osm.passenger.trips.xml"/>
+        <additional-files value="D:/Sumo/osm/osm.poly.xml,D:/Sumo/osm/test.add.xml"/>
+    </input>
+
+    <processing>
+        <ignore-route-errors value="true"/>
+    </processing>
+
+    <routing>
+        <device.rerouting.adaptation-steps value="180"/>
+    </routing>
+
+    <report>
+        <verbose value="true"/>
+        <duration-log.statistics value="true"/>
+        <no-step-log value="true"/>
+    </report>
+
+    <traci_server>
+        <remote-port value="65122"/>
+    </traci_server>
+
+    <gui_only>
+        <gui-settings-file value="D:/Sumo/osm/osm.view.xml"/>
+        <start value="true"/>
+    </gui_only>
+
+</configuration>
+-->
+
+<detector xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/det_e1_file.xsd">
+    <interval begin="0.00" end="413.00" id="0" nVehContrib="2" flow="17.43" occupancy="0.35" speed="7.78" harmonicMeanSpeed="7.74" length="5.00" nVehEntered="3"/>
+</detector>
