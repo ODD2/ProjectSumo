@@ -1,80 +1,53 @@
-
 import os
 import sys
 import traci
 import matlab.engine
 import math
 import numpy as np
-# Create Matlab Engine
-eng = matlab.engine.start_matlab()
-# Add Matlab File Search Locations
-eng.addpath(os.getcwd()+"\\matlab\\")
-eng.addpath(os.getcwd()+"\\matlab\\SelectCQI_bySNR\\")
+from net_model import BaseStationController, ALL_BASE_STATION
+from veh_rec import VehicleRecorder
+from enum import IntEnum
+from globs import *
 
 
-def GET_BS_CQI_Vector(BS_POSITIONS, UE_POSITION):
-    MACRO_BS_NUM = 0
-    N_BS = len(BS_POSITIONS)
-    CQI_Iter = np.zeros(N_BS, dtype=float)
-    SINR_Iter = np.zeros(N_BS, dtype=float)
+# Base Station Indicator Creator
+def CreateBaseStationIndicator(name, setting):
+    # Bs Info
+    bs_type = setting["type"]
+    x = setting["x"]
+    y = setting["y"]
+    # Create POI
+    traci.poi.add("poi_" + name, x, y, setting["color"], "net_bs",
+                  NetObjLayer.BS_POI, setting["img"], setting["width"],
+                  setting["height"])
 
-    for tx_BS_num in range(N_BS):
-        Intf_dist = []
-        Intf_pwr_dBm = []
-        Intf_h_BS = []
-        Intf_h_MS = []
-        # Intf_DS_Desired = []
+    # Create Polygon
+    coef = pow(3, 0.5) / 2
+    if bs_type == BaseStationType.UMI:
+        radius_layer = NetObjLayer.BS_RAD_UMI
+        radius_color = BS_UMI_RADIUS_COLOR
+        radius = BS_UMI_RADIUS
+    else:
+        radius_layer = NetObjLayer.BS_RAD_UMA
+        radius_color = BS_UMA_RADIUS_COLOR
+        radius = BS_UMA_RADIUS
 
-        # Confirm settings with 3GPP specs
-        h_BS = 25
-        h_MS = 0.8
-        if(tx_BS_num == MACRO_BS_NUM):
-            tx_p_dBm = 23
-            CP = 4.69
-            bandwidth = 180000
-        else:
-            tx_p_dBm = 10
-            CP = 2.34
-            bandwidth = 360000
-
-        UE_dist = pow((BS_POSITIONS[tx_BS_num][0]-UE_POSITION[0])**2 +
-                      (BS_POSITIONS[tx_BS_num][0]-UE_POSITION[0])**2, 0.5)
-
-        # up to 4 us
-        DS_Desired = np.random.normal(0, 4)
-
-        for intf_BS_num in range(N_BS):
-            if(intf_BS_num == tx_BS_num):
-                continue
-
-            if(intf_BS_num == MACRO_BS_NUM):
-                Intf_h_BS.append(25.0)
-                Intf_h_MS.append(0.8)
-                Intf_pwr_dBm.append(23)
-            else:
-                Intf_h_BS.append(10.0)
-                Intf_h_MS.append(0.8)
-                Intf_pwr_dBm.append(18)
-
-            # GHz
-            fc = 2.0
-
-            # Locations
-            Intf_dist.append((pow((BS_POSITIONS[intf_BS_num][0]-UE_POSITION[0])**2 +
-                                  (BS_POSITIONS[intf_BS_num][0]-UE_POSITION[0])**2, 0.5)))
-
-            (CQI_Iter[tx_BS_num], SINR_Iter[tx_BS_num]) = eng.SINR_Channel_Model_Multi_Var_BS(
-                float(UE_dist), float(h_BS), float(h_MS),
-                float(fc), float(tx_p_dBm), float(bandwidth),
-                matlab.double(Intf_h_BS),
-                matlab.double(Intf_h_MS),
-                matlab.double(Intf_dist),
-                matlab.double(Intf_pwr_dBm),
-                float(DS_Desired), float(CP), nargout=2)
-    return CQI_Iter
+    traci.polygon.add("poly_" + name + "_radius",
+                      [(x - radius * coef, y + radius / 2),
+                       (x - radius * coef, y - radius / 2), (x, y - radius),
+                       (x + radius * coef, y - radius / 2),
+                       (x + radius * coef, y + radius / 2), (x, y + radius)],
+                      radius_color, True, "net_bs_radius", radius_layer)
 
 
 if __name__ == "__main__":
+    # Create Matlab Engine
+    eng = matlab.engine.start_matlab()
+
+    # Add Matlab File Search Locations
+    eng.addpath(os.getcwd() + "\\matlab\\")
+    eng.addpath(os.getcwd() + "\\matlab\\SelectCQI_bySNR\\")
+
     # Setup Traci Environment
     if 'SUMO_HOME' in os.environ:
         tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
@@ -82,40 +55,54 @@ if __name__ == "__main__":
         sys.path.append(tools)
     else:
         sys.exit("please declare environment variable 'SUMO_HOME'")
+
     # Start Traci
     traci.start(["sumo-gui", "-c", "D:/Sumo/osm/osm.sumocfg", "--start"])
 
-    # Fetch Base Station 2D Locations In Advance
-    bs_positions = []
-    for bs_id in ["poi_1", "poi_2", "poi_3", "poi_4", "poi_5"]:
-        bs_positions.append(traci.poi.getPosition(bs_id))
+    # Create Base Station Icon and Radius in SUMO
+    for name, setting in BS_SETTINGS.items():
+        CreateBaseStationIndicator(name, setting)
+
+    # Submit all base stations to the Network Model
+    for name, setting in BS_SETTINGS.items():
+        ALL_BASE_STATION.append(
+            BaseStationController(name, (setting["x"], setting["y"]), setting["type"]))
+
+    # Vehicle Recorders
+    vehicle_recorders = {}
 
     # Start Simulation
     step = 0
     while step < 1000:
         traci.simulationStep()
-        if traci.inductionloop.getLastStepVehicleNumber("0") > 0:
-            iduloop_v1id = traci.inductionloop.getLastStepVehicleIDs("0")[0]
-            print("vehicle id:" + str(iduloop_v1id) +
-                  " (speed:"+str(traci.vehicle.getSpeed(iduloop_v1id))+")")
+        # if traci.inductionloop.getLastStepVehicleNumber("0") > 0:
+        #     iduloop_v1id = traci.inductionloop.getLastStepVehicleIDs("0")[0]
+        #     print("vehicle id:" + str(iduloop_v1id) + " (speed:" +
+        #           str(traci.vehicle.getSpeed(iduloop_v1id)) + ")")
+
+        # Loop Through All Vehicles
         for v_id in traci.vehicle.getIDList():
-            CQI_Vec = GET_BS_CQI_Vector(bs_positions,
-                                        traci.vehicle.getPosition(v_id))
-            lerp = max(CQI_Vec)/30
-            traci.vehicle.setColor(v_id, (255*(1-lerp), 255*lerp, 0, 255))
-        # for v_id in traci.vehicle.getIDList():
-        #     shortDistance = 1e10
-        #     for bs_position in bs_positions:
-        #         veh_position = traci.vehicle.getPosition(v_id)
-        #         delta_position = [veh_position[0] -
-        #                           bs_position[0], veh_position[1]-bs_position[1]]
-        #         distance = pow(pow(delta_position[0], 2) +
-        #                        pow(delta_position[1], 2), 0.5)
-        #         shortDistance = shortDistance if shortDistance < distance else distance
-        #     lerp = shortDistance/50
-        #     if(lerp > 1):
-        #         lerp = 1
-        #     traci.vehicle.setColor(v_id, (255*lerp, 255*(1-lerp), 0, 255))
+            # Newly Joined Vehicle: Create Vehicle Recorder For It
+            if not v_id in vehicle_recorders:
+                vehicle_recorders[v_id] = VehicleRecorder(v_id)
+            # Update Vehicle
+            vehicle_recorders[v_id].Update(eng)
+
+        # Loop Through All BaseStations
+        for base_station in ALL_BASE_STATION:
+            base_station.Update()
+
+        # Find None-Updating Vehicles as Ghost Vehicles
+        current_time = traci.simulation.getTime()
+        ghost_vehicles = []
+        for v_id, vr_obj in vehicle_recorders.items():
+            if vr_obj.update_time < current_time:
+                ghost_vehicles.append(v_id)
+
+        # Remove Ghost Vehicles
+        for v_id in ghost_vehicles:
+            vehicle_recorders[v_id].Clear()
+            vehicle_recorders.pop(v_id)
 
         step += 1
     # End Simulation
