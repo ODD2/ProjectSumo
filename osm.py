@@ -57,7 +57,7 @@ if __name__ == "__main__":
         sys.exit("please declare environment variable 'SUMO_HOME'")
 
     # Start Traci
-    traci.start(["sumo-gui", "-c", "D:/Sumo/osm/osm.sumocfg", "--start"])
+    traci.start(["sumo-gui", "-c", os.getcwd() +"\\osm.sumocfg", "--start"])
 
     # Create Base Station Icon and Radius in SUMO
     for name, setting in BS_SETTINGS.items():
