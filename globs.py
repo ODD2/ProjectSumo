@@ -28,8 +28,7 @@ BS_UMI_RADIUS = 20
 BS_SETTINGS = {
     "bs1": {
         "color": (0, 0, 0, 255),
-        "x": 440,
-        "y": 250,
+        "pos": (440, 250),
         "img": os.getcwd() + "/wifi.png",
         "width": 5,
         "height": 3.9,
@@ -37,8 +36,7 @@ BS_SETTINGS = {
     },
     "bs2": {
         "color": (0, 0, 0, 255),
-        "x": 220,
-        "y": 200,
+        "pos": (220, 200),
         "img": os.getcwd() + "/wifi.png",
         "width": 5,
         "height": 3.9,
@@ -46,8 +44,7 @@ BS_SETTINGS = {
     },
     "bs3": {
         "color": (0, 0, 0, 255),
-        "x": 363,
-        "y": 204,
+        "pos": (363, 204),
         "img": os.getcwd() + "/wifi.png",
         "width": 5,
         "height": 3.9,

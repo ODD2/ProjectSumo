@@ -4,7 +4,7 @@ import traci
 import matlab.engine
 import math
 import numpy as np
-from net_model import BaseStationController, ALL_BASE_STATION
+from net_model import BaseStationController, BASE_STATION_CONTROLLER
 from veh_rec import VehicleRecorder
 from enum import IntEnum
 from globs import *
@@ -14,8 +14,8 @@ from globs import *
 def CreateBaseStationIndicator(name, setting):
     # Bs Info
     bs_type = setting["type"]
-    x = setting["x"]
-    y = setting["y"]
+    x = setting["pos"][0]
+    y = setting["pos"][1]
     # Create POI
     traci.poi.add("poi_" + name, x, y, setting["color"], "net_bs",
                   NetObjLayer.BS_POI, setting["img"], setting["width"],
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         sys.exit("please declare environment variable 'SUMO_HOME'")
 
     # Start Traci
-    traci.start(["sumo-gui", "-c", os.getcwd() +"\\osm.sumocfg", "--start"])
+    traci.start(["sumo-gui", "-c", os.getcwd() + "\\osm.sumocfg", "--start"])
 
     # Create Base Station Icon and Radius in SUMO
     for name, setting in BS_SETTINGS.items():
@@ -65,8 +65,9 @@ if __name__ == "__main__":
 
     # Submit all base stations to the Network Model
     for name, setting in BS_SETTINGS.items():
-        ALL_BASE_STATION.append(
-            BaseStationController(name, (setting["x"], setting["y"]), setting["type"]))
+        BASE_STATION_CONTROLLER.append(BaseStationController(
+            name,
+            setting["pos"], setting["type"]))
 
     # Vehicle Recorders
     vehicle_recorders = {}
@@ -89,7 +90,7 @@ if __name__ == "__main__":
             vehicle_recorders[v_id].Update(eng)
 
         # Loop Through All BaseStations
-        for base_station in ALL_BASE_STATION:
+        for base_station in BASE_STATION_CONTROLLER:
             base_station.Update()
 
         # Find None-Updating Vehicles as Ghost Vehicles

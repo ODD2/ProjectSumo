@@ -7,7 +7,7 @@ from enum import IntEnum
 from globs import *
 from net_pack import NetworkTransmitRequest, NetworkTransmitResponse
 
-ALL_BASE_STATION = []
+BASE_STATION_CONTROLLER = []
 
 
 class BaseStationController:
@@ -64,14 +64,14 @@ class BaseStationController:
 
 # (matlab.engine,(double,double))
 def GET_ALL_BS_CQI_Vector(eng, UE_POSITION):
-    global ALL_BASE_STATION
+    global BASE_STATION_CONTROLLER
 
     MACRO_BS_NUM = 0
-    N_BS = len(ALL_BASE_STATION)
+    N_BS = len(BASE_STATION_CONTROLLER)
     CQI_Iter = np.zeros(N_BS, dtype=float)
     SINR_Iter = np.zeros(N_BS, dtype=float)
 
-    for tx_BS_num, tx_BS_info in enumerate(ALL_BASE_STATION):
+    for tx_BS_num, tx_BS_info in enumerate(BASE_STATION_CONTROLLER):
         Intf_dist = []
         Intf_pwr_dBm = []
         Intf_h_BS = []
@@ -79,16 +79,17 @@ def GET_ALL_BS_CQI_Vector(eng, UE_POSITION):
         # Intf_DS_Desired = []
 
         # Confirm settings with 3GPP specs
-        h_BS = 25
-        h_MS = 0.8
+        h_MS = 0.8  # height of vehicle
         if (tx_BS_num == MACRO_BS_NUM):
-            tx_p_dBm = 23
+            h_BS = 25  # height of antenna
             CP = 4.69
             bandwidth = 180000
+            tx_p_dBm = 23
         else:
-            tx_p_dBm = 10
+            h_BS = 10  # height of antenna
             CP = 2.34
             bandwidth = 360000
+            tx_p_dBm = 10
 
         UE_dist = pow((tx_BS_info.pos[0] - UE_POSITION[0])**2 +
                       (tx_BS_info.pos[1] - UE_POSITION[1])**2, 0.5)
@@ -96,7 +97,7 @@ def GET_ALL_BS_CQI_Vector(eng, UE_POSITION):
         # up to 4 us
         DS_Desired = np.random.normal(0, 4)
 
-        for intf_BS_num, intf_BS_info in enumerate(ALL_BASE_STATION):
+        for intf_BS_num, intf_BS_info in enumerate(BASE_STATION_CONTROLLER):
             if (intf_BS_num == tx_BS_num):
                 continue
 
@@ -137,71 +138,66 @@ def GET_ALL_BS_CQI_Vector(eng, UE_POSITION):
 
 # (matlab.engine, [BaseStationController], (double,double))
 def GET_BS_CQI_SINR_5G(eng, BS_INTEREST, UE_POSITION):
-    MACRO_BS = ALL_BASE_STATION[0]
-    N_BS = len(BS_INTEREST)
-    CQI_Iter = np.zeros(N_BS, dtype=float)
-    SINR_Iter = np.zeros(N_BS, dtype=float)
+    CQI_Iter = np.zeros(len(BS_INTEREST), dtype=float)
+    SINR_Iter = np.zeros(len(BS_INTEREST), dtype=float)
 
     for tx_BS_idx, tx_BS_obj in enumerate(BS_INTEREST):
         Intf_dist = []
         Intf_pwr_dBm = []
         Intf_h_BS = []
         Intf_h_MS = []
-        # Intf_DS_Desired = []
 
         # Confirm settings with 3GPP specs
-        h_BS = 25
-        h_MS = 0.8
-        if (tx_BS_obj == MACRO_BS):
-            tx_p_dBm = 23
+        if (tx_BS_obj.type == BaseStationType.UMA):
+            h_BS = 25  # height of antenna
+            tx_p_dBm = 23  # UMA transmission power
+            # bandwidth = 180000 # resource block bandwidth
+            bandwidth = 360000  # for current schenario, both UMA&UMI works in bandwidth 360000
             CP = 4.69
-            bandwidth = 180000
+            fc = 2.0  # GHz
         else:
-            tx_p_dBm = 10
+            h_BS = 10  # height of antenna
+            tx_p_dBm = 10  # UMI transmission power
+            bandwidth = 360000  # resource block bandwidth
             CP = 2.34
-            bandwidth = 360000
+            fc = 3.5  # GHz
+
+        h_MS = 0.8  # height of vehicle
 
         UE_dist = pow((tx_BS_obj.pos[0] - UE_POSITION[0])**2 +
-                      (tx_BS_obj.pos[1] - UE_POSITION[1])**2, 0.5)
+                      (tx_BS_obj.pos[1] - UE_POSITION[1])**2, 0.5)  # distance between vehicle and station
 
-        # up to 4 us
-        DS_Desired = np.random.normal(0, 4)
+        DS_Desired = np.random.normal(0, 4)  # up to 4 us
 
-        for intf_BS_obj in ALL_BASE_STATION:
+        for intf_BS_obj in BASE_STATION_CONTROLLER:
             if (intf_BS_obj == tx_BS_obj):
                 continue
 
-            if (intf_BS_obj == MACRO_BS):
-                Intf_h_BS.append(25.0)
-                Intf_h_MS.append(0.8)
-                Intf_pwr_dBm.append(23)
+            if (intf_BS_obj.type == BaseStationType.UMA):
+                Intf_h_BS.append(25.0)  # intf-station antenna height
+                Intf_pwr_dBm.append(23)  # intf-station transmission power
             else:
-                Intf_h_BS.append(10.0)
-                Intf_h_MS.append(0.8)
-                Intf_pwr_dBm.append(18)
+                Intf_h_BS.append(10.0)  # intf-station antenna height
+                Intf_pwr_dBm.append(18)  # intf-station transmission power
 
-            # GHz
-            fc = 2.0
+            Intf_h_MS.append(0.8)  # intf-vehicle height
+            Intf_dist.append((pow((intf_BS_obj.pos[0] - UE_POSITION[0])**2 +
+                                  (intf_BS_obj.pos[1] - UE_POSITION[1])**2, 0.5)))  # distance between vehicle and intf-station
 
-            # Locations
-            Intf_dist.append(
-                (pow((intf_BS_obj.pos[0] - UE_POSITION[0])**2 +
-                     (intf_BS_obj.pos[1] - UE_POSITION[1])**2, 0.5)))
+        (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx]) = eng.SINR_Channel_Model_5G(
+            float(UE_dist),
+            float(h_BS),
+            float(h_MS),
+            float(fc),
+            float(tx_p_dBm),
+            float(bandwidth),
+            matlab.double(Intf_h_BS),
+            matlab.double(Intf_h_MS),
+            matlab.double(Intf_dist),
+            matlab.double(Intf_pwr_dBm),
+            float(DS_Desired),
+            float(CP),
+            True if tx_BS_obj.type == BaseStationType.UMA else False,
+            nargout=2)
 
-            (CQI_Iter[tx_BS_idx],
-             SINR_Iter[tx_BS_idx]) = eng.SINR_Channel_Model_5G(
-                 float(UE_dist),
-                 float(h_BS),
-                 float(h_MS),
-                 float(fc),
-                 float(tx_p_dBm),
-                 float(bandwidth),
-                 matlab.double(Intf_h_BS),
-                 matlab.double(Intf_h_MS),
-                 matlab.double(Intf_dist),
-                 matlab.double(Intf_pwr_dBm),
-                 float(DS_Desired),
-                 float(CP),
-                 True if tx_BS_obj.type == BaseStationType.UMA else False,
-                 nargout=2)
     return CQI_Iter, SINR_Iter

@@ -1,10 +1,9 @@
 import traci
-import net_model as netm
 import numpy as np
 from queue import Queue
-from net_model import BaseStationType, BaseStationController
+from net_model import GET_BS_CQI_SINR_5G, BASE_STATION_CONTROLLER, BaseStationController
 from net_pack import NetworkTransmitResponse, NetworkTransmitRequest
-from globs import SociatyGroup, NetObjLayer
+from globs import SociatyGroup, NetObjLayer, BaseStationType
 
 
 class BriefControllerInfo():
@@ -62,7 +61,7 @@ class VehicleRecorder:
         vehicle_pos = traci.vehicle.getPosition(self.vid)
 
         # Find In-Range BaseStations
-        for bs_controller in netm.ALL_BASE_STATION:
+        for bs_controller in BASE_STATION_CONTROLLER:
             base_station_pos = bs_controller.pos
             distance = pow((vehicle_pos[0] - base_station_pos[0])**2 +
                            (vehicle_pos[1] - base_station_pos[1])**2, 0.5)
@@ -74,7 +73,7 @@ class VehicleRecorder:
 
         # UMA Base Station Selection
         if len(UMA_BS) > 0:
-            uma_cqi, uma_sinr = netm.GET_BS_CQI_SINR_5G(
+            uma_cqi, uma_sinr = GET_BS_CQI_SINR_5G(
                 eng,
                 UMA_BS,
                 vehicle_pos
@@ -89,7 +88,7 @@ class VehicleRecorder:
 
         # UMI Base Station Selection
         if len(UMI_BS) > 0:
-            umi_cqi, umi_sinr = netm.GET_BS_CQI_SINR_5G(
+            umi_cqi, umi_sinr = GET_BS_CQI_SINR_5G(
                 eng,
                 UMI_BS,
                 vehicle_pos
