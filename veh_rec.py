@@ -1,5 +1,6 @@
 import traci
 import numpy as np
+import random
 from queue import Queue
 from net_model import GET_BS_CQI_SINR_5G, BASE_STATION_CONTROLLER, BaseStationController
 from net_pack import NetworkTransmitResponse, NetworkTransmitRequest
@@ -103,8 +104,12 @@ class VehicleRecorder:
 
         # Create Critical Package
         if self.umi_info != None or self.uma_info != None:
-            self.CreatePackage(20, SociatyGroup.CRITICAL)
-            self.CreatePackage(20, SociatyGroup.GENERAL)
+            self.CreatePackage(
+                random.randrange(190, 1100, 1)*8,
+                SociatyGroup.CRITICAL)
+            self.CreatePackage(
+                random.randrange(190, 1100, 1)*8,
+                SociatyGroup.GENERAL)
 
         # Arrage Transmission Requests
         for combine in self.queue_pref:
@@ -115,6 +120,7 @@ class VehicleRecorder:
                     # print("No valid base station to transfer")
                     continue
                 msg = queue.queue[0]
+                msg.cqi = base_station_info.cqi
                 msg.sinr = base_station_info.sinr
                 base_station_info.controller.Request(msg)
 
@@ -133,21 +139,23 @@ class VehicleRecorder:
             return
 
         if response.status:
-            msg.bytes -= response.bytes
+            msg.bits -= response.bits
             # Message Fully Transmitted. Pop!
-            if(msg.bytes == 0):
+            if(msg.bits == 0):
                 queue.get()
 
         # Update Connection Status
         self.UpdateTransmissionStatus(response.responder, response.status)
 
-    # Central controller that manages package creation (NetworkTransmitRequest without sinr filled)
+    # Central controller that manages package creation (NetworkTransmitRequest without cqi&sinr filled)
+    # size in bits
     def CreatePackage(self, size, social_group):
         queue = self.queue_pref[social_group]["queue"]
         queue.put(NetworkTransmitRequest(
             str(self.package_counter),
             self,
             size,
+            0,
             0,
             social_group
         ))

@@ -3,7 +3,7 @@ import sys
 import matlab.engine
 import math
 import numpy as np
-from enum import IntEnum
+import traci
 from globs import *
 from net_pack import NetworkTransmitRequest, NetworkTransmitResponse
 
@@ -16,50 +16,77 @@ class BaseStationController:
         self.pos = pos
         self.radius = BS_UMI_RADIUS if bs_type == BaseStationType.UMI else BS_UMA_RADIUS
         self.type = bs_type
-        self.social_group_pending_request = [[]]*len(SociatyGroup)
-        self.valid_resource_blocks = 25
+        self.Reset()
 
     def Request(self, pack: NetworkTransmitRequest):
         self.social_group_pending_request[pack.social_group].append(pack)
 
-    def Update(self):
-        # CRITICAL transmit requests has higher priority
-        if len(self.social_group_pending_request[SociatyGroup.CRITICAL]) > 0:
-            # sort width sinr
-            requests = self.social_group_pending_request[SociatyGroup.CRITICAL]
-            requests.sort(reverse=True, key=(lambda x: x.sinr))
-            for request in requests:
-                if self.valid_resource_blocks == 0:  # no resource block to allocate
-                    # notify request owner
-                    request.owner.Response(NetworkTransmitResponse(
-                        False,
-                        self,
-                        request.name,
-                        0,
-                        request.social_group
-                    ))
-                else:
-                    # allocate resource block for transmit request
-                    trans_size = self.valid_resource_blocks if self.valid_resource_blocks < request.bytes else request.bytes
-                    self.valid_resource_blocks -= trans_size
-                    # notify request owner
-                    request.owner.Response(NetworkTransmitResponse(
-                        True,
-                        self,
-                        request.name,
-                        trans_size,
-                        request.social_group
-                    ))
+    def Update(self, eng):
+        for group in SociatyGroup:
+            # Check if there exists pending requests
+            if len(self.social_group_pending_request[group.value]) > 0:
+                # sort with cqi
+                requests = self.social_group_pending_request[group.value]
+                requests.sort(reverse=True, key=(lambda x: x.cqi))
+                # serve requests
+                for req in requests:
+                    if self.valid_resource_blocks == 0:  # no resource block to allocate
+                        # notify request owner
+                        req.owner.Response(NetworkTransmitResponse(
+                            False,
+                            self,
+                            req.name,
+                            0,
+                            req.social_group
+                        ))
+                    else:
+                        # allocate resource block for transmit request
 
-        # GENERAL transmit requests has lower priority
-        if len(self.social_group_pending_request[SociatyGroup.GENERAL]) > 0:
-            requests = self.social_group_pending_request[SociatyGroup.GENERAL]
+                        # get the cqi and sinr of tranmission
+                        # cqi, sinr = GET_BS_CQI_SINR_5G(
+                        #     eng,
+                        #     [self],
+                        #     traci.vehicle.getPosition(request.owner.vid)
+                        # )
+
+                        # get the maximum transmission size per resource-block according to cqi
+                        rb_trans_size = eng.GetThroughputPerRB(
+                            float(req.cqi),
+                            int(NET_RB_SLOT_SYMBOLS)
+                        )
+
+                        # available total transmission size
+                        valid_trans_size = rb_trans_size * self.valid_resource_blocks
+
+                        # get the actual transmission size
+                        trans_size = valid_trans_size if valid_trans_size < req.bits else req.bits
+
+                        # consume required resource block
+                        self.valid_resource_blocks -= math.ceil(
+                            trans_size/rb_trans_size
+                        )
+
+                        # notify request owner
+                        req.owner.Response(NetworkTransmitResponse(
+                            True,
+                            self,
+                            req.name,
+                            trans_size,
+                            req.social_group
+                        ))
         # Reset
         self.Reset()
 
     def Reset(self):
-        self.social_group_pending_request = [[]]*len(SociatyGroup)
-        self.valid_resource_blocks = BS_RESOURCE_BLOCK_TOTAL
+        self.social_group_pending_request = (
+            [[] for x in range(len(SociatyGroup))]
+        )
+        if self.type == BaseStationType.UMA:
+            self.valid_resource_blocks = BS_UMA_FULL_BANDWIDTH * 0.9 / BS_UMA_BANDWIDTH
+        elif self.type == BaseStationType.UMI:
+            self.valid_resource_blocks = BS_UMI_FULL_BANDWIDTH * 0.9 / BS_UMI_BANDWIDTH
+        else:
+            self.valid_resource_blocks = 0
 
 
 # (matlab.engine,(double,double))
@@ -149,18 +176,18 @@ def GET_BS_CQI_SINR_5G(eng, BS_INTEREST, UE_POSITION):
 
         # Confirm settings with 3GPP specs
         if (tx_BS_obj.type == BaseStationType.UMA):
-            h_BS = 25  # height of antenna
-            tx_p_dBm = 23  # UMA transmission power
-            # bandwidth = 180000 # resource block bandwidth
-            bandwidth = 360000  # for current schenario, both UMA&UMI works in bandwidth 360000
+            h_BS = BS_UMA_HEIGHT  # height of antenna
+            tx_p_dBm = BS_UMA_TRANS_PWR  # UMA transmission power
+            # for current schenario, both UMA&UMI works in bandwidth 360000
+            bandwidth = BS_UMA_BANDWIDTH
             CP = 4.69
-            fc = 2.0  # GHz
+            fc = BS_UMA_FREQ  # GHz
         else:
-            h_BS = 10  # height of antenna
-            tx_p_dBm = 10  # UMI transmission power
-            bandwidth = 360000  # resource block bandwidth
+            h_BS = BS_UMI_HEIGHT  # height of antenna
+            tx_p_dBm = BS_UMI_TRANS_PWR  # UMI transmission power
+            bandwidth = BS_UMI_BANDWIDTH  # resource block bandwidth
             CP = 2.34
-            fc = 3.5  # GHz
+            fc = BS_UMI_FREQ  # GHz
 
         h_MS = 0.8  # height of vehicle
 
@@ -174,11 +201,15 @@ def GET_BS_CQI_SINR_5G(eng, BS_INTEREST, UE_POSITION):
                 continue
 
             if (intf_BS_obj.type == BaseStationType.UMA):
-                Intf_h_BS.append(25.0)  # intf-station antenna height
-                Intf_pwr_dBm.append(23)  # intf-station transmission power
+                # intf-station antenna height
+                Intf_h_BS.append(BS_UMA_HEIGHT)
+                # intf-station transmission power
+                Intf_pwr_dBm.append(BS_UMA_TRANS_PWR)
             else:
-                Intf_h_BS.append(10.0)  # intf-station antenna height
-                Intf_pwr_dBm.append(18)  # intf-station transmission power
+                # intf-station antenna height
+                Intf_h_BS.append(BS_UMI_HEIGHT)
+                # intf-station transmission power
+                Intf_pwr_dBm.append(BS_UMI_TRANS_PWR)
 
             Intf_h_MS.append(0.8)  # intf-vehicle height
             Intf_dist.append((pow((intf_BS_obj.pos[0] - UE_POSITION[0])**2 +

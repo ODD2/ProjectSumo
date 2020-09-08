@@ -3,10 +3,11 @@ from globs import SociatyGroup
 
 
 class NetworkTransmitRequest:
-    def __init__(self, name: str, owner, size: int, sinr: float, social_group: SociatyGroup):
+    def __init__(self, name: str, owner, size: int, cqi: float, sinr: float, social_group: SociatyGroup):
         self.name = name
         self.owner = owner
-        self.bytes = size
+        self.bits = size
+        self.cqi = cqi
         self.sinr = sinr
         self.social_group = social_group
 
@@ -16,5 +17,5 @@ class NetworkTransmitResponse:
         self.status = status
         self.responder = responder
         self.name = name
-        self.bytes = size
+        self.bits = size
         self.social_group = social_group

@@ -91,7 +91,7 @@ if __name__ == "__main__":
 
         # Loop Through All BaseStations
         for base_station in BASE_STATION_CONTROLLER:
-            base_station.Update()
+            base_station.Update(eng)
 
         # Find None-Updating Vehicles as Ghost Vehicles
         current_time = traci.simulation.getTime()
