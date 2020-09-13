@@ -2,7 +2,7 @@ import traci
 import numpy as np
 import random
 from queue import Queue
-from net_model import GET_BS_CQI_SINR_5G, BASE_STATION_CONTROLLER, BaseStationController
+from net_model import GET_BS_CQI_SINR_5G, BASE_STATION_CONTROLLER, BaseStationController, CandidateBaseStationInfo
 from net_pack import NetworkTransmitResponse, NetworkTransmitRequest
 from globs import SociatyGroup, NetObjLayer, BaseStationType
 
@@ -24,7 +24,7 @@ class VehicleRecorder:
         self.queue_pref[SociatyGroup.GENERAL] = {
             "queue": Queue(0),
             "bs_pref": (
-                lambda: self.umi_info if self.umi_info != None else self.uma_info
+                lambda: self.uma_info if self.uma_info != None else self.umi_info
             )
         }
         self.queue_pref[SociatyGroup.CRITICAL] = {
@@ -76,7 +76,8 @@ class VehicleRecorder:
         if len(UMA_BS) > 0:
             uma_cqi, uma_sinr = GET_BS_CQI_SINR_5G(
                 eng,
-                UMA_BS,
+                [CandidateBaseStationInfo(base_station, SociatyGroup.GENERAL)
+                 for base_station in UMA_BS],
                 vehicle_pos
             )
             # Select the best uma controller according to cqi
@@ -91,7 +92,8 @@ class VehicleRecorder:
         if len(UMI_BS) > 0:
             umi_cqi, umi_sinr = GET_BS_CQI_SINR_5G(
                 eng,
-                UMI_BS,
+                [CandidateBaseStationInfo(base_station, SociatyGroup.GENERAL)
+                 for base_station in UMI_BS],
                 vehicle_pos
             )
             # Select the best umi controller according to cqi
@@ -117,7 +119,10 @@ class VehicleRecorder:
             if queue.qsize() > 0:
                 base_station_info = combine["bs_pref"]()
                 if base_station_info == None:
-                    # print("No valid base station to transfer")
+                    print("[{}]:[{}]->No valid base station to transfer.".format(
+                        self.vid,
+                        str(traci.simulation.getCurrentTime())
+                    ))
                     continue
                 msg = queue.queue[0]
                 msg.cqi = base_station_info.cqi
