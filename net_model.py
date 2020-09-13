@@ -30,6 +30,8 @@ class BaseStationController:
                 requests.sort(reverse=True, key=(lambda x: x.cqi))
                 # required resource block bandwidth for social group msg
                 req_bandwidth_per_rb = self.RequiredBandwidth(group)
+                # required timeslot for using this bandwidth
+                req_timeslot = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
                 # serve requests
                 for req in requests:
                     if self.valid_bandwidth < req_bandwidth_per_rb:
@@ -73,7 +75,7 @@ class BaseStationController:
                         self.valid_bandwidth -= total_required_bandwidth
 
                         # if resource block bandwidth requires two timeslots
-                        if(NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb] == 2):
+                        if(req_timeslot == 2):
                             # consume required bandwidth for the next timeslot
                             self.valid_bandwidth_next_ts -= total_required_bandwidth
 
@@ -83,7 +85,8 @@ class BaseStationController:
                             self,
                             req.name,
                             trans_size,
-                            req.social_group
+                            req.social_group,
+                            req_timeslot
                         ))
         # Reset
         self.Reset()

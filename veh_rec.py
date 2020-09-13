@@ -14,6 +14,15 @@ class BriefControllerInfo():
         self.cqi = cqi
 
 
+class RequestTransmitting:
+    def __init__(self, base_station, name: str,  size: int,  social_group: SociatyGroup, timeslot=0):
+        self.base_station = base_station
+        self.name = name
+        self.bits = size
+        self.social_group = social_group
+        self.timeslot = timeslot
+
+
 class VehicleRecorder:
     def __init__(self, vid):
         # Vehicle ID
@@ -24,30 +33,34 @@ class VehicleRecorder:
         self.queue_pref[SociatyGroup.GENERAL] = {
             "queue": Queue(0),
             "bs_pref": (
-                lambda: self.uma_info if self.uma_info != None else self.umi_info
+                lambda: self.connected_uma_info if self.connected_uma_info != None else self.connected_umi_info
             )
         }
         self.queue_pref[SociatyGroup.CRITICAL] = {
             "queue": Queue(0),
             "bs_pref": (
-                lambda: self.umi_info if self.umi_info != None else self.uma_info
+                lambda: self.connected_umi_info if self.connected_umi_info != None else self.connected_uma_info
             )
         }
 
         # Package counter
         self.package_counter = 0
         # Controllers infos
-        self.uma_info = None
-        self.umi_info = None
+        self.connected_uma_info = None
+        self.connected_umi_info = None
         # The last time when this vehicle recorder updates
         self.update_time = 0
+
+        # Request transmitting list
+        self.transmitting = []
+
         # Connection line settings
         self.connection_line_setting = {
             self.vid + "_umi_con": {
-                "info": (lambda: self.umi_info),
+                "info": (lambda: self.connected_umi_info),
             },
             self.vid + "_uma_con": {
-                "info": (lambda: self.uma_info),
+                "info": (lambda: self.connected_uma_info),
             }
         }
         # The connetion lines currently drawn in SUMO
@@ -57,8 +70,8 @@ class VehicleRecorder:
     def Update(self, eng):
         UMI_BS = []
         UMA_BS = []
-        self.umi_info = None
-        self.uma_info = None
+        self.connected_umi_info = None
+        self.connected_uma_info = None
         vehicle_pos = traci.vehicle.getPosition(self.vid)
 
         # Find In-Range BaseStations
@@ -82,7 +95,7 @@ class VehicleRecorder:
             )
             # Select the best uma controller according to cqi
             index = np.argmax(uma_cqi)
-            self.uma_info = BriefControllerInfo(
+            self.connected_uma_info = BriefControllerInfo(
                 UMA_BS[index],
                 uma_sinr[index],
                 uma_cqi[index]
@@ -98,14 +111,14 @@ class VehicleRecorder:
             )
             # Select the best umi controller according to cqi
             index = np.argmax(umi_cqi)
-            self.umi_info = BriefControllerInfo(
+            self.connected_umi_info = BriefControllerInfo(
                 UMI_BS[index],
                 umi_sinr[index],
                 umi_cqi[index]
             )
 
         # Create Critical Package
-        if self.umi_info != None or self.uma_info != None:
+        if self.connected_umi_info != None or self.connected_uma_info != None:
             self.CreatePackage(
                 random.randrange(190, 1100, 1)*8,
                 SociatyGroup.CRITICAL)
@@ -119,7 +132,7 @@ class VehicleRecorder:
             if queue.qsize() > 0:
                 base_station_info = combine["bs_pref"]()
                 if base_station_info == None:
-                    print("[{}]:[{}]->No valid base station to transfer.".format(
+                    print("[{}]:[{}]->No valid base station to transmit.".format(
                         self.vid,
                         str(traci.simulation.getCurrentTime())
                     ))
@@ -131,6 +144,16 @@ class VehicleRecorder:
 
         # Update Connection Line
         self.UpdateConnectionLines()
+
+        # Update Transmitting Requests
+        transmitting = []
+        for index, request in enumerate(self.transmitting):
+            request.timeslot -= 1
+            # Update Connection State
+            self.UpdateTransmissionStatus(request.base_station, True)
+            if request.timeslot > 0:
+                transmitting.append(request)
+        self.transmitting = transmitting
 
         # Record
         self.update_time = traci.simulation.getTime()
@@ -145,12 +168,17 @@ class VehicleRecorder:
 
         if response.status:
             msg.bits -= response.bits
-            # Message Fully Transmitted. Pop!
+            # Add Request to transferring
+            self.transmitting.append(RequestTransmitting(
+                response.responder, response.name,
+                response.bits, response.social_group,
+                response.timeslot))
+            # Message Fully Requested. Pop!
             if(msg.bits == 0):
                 queue.get()
 
         # Update Connection Status
-        self.UpdateTransmissionStatus(response.responder, response.status)
+        # self.UpdateTransmissionStatus(response.responder, response.status)
 
     # Central controller that manages package creation (NetworkTransmitRequest without cqi&sinr filled)
     # size in bits
@@ -217,7 +245,7 @@ class VehicleRecorder:
                 break
 
         if not updated:
-            print("UpdateTransmissionStatus: Error!")
+            # print("UpdateTransmissionStatus: Error!")
 
     def Clear(self):
         # Clear Lines
