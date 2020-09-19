@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 09/14/20 03:02:07 by Eclipse SUMO GUI Version 1.5.0
+<!-- generated on 09/19/20 20:22:35 by Eclipse SUMO GUI Version 1.5.0
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
 
     <input>
@@ -8,6 +8,18 @@
         <route-files value="D:\Sumo\osm\osm.passenger.trips.xml"/>
         <additional-files value="D:\Sumo\osm\osm.poly.xml,D:\Sumo\osm\test.add.xml"/>
     </input>
+
+    <output>
+        <precision value="3"/>
+        <netstate-dump.precision value="3"/>
+        <emission-output.precision value="3"/>
+        <battery-output.precision value="3"/>
+        <elechybrid-output.precision value="3"/>
+    </output>
+
+    <time>
+        <step-length value="0.001"/>
+    </time>
 
     <processing>
         <ignore-route-errors value="true"/>
@@ -24,18 +36,13 @@
     </report>
 
     <traci_server>
-        <remote-port value="57945"/>
+        <remote-port value="59252"/>
     </traci_server>
 
     <gui_only>
         <gui-settings-file value="D:\Sumo\osm\osm.view.xml"/>
         <start value="true"/>
+        <tracker-interval value="0.001"/>
     </gui_only>
 
 </configuration>
--->
-
-<detector xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/det_e1_file.xsd">
-    <interval begin="0.00" end="900.00" id="0" nVehContrib="4" flow="16.00" occupancy="0.28" speed="8.09" harmonicMeanSpeed="7.99" length="5.00" nVehEntered="4"/>
-    <interval begin="900.00" end="1000.00" id="0" nVehContrib="0" flow="0.00" occupancy="0.00" speed="-1.00" harmonicMeanSpeed="-1.00" length="-1.00" nVehEntered="0"/>
-</detector>

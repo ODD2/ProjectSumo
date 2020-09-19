@@ -244,7 +244,7 @@ class VehicleRecorder:
                         traci.polygon.setColor(lineid, (255, 0, 0, 255))
                 break
 
-        if not updated:
+        # if not updated:
             # print("UpdateTransmissionStatus: Error!")
 
     def Clear(self):

@@ -57,7 +57,12 @@ if __name__ == "__main__":
         sys.exit("please declare environment variable 'SUMO_HOME'")
 
     # Start Traci
-    traci.start(["sumo-gui", "-c", os.getcwd() + "\\osm.sumocfg", "--start"])
+    traci.start(["sumo-gui",
+                 "-c",
+                 os.getcwd() + "\\osm.sumocfg",
+                 "--start",
+                 "--step-length", "0.001",
+                 ])
 
     # Create Base Station Icon and Radius in SUMO
     for name, setting in BS_SETTINGS.items():
@@ -74,7 +79,7 @@ if __name__ == "__main__":
 
     # Start Simulation
     step = 0
-    while step < 1000:
+    while step < 1000000:
         traci.simulationStep()
         # if traci.inductionloop.getLastStepVehicleNumber("0") > 0:
         #     iduloop_v1id = traci.inductionloop.getLastStepVehicleIDs("0")[0]
