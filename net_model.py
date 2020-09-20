@@ -18,11 +18,11 @@ class BaseStationController:
         self.type = bs_type
         self.Reset()
 
-    def Request(self, pack: NetworkTransmitRequest):
-        self.social_group_pending_request[pack.social_group].append(pack)
+    def Upload(self, req: NetworkTransmitRequest):
+        self.social_group_pending_request[req.package.social_group].append(req)
 
     def Update(self, eng):
-        for group in SociatyGroup:
+        for group in SocialGroup:
             # Check if there exists pending requests
             if len(self.social_group_pending_request[group.value]) > 0:
                 # sort with cqi
@@ -31,20 +31,22 @@ class BaseStationController:
                 # required resource block bandwidth for social group msg
                 req_bandwidth_per_rb = self.RequiredBandwidth(group)
                 # required timeslot for using this bandwidth
-                req_timeslot = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
+                req_time_slot = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
                 # serve requests
                 for req in requests:
                     if self.valid_bandwidth < req_bandwidth_per_rb:
                         # no resource block to allocate
 
                         # notify request owner
-                        req.owner.Response(NetworkTransmitResponse(
-                            False,
-                            self,
-                            req.name,
-                            0,
-                            req.social_group
-                        ))
+                        req.package.owner.UploadRequestResponse(
+                            NetworkTransmitResponse(
+                                False,
+                                self,
+                                req.package.name,
+                                0,
+                                group,
+                            )
+                        )
                     else:
                         # allocate resource block for transmit request
 
@@ -67,7 +69,7 @@ class BaseStationController:
                         valid_trans_size = rb_trans_size * valid_resource_blocks
 
                         # get the actual transmission size
-                        trans_size = valid_trans_size if valid_trans_size < req.bits else req.bits
+                        trans_size = valid_trans_size if valid_trans_size < req.package.bits else req.package.bits
 
                         total_required_bandwidth = (req_bandwidth_per_rb *
                                                     math.ceil(trans_size/rb_trans_size))
@@ -75,29 +77,37 @@ class BaseStationController:
                         self.valid_bandwidth -= total_required_bandwidth
 
                         # if resource block bandwidth requires two timeslots
-                        if(req_timeslot == 2):
+                        if(req_time_slot == 2):
                             # consume required bandwidth for the next timeslot
                             self.valid_bandwidth_next_ts -= total_required_bandwidth
 
                         # notify request owner
-                        req.owner.Response(NetworkTransmitResponse(
-                            True,
-                            self,
-                            req.name,
-                            trans_size,
-                            req.social_group,
-                            req_timeslot
-                        ))
+                        req.package.owner.UploadRequestResponse(
+                            NetworkTransmitResponse(
+                                True,
+                                self,
+                                req.package.name,
+                                trans_size,
+                                group,
+                                req_time_slot
+                            )
+                        )
         # Reset
         self.Reset()
 
     def Reset(self):
         self.social_group_pending_request = (
-            [[] for x in range(len(SociatyGroup))]
+            [[] for x in range(len(SocialGroup))]
         )
         # valid bandwidth for next timeslot (0.5ms per timeslot)
         self.valid_bandwidth_next_ts = BS_ALL_BANDWIDTH*0.9
         self.valid_bandwidth = self.valid_bandwidth_next_ts
+
+    def VehicleSubscribe(self, vid):
+        a = 0
+
+    def VehicleUnsubscribe(self, vid):
+        a = 0
 
     def RequiredBandwidth(self, social_group):
         if(self.type == BaseStationType.UMA):
@@ -134,7 +144,7 @@ def GET_BS_CQI_SINR_5G(eng, BS_INTEREST_INFO, UE_POSITION):
             # resource block bandwidth
             bandwidth = BS_UMA_RB_BANDWIDTH
             # cyclic prefix
-            CP = 4.69
+            CP = BS_UMA_CP
             # GHz
             fc = BS_UMA_FREQ
         else:

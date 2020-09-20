@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 09/19/20 20:22:35 by Eclipse SUMO GUI Version 1.5.0
+<!-- generated on 09/20/20 15:45:00 by Eclipse SUMO GUI Version 1.7.0
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
 
     <input>
@@ -9,16 +9,8 @@
         <additional-files value="D:\Sumo\osm\osm.poly.xml,D:\Sumo\osm\test.add.xml"/>
     </input>
 
-    <output>
-        <precision value="3"/>
-        <netstate-dump.precision value="3"/>
-        <emission-output.precision value="3"/>
-        <battery-output.precision value="3"/>
-        <elechybrid-output.precision value="3"/>
-    </output>
-
     <time>
-        <step-length value="0.001"/>
+        <step-length value="0.1"/>
     </time>
 
     <processing>
@@ -36,13 +28,13 @@
     </report>
 
     <traci_server>
-        <remote-port value="59252"/>
+        <remote-port value="52884"/>
     </traci_server>
 
     <gui_only>
         <gui-settings-file value="D:\Sumo\osm\osm.view.xml"/>
         <start value="true"/>
-        <tracker-interval value="0.001"/>
+        <tracker-interval value="0.1"/>
     </gui_only>
 
 </configuration>

@@ -40,7 +40,7 @@ def CreateBaseStationIndicator(name, setting):
                       radius_color, True, "net_bs_radius", radius_layer)
 
 
-if __name__ == "__main__":
+def main():
     # Create Matlab Engine
     eng = matlab.engine.start_matlab()
 
@@ -56,12 +56,18 @@ if __name__ == "__main__":
     else:
         sys.exit("please declare environment variable 'SUMO_HOME'")
 
+    # Check Basic Requirements
+    if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_TIMESLOT < 0:
+        return
+    if SIM_SECONDS_PER_STEP/NET_SECONDS_PER_TIMESLOT % 1 != 0:
+        return
+
     # Start Traci
     traci.start(["sumo-gui",
                  "-c",
                  os.getcwd() + "\\osm.sumocfg",
                  "--start",
-                 "--step-length", "0.001",
+                 "--step-length", str(SIM_SECONDS_PER_STEP),
                  ])
 
     # Create Base Station Icon and Radius in SUMO
@@ -77,6 +83,9 @@ if __name__ == "__main__":
     # Vehicle Recorders
     vehicle_recorders = {}
 
+    # Frequently used constants
+    TIMESLOTS_PER_STEP = int(SIM_SECONDS_PER_STEP/NET_SECONDS_PER_TIMESLOT)
+
     # Start Simulation
     step = 0
     while step < 1000000:
@@ -86,23 +95,27 @@ if __name__ == "__main__":
         #     print("vehicle id:" + str(iduloop_v1id) + " (speed:" +
         #           str(traci.vehicle.getSpeed(iduloop_v1id)) + ")")
 
+        traci_vids = traci.vehicle.getIDList()
         # Loop Through All Vehicles
-        for v_id in traci.vehicle.getIDList():
+        for v_id in traci_vids:
             # Newly Joined Vehicle: Create Vehicle Recorder For It
             if not v_id in vehicle_recorders:
                 vehicle_recorders[v_id] = VehicleRecorder(v_id)
-            # Update Vehicle
-            vehicle_recorders[v_id].Update(eng)
 
-        # Loop Through All BaseStations
-        for base_station in BASE_STATION_CONTROLLER:
-            base_station.Update(eng)
+        for i in range(TIMESLOTS_PER_STEP):
+            # Update Vehicles
+            for v_id in traci_vids:
+                vehicle_recorders[v_id].Update(eng)
+
+            # Update all BaseStations
+            for base_station in BASE_STATION_CONTROLLER:
+                base_station.Update(eng)
 
         # Find None-Updating Vehicles as Ghost Vehicles
         current_time = traci.simulation.getTime()
         ghost_vehicles = []
         for v_id, vr_obj in vehicle_recorders.items():
-            if vr_obj.update_time < current_time:
+            if vr_obj.sync_time < current_time:
                 ghost_vehicles.append(v_id)
 
         # Remove Ghost Vehicles
@@ -113,3 +126,7 @@ if __name__ == "__main__":
         step += 1
     # End Simulation
     traci.close()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,22 +1,35 @@
 
-from globs import SociatyGroup
+from globs import SocialGroup
 
 
-class NetworkTransmitRequest:
-    def __init__(self, name: str, owner, size: int, cqi: float, sinr: float, social_group: SociatyGroup):
+class NetworkPackage:
+    def __init__(self, name: str, owner, size: int, social_group: SocialGroup, at: float):
         self.name = name
         self.owner = owner
         self.bits = size
+        self.social_group = social_group
+        self.at = at
+
+
+class NetworkTransmitRequest:
+    def __init__(self, package: NetworkPackage,  cqi: float, sinr: float):
+        self.package = package
         self.cqi = cqi
         self.sinr = sinr
-        self.social_group = social_group
 
 
 class NetworkTransmitResponse:
-    def __init__(self, status: bool, responder, name: str,  size: int,  social_group: SociatyGroup, timeslot=0):
+    def __init__(self, status: bool, sender, name: str,  size: int, social_group: SocialGroup, time_slots=0):
         self.status = status
-        self.responder = responder
+        self.sender = sender
         self.name = name
         self.bits = size
         self.social_group = social_group
-        self.timeslot = timeslot
+        self.req_time_slots = time_slots
+
+
+class PackageProcessing:
+    def __init__(self, package: NetworkPackage, opponent, time_slots: float):
+        self.package = package
+        self.opponent = opponent
+        self.req_time_slots = time_slots

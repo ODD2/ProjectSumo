@@ -1,257 +1,355 @@
 import traci
 import numpy as np
-import random
+from enum import IntEnum
+from numpy import random
 from queue import Queue
 from net_model import GET_BS_CQI_SINR_5G, BASE_STATION_CONTROLLER, BaseStationController, CandidateBaseStationInfo
-from net_pack import NetworkTransmitResponse, NetworkTransmitRequest
-from globs import SociatyGroup, NetObjLayer, BaseStationType
+from net_pack import NetworkTransmitResponse, NetworkTransmitRequest, NetworkPackage, PackageProcessing
+from globs import SocialGroup, NetObjLayer, BaseStationType, NET_SG_RND_REQ_SIZE, PackageProcessType
 
 
-class BriefControllerInfo():
-    def __init__(self, controller: BaseStationController, sinr: float, cqi: float):
-        self.controller = controller
-        self.sinr = sinr
+class BriefBaseStationInfo:
+    def __init__(self, ctrlr: BaseStationController, cqi: float, sinr: float,):
+        self.ctrlr = ctrlr
         self.cqi = cqi
+        self.sinr = sinr
 
 
-class RequestTransmitting:
-    def __init__(self, base_station, name: str,  size: int,  social_group: SociatyGroup, timeslot=0):
-        self.base_station = base_station
-        self.name = name
-        self.bits = size
-        self.social_group = social_group
-        self.timeslot = timeslot
+class ConnectionState(IntEnum):
+    Unknown = 0
+    Connect = 1,
+    Deny = 2,
+    Transmit = 3,
+    Success = 4
+
+
+class SharedConnection:
+    def __init__(self, rec):
+        self.share = 1
+        self.rec = rec
+
+
+class ConnectionRecorder:
+    def __init__(self, s1, s2):
+        self.s1 = s1
+        self.s2 = s2
+        self.state = ConnectionState.Connect
+        self.name = "con_{}_{}".format(s1.name, s2.name)
+        # Create line
+        traci.polygon.add(
+            self.name,
+            [(0, 0), (0, 0)],
+            (0, 0, 0, 255),
+            False,
+            "Line",
+            NetObjLayer.CON_LINE, 0.1
+        )
+
+    def Update(self):
+        traci.polygon.setShape(
+            self.name,
+            [self.s1.pos, self.s2.pos]
+        )
+
+    def ChangeState(self, state: ConnectionState, force=False):
+        if(not force and self.state > state):
+            return
+
+        self.state = state
+
+        if(state == ConnectionState.Transmit):
+            traci.polygon.setColor(self.name, (255, 165, 0, 255))
+        elif(state == ConnectionState.Success):
+            traci.polygon.setColor(self.name, (0, 255, 0, 255))
+        else:
+            traci.polygon.setColor(self.name, (0, 0, 0, 255))
+
+    def Clean(self):
+        traci.polygon.remove(self.name)
+
+
+class NetworkStatusMonitor:
+    def __init__(self):
+        self.total_recv_package = 0
+        self.total_send_package = 0
+        self.step_recv_package = 0
+        self.step_send_package = 0
 
 
 class VehicleRecorder:
-    def __init__(self, vid):
+    def __init__(self, name):
         # Vehicle ID
-        self.vid = vid
-        # Network package queue settings with social grouping
-        self.queue_pref = [None] * len(SociatyGroup)
-        # Queue & Base station preferences
-        self.queue_pref[SociatyGroup.GENERAL] = {
-            "queue": Queue(0),
-            "bs_pref": (
-                lambda: self.connected_uma_info if self.connected_uma_info != None else self.connected_umi_info
-            )
-        }
-        self.queue_pref[SociatyGroup.CRITICAL] = {
-            "queue": Queue(0),
-            "bs_pref": (
-                lambda: self.connected_umi_info if self.connected_umi_info != None else self.connected_uma_info
-            )
-        }
+        self.name = name
 
-        # Package counter
-        self.package_counter = 0
-        # Controllers infos
-        self.connected_uma_info = None
-        self.connected_umi_info = None
+        # Vehicle Position
+        self.pos = (0, 0)
+
+        # Best connectivity base station for each social group, categorized by base station type
+        self.sbscrb_social_bs = [
+            [None for j in range(len(SocialGroup))] for i in range(len(BaseStationType))
+        ]
+
+        # The Social Group Upload Request Queue
+        self.social_up_queue = [Queue(0) for i in SocialGroup]
+
+        # The last time when this vehicle recorder generates upload request
+        self.up_req_gen_time = 0
+
+        # Package counter for upload req
+        self.up_req_counter = 0
+
         # The last time when this vehicle recorder updates
-        self.update_time = 0
+        self.sync_time = 0
 
-        # Request transmitting list
-        self.transmitting = []
+        # Upload/Download packages that're currently transmitting
+        self.pkg_in_proc = [[] for i in PackageProcessType]
 
-        # Connection line settings
-        self.connection_line_setting = {
-            self.vid + "_umi_con": {
-                "info": (lambda: self.connected_umi_info),
-            },
-            self.vid + "_uma_con": {
-                "info": (lambda: self.connected_uma_info),
-            }
-        }
+        # The network status monitor
+        self.net_status = NetworkStatusMonitor()
+
         # The connetion lines currently drawn in SUMO
-        self.connection_lines = []
+        self.con_state = {}
 
     # General routine called by main
     def Update(self, eng):
-        UMI_BS = []
-        UMA_BS = []
-        self.connected_umi_info = None
-        self.connected_uma_info = None
-        vehicle_pos = traci.vehicle.getPosition(self.vid)
+        self.UpdateVehicleInfo()
+        self.CheckSubscribeBSValidity()
+        self.SelectBestSocialBS(eng)
+        self.LinkStateUpdate()
+        self.GenerateUploadRequest()
+        self.ServeUploadRequest()
+        self.ServePkgs()
+
+    # Update the vehicle's basic infos
+    def UpdateVehicleInfo(self):
+        self.pos = traci.vehicle.getPosition(self.name)
+        self.sync_time = traci.simulation.getTime()
+
+    # Check if the latest subscribes base stations still has the validity to provide service
+    def CheckSubscribeBSValidity(self):
+        invalid_bs = []
+        for bs_type in BaseStationType:
+            for social_group in SocialGroup:
+                if(self.sbscrb_social_bs[bs_type][social_group] == None):
+                    continue
+                else:
+                    base_station_ctrlr = self.sbscrb_social_bs[bs_type][social_group].ctrlr
+                    if(base_station_ctrlr not in invalid_bs):
+                        distance = pow((self.pos[0] - base_station_ctrlr.pos[0])**2 +
+                                       (self.pos[1] - base_station_ctrlr.pos[1])**2, 0.5)
+                        if(distance > base_station_ctrlr.radius):
+                            self.UnsubscribeBS(bs_type, social_group)
+                            invalid_bs.append(base_station_ctrlr)
+                    else:
+                        self.UnsubscribeBS(bs_type, social_group)
+
+    # Find and subscribe the base station that provides the best connectivity according to it's social group,
+    # also categorized by it's base station type.
+    def SelectBestSocialBS(self, eng):
+        bs_in_range = [[] for i in BaseStationType]
 
         # Find In-Range BaseStations
-        for bs_controller in BASE_STATION_CONTROLLER:
-            base_station_pos = bs_controller.pos
-            distance = pow((vehicle_pos[0] - base_station_pos[0])**2 +
-                           (vehicle_pos[1] - base_station_pos[1])**2, 0.5)
-            if distance < bs_controller.radius:
-                if bs_controller.type == BaseStationType.UMA:
-                    UMA_BS.append(bs_controller)
-                elif bs_controller.type == BaseStationType.UMI:
-                    UMI_BS.append(bs_controller)
+        for bs_ctrlr in BASE_STATION_CONTROLLER:
+            distance = pow((self.pos[0] - bs_ctrlr.pos[0])**2 +
+                           (self.pos[1] - bs_ctrlr.pos[1])**2, 0.5)
+            if distance < bs_ctrlr.radius:
+                bs_in_range[bs_ctrlr.type].append(bs_ctrlr)
 
-        # UMA Base Station Selection
-        if len(UMA_BS) > 0:
-            uma_cqi, uma_sinr = GET_BS_CQI_SINR_5G(
-                eng,
-                [CandidateBaseStationInfo(base_station, SociatyGroup.GENERAL)
-                 for base_station in UMA_BS],
-                vehicle_pos
+        # Find best connectivity base station for social group, filter by base station type
+        for bs_type in BaseStationType:
+            if(len(bs_in_range[bs_type]) == 0):
+                continue
+            for social_type in SocialGroup:
+                # Get cqi & sinr for social type
+                _cqi, _sinr = GET_BS_CQI_SINR_5G(
+                    eng,
+                    [
+                        CandidateBaseStationInfo(bs_ctrlr, social_type)
+                        for bs_ctrlr in bs_in_range[bs_type]
+                    ],
+                    self.pos
+                )
+                bs_idx = np.argmax(_cqi)
+                self.SubscribeBS(
+                    bs_type,
+                    social_type,
+                    BriefBaseStationInfo(
+                        bs_in_range[bs_type][bs_idx],
+                        _cqi[bs_idx],
+                        _sinr[bs_idx]
+                    )
+                )
+
+    # Subscribe base station
+    def SubscribeBS(self, bs_type, social_group, bs_info: BriefBaseStationInfo):
+        # Unsubscribe the previous base station
+        if(self.sbscrb_social_bs[bs_type][social_group] != None):
+            self.UnsubscribeBS(bs_type, social_group)
+
+        # Subscribe the new one
+        self.sbscrb_social_bs[bs_type][social_group] = bs_info
+        # Register to base station, too.
+        bs_ctrlr = bs_info.ctrlr
+        bs_ctrlr.VehicleSubscribe(self.name)
+        # Create connection recorder for this base station if not exists
+        if(bs_ctrlr.name not in self.con_state):
+            self.con_state[bs_ctrlr.name] = SharedConnection(
+                ConnectionRecorder(self, bs_ctrlr)
             )
-            # Select the best uma controller according to cqi
-            index = np.argmax(uma_cqi)
-            self.connected_uma_info = BriefControllerInfo(
-                UMA_BS[index],
-                uma_sinr[index],
-                uma_cqi[index]
-            )
+        else:
+            self.con_state[bs_ctrlr.name].share += 1
 
-        # UMI Base Station Selection
-        if len(UMI_BS) > 0:
-            umi_cqi, umi_sinr = GET_BS_CQI_SINR_5G(
-                eng,
-                [CandidateBaseStationInfo(base_station, SociatyGroup.GENERAL)
-                 for base_station in UMI_BS],
-                vehicle_pos
-            )
-            # Select the best umi controller according to cqi
-            index = np.argmax(umi_cqi)
-            self.connected_umi_info = BriefControllerInfo(
-                UMI_BS[index],
-                umi_sinr[index],
-                umi_cqi[index]
-            )
+    #  Unsubscribe base station
+    def UnsubscribeBS(self, bs_type, social_group):
+        # Unsubscribe the base station
+        bs_info = self.sbscrb_social_bs[bs_type][social_group]
+        self.sbscrb_social_bs[bs_type][social_group] = None
+        # Unregister from base station
+        bs_ctrlr = bs_info.ctrlr
+        bs_ctrlr.VehicleUnsubscribe(self.name)
+        # Break connection
+        self.con_state[bs_ctrlr.name].share -= 1
 
-        # Create Critical Package
-        if self.connected_umi_info != None or self.connected_uma_info != None:
-            self.CreatePackage(
-                random.randrange(190, 1100, 1)*8,
-                SociatyGroup.CRITICAL)
-            self.CreatePackage(
-                random.randrange(190, 1100, 1)*8,
-                SociatyGroup.GENERAL)
+    # Randomly generate network request for different social groups (NetworkTransmitRequest without cqi&sinr filled)
+    # size in bits
+    def GenerateUploadRequest(self):
+        if(self.sync_time - self.up_req_gen_time > 1):
+            self.up_req_gen_time = self.sync_time
+            for group in SocialGroup:
+                for _ in range(random.poisson(1)):
+                    req_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
+                    self.social_up_queue[group].put(
+                        NetworkTransmitRequest(
+                            NetworkPackage(
+                                str(self.up_req_counter),
+                                self,
+                                random.randint(
+                                    req_size_rnd_range[0],
+                                    req_size_rnd_range[1]+1
+                                )*8,
+                                group,
+                                self.sync_time,
+                            ),
+                            0,
+                            0
+                        )
+                    )
+                    self.up_req_counter += 1
+            return
+    # Serves upload requests
 
-        # Arrage Transmission Requests
-        for combine in self.queue_pref:
-            queue = combine["queue"]
-            if queue.qsize() > 0:
-                base_station_info = combine["bs_pref"]()
-                if base_station_info == None:
-                    print("[{}]:[{}]->No valid base station to transmit.".format(
-                        self.vid,
-                        str(traci.simulation.getCurrentTime())
-                    ))
-                    continue
-                msg = queue.queue[0]
-                msg.cqi = base_station_info.cqi
-                msg.sinr = base_station_info.sinr
-                base_station_info.controller.Request(msg)
+    def ServeUploadRequest(self):
+        for group in SocialGroup:
+            if(self.social_up_queue[group].qsize() > 0):
+                bs_ctrlr_info = self.SelectSocialBS(group)
+                if(bs_ctrlr_info != None):
+                    request = self.social_up_queue[group].queue[0]
+                    request.sinr = bs_ctrlr_info.sinr
+                    request.cqi = bs_ctrlr_info.cqi
+                    bs_ctrlr_info.ctrlr.Upload(
+                        request
+                    )
 
-        # Update Connection Line
-        self.UpdateConnectionLines()
+    # Serves uploading/downloading packages
+    def ServePkgs(self):
+        for pkg_proc_type in PackageProcessType:
+            for pkg_proc in self.pkg_in_proc[pkg_proc_type]:
+                pkg_proc.req_time_slots -= 1
+                if(pkg_proc.req_time_slots == 0):
+                    self.pkg_in_proc[pkg_proc_type].remove(pkg_proc)
+                    if(pkg_proc.opponent.name in self.con_state):
+                        self.con_state[pkg_proc.opponent.name].rec.ChangeState(
+                            ConnectionState.Success
+                        )
+                    # TODO: do some logging stuff.
+                    print(
+                        "{}: {}:{} from:{} at:{} social:{} size:{} sender:{}".format(
+                            self.sync_time,
+                            pkg_proc_type.name.lower(),
+                            pkg_proc.package.name,
+                            pkg_proc.package.owner.name,
+                            pkg_proc.package.at,
+                            SocialGroup(
+                                pkg_proc.package.social_group
+                            ).name.lower(),
+                            pkg_proc.package.bits,
+                            pkg_proc.opponent.name,
+                        )
+                    )
+                else:
+                    if(pkg_proc.opponent.name in self.con_state):
+                        self.con_state[pkg_proc.opponent.name].rec.ChangeState(
+                            ConnectionState.Transmit
+                        )
 
-        # Update Transmitting Requests
-        transmitting = []
-        for index, request in enumerate(self.transmitting):
-            request.timeslot -= 1
-            # Update Connection State
-            self.UpdateTransmissionStatus(request.base_station, True)
-            if request.timeslot > 0:
-                transmitting.append(request)
-        self.transmitting = transmitting
-
-        # Record
-        self.update_time = traci.simulation.getTime()
+    # Select the service base station according to the social type provided.
+    def SelectSocialBS(self, social_type):
+        if(social_type == SocialGroup.CRITICAL):
+            return (self.sbscrb_social_bs[BaseStationType.UMI][social_type]
+                    if self.sbscrb_social_bs[BaseStationType.UMI][social_type] != None
+                    else self.sbscrb_social_bs[BaseStationType.UMA][social_type])
+        elif(social_type == SocialGroup.GENERAL):
+            return (self.sbscrb_social_bs[BaseStationType.UMI][social_type]
+                    if self.social_up_queue[SocialGroup.CRITICAL].qsize() == 0
+                    else self.sbscrb_social_bs[BaseStationType.UMA][social_type])
+        else:
+            return (self.sbscrb_social_bs[BaseStationType.UMA][social_type]
+                    if self.sbscrb_social_bs[BaseStationType.UMA][social_type] != None
+                    else self.sbscrb_social_bs[BaseStationType.UMI][social_type])
 
     # Function called by BaseStationController to give response to requests
-    def Response(self, response: NetworkTransmitResponse):
-        queue = self.queue_pref[response.social_group]["queue"]
-        msg = queue.queue[0]
-        if msg.name != response.name:
+    def UploadRequestResponse(self, response: NetworkTransmitResponse):
+        queue = self.social_up_queue[response.social_group]
+        request = queue.queue[0]
+        if request.package.name != response.name:
             print("Response: Error message corrupted")
             return
 
         if response.status:
-            msg.bits -= response.bits
+            request.package.bits -= response.bits
             # Add Request to transferring
-            self.transmitting.append(RequestTransmitting(
-                response.responder, response.name,
-                response.bits, response.social_group,
-                response.timeslot))
+            self.pkg_in_proc[PackageProcessType.UPLOAD].append(
+                PackageProcessing(
+                    NetworkPackage(
+                        request.package.name,
+                        self,
+                        response.bits,
+                        request.package.social_group,
+                        request.package.at
+                    ),
+                    response.sender,
+                    response.req_time_slots
+                )
+            )
             # Message Fully Requested. Pop!
-            if(msg.bits == 0):
+            if(request.package.bits == 0):
                 queue.get()
 
-        # Update Connection Status
-        # self.UpdateTransmissionStatus(response.responder, response.status)
+    # Function called by BaseStationControllers to send packages
+    def ReceivePackage(self, pkg: NetworkPackage):
+        self.pkg_in_proc[pkg.social_group].append(pkg)
 
-    # Central controller that manages package creation (NetworkTransmitRequest without cqi&sinr filled)
-    # size in bits
-    def CreatePackage(self, size, social_group):
-        queue = self.queue_pref[social_group]["queue"]
-        queue.put(NetworkTransmitRequest(
-            str(self.package_counter),
-            self,
-            size,
-            0,
-            0,
-            social_group
-        ))
-        self.package_counter += 1
+    def LinkStateUpdate(self):
+        ghost_con = []
+        for name, struct in self.con_state.items():
+            # if no one's sharing this connection, the recorder is redundant
+            if(struct.share <= 0):
+                ghost_con.append(name)
+                struct.rec.Clean()
+            else:
+                # initialize connection state to connect
+                struct.rec.Update()
+                struct.rec.ChangeState(ConnectionState.Connect, True)
 
-    # General routine called by Update. Updates connection-line position and visibility
-    def UpdateConnectionLines(self):
-        vehicle_pos = traci.vehicle.getPosition(self.vid)
-
-        for line_name, tools in self.connection_line_setting.items():
-            if not tools["info"]() == None:
-                controller = tools["info"]().controller
-                if not line_name in self.connection_lines:
-                    # Create line
-                    traci.polygon.add(
-                        line_name,
-                        [vehicle_pos, controller.pos],
-                        (0, 0, 0, 255),
-                        False,
-                        "Line",
-                        NetObjLayer.CON_LINE, 0.1
-                    )
-                    # Record line as currently drawn
-                    self.connection_lines.append(line_name)
-                else:
-                    # Update line positions
-                    traci.polygon.setShape(
-                        line_name,
-                        [vehicle_pos, controller.pos]
-                    )
-                    traci.polygon.setColor(
-                        line_name,
-                        (0, 0, 0, 255)
-                    )
-            elif line_name in self.connection_lines:
-                # Remove connection line
-                traci.polygon.remove(line_name)
-                self.connection_lines.remove(line_name)
-
-    # Update connection-line color according to message response status
-    def UpdateTransmissionStatus(self, connect_bs, success):
-        updated = False
-        for lineid, tools in self.connection_line_setting.items():
-            controller_info = tools["info"]()
-            if controller_info == None:
-                continue
-            if controller_info.controller == connect_bs:
-                if lineid in self.connection_lines:
-                    updated = True
-                    if success:
-                        traci.polygon.setColor(lineid, (0, 255, 0, 255))
-                    else:
-                        traci.polygon.setColor(lineid, (255, 0, 0, 255))
-                break
-
-        # if not updated:
-            # print("UpdateTransmissionStatus: Error!")
+        # remove non-shared existing connections
+        for name in ghost_con:
+            self.con_state.pop(name)
 
     def Clear(self):
-        # Clear Lines
-        for line_id in self.connection_lines:
-            traci.polygon.remove(line_id)
-        self.connection_lines = []
+        # Clear connection recorders
+        for name in self.con_state:
+            self.con_state[name].rec.Clean()
+        self.con_state = {}
 
     def __del__(self):
         self.Clear()
