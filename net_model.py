@@ -4,111 +4,298 @@ import matlab.engine
 import math
 import numpy as np
 import traci
+from copy import copy
 from globs import *
-from net_pack import NetworkTransmitRequest, NetworkTransmitResponse
+from net_pack import NetworkTransmitRequest, NetworkTransmitResponse, PackageProcessing, NetworkPackage
 
 BASE_STATION_CONTROLLER = []
 
 
+class ReceiverState:
+    def __init__(self, recvr):
+        self.bits_sent = 0
+        self.recvr = recvr
+
+
+class SocialGroupBroadcastRequest:
+    def __init__(self, package, recvrs):
+        self.package = package
+        self.recvr_stats = [
+            ReceiverState(recvr)
+            for recvr in recvrs
+            if recvr != package.owner
+        ]
+
+
 class BaseStationController:
     def __init__(self, name, pos, bs_type):
+        # Base station paremeters
         self.name = name
         self.pos = pos
         self.radius = BS_UMI_RADIUS if bs_type == BaseStationType.UMI else BS_UMA_RADIUS
         self.type = bs_type
+
+        # vehicles that've subscribed to specific social groups
+        self.sbscrb_social_vehs = [[] for i in SocialGroup]
+
+        # Upload/Download packages that're currently transmitting
+        self.pkg_in_proc = [[] for i in LinkType]
+
+        # request for sending to other objects
+        self.sg_broadcast_req = (
+            [[] for x in range(len(SocialGroup))]
+        )
+
         self.Reset()
 
-    def Upload(self, req: NetworkTransmitRequest):
-        self.social_group_pending_request[req.package.social_group].append(req)
+    def Update(self, eng, cloud):
+        self.ServePackage()
+        self.CreateBroadcastRequest()
+        # TODO: Propagate
+        self.ServeBroadcastRequest(eng)
+        self.ServeUploadRequest(eng)
+        # Reset
+        self.Reset()
 
-    def Update(self, eng):
-        for group in SocialGroup:
+    # Serves uploading/downloading packages
+    def ServePackage(self):
+        for link_type in LinkType:
+            pkg_procs_done = []
+            for pkg_proc in self.pkg_in_proc[link_type]:
+                # consume time slot
+                pkg_proc.req_time_slots -= 1
+                # consume bandwidth
+                self.valid_bandwidth[link_type] -= self.RequiredBandwidth(
+                    pkg_proc.package.social_group
+                )
+                if(pkg_proc.req_time_slots == 0):
+                    # package that has done transmitting are collected
+                    pkg_procs_done.append(pkg_proc)
+                    # if the package is uploaded
+                    if(link_type == LinkType.UPLOAD):
+                        # Save to local
+                        self.recv_package.append(pkg_proc.package)
+                    # log
+                    print(
+                        "{}-{}: type:{} target:{} origin:{}-{}*-{}b-{}-{}s ".format(
+                            traci.simulation.getTime(),
+                            self.name,
+                            link_type.name.lower(),
+                            pkg_proc.opponent.name,
+                            pkg_proc.package.owner.name,
+                            pkg_proc.package.name,
+                            pkg_proc.package.bits,
+                            SocialGroup(
+                                pkg_proc.package.social_group
+                            ).name.lower(),
+                            pkg_proc.package.at,
+                        )
+                    )
+            # remove transmitted packages
+            for pkg_proc in pkg_procs_done:
+                # remove packages that has done transmitting
+                self.pkg_in_proc[link_type].remove(pkg_proc)
+
+    # Function called by VehicleRecorder to submit upload requests to this base station
+    def Upload(self, req: NetworkTransmitRequest):
+        self.sg_upload_req[req.package.social_group].append(req)
+
+    # Serve submitted upload requests
+    def ServeUploadRequest(self, eng):
+        for social_group in SocialGroup:
             # Check if there exists pending requests
-            if len(self.social_group_pending_request[group.value]) > 0:
+            if len(self.sg_upload_req[social_group.value]) > 0:
                 # sort with cqi
-                requests = self.social_group_pending_request[group.value]
+                requests = self.sg_upload_req[social_group.value]
                 requests.sort(reverse=True, key=(lambda x: x.cqi))
                 # required resource block bandwidth for social group msg
-                req_bandwidth_per_rb = self.RequiredBandwidth(group)
+                req_bandwidth_per_rb = self.RequiredBandwidth(social_group)
                 # required timeslot for using this bandwidth
-                req_time_slot = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
+                req_time_slots = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
                 # serve requests
                 for req in requests:
-                    if self.valid_bandwidth < req_bandwidth_per_rb:
+                    package = req.package
+                    if self.valid_bandwidth[LinkType.UPLOAD] < req_bandwidth_per_rb:
+                        package = copy(package)
                         # no resource block to allocate
-
+                        package.bits = 0
                         # notify request owner
-                        req.package.owner.UploadRequestResponse(
+                        package.owner.UploadRequestResponse(
                             NetworkTransmitResponse(
                                 False,
                                 self,
-                                req.package.name,
-                                0,
-                                group,
+                                package
                             )
                         )
                     else:
                         # allocate resource block for transmit request
-
-                        # get the cqi and sinr of tranmission
-                        # cqi, sinr = GET_BS_CQI_SINR_5G(
-                        #     eng,
-                        #     [CandidateBaseStationInfo(self, req.social_group)],
-                        #     traci.vehicle.getPosition(request.owner.vid)
-                        # )
-
                         # get the maximum transmission size per resource-block according to cqi
                         rb_trans_size = eng.GetThroughputPerRB(
                             float(req.cqi),
                             int(NET_RB_SLOT_SYMBOLS)
                         )
                         valid_resource_blocks = math.floor(
-                            self.valid_bandwidth/req_bandwidth_per_rb
+                            self.valid_bandwidth[LinkType.UPLOAD] /
+                            req_bandwidth_per_rb
                         )
                         # available total transmission size
                         valid_trans_size = rb_trans_size * valid_resource_blocks
-
                         # get the actual transmission size
-                        trans_size = valid_trans_size if valid_trans_size < req.package.bits else req.package.bits
-
+                        trans_size = valid_trans_size if valid_trans_size < package.bits else package.bits
                         total_required_bandwidth = (req_bandwidth_per_rb *
                                                     math.ceil(trans_size/rb_trans_size))
                         # consume required bandwidth
-                        self.valid_bandwidth -= total_required_bandwidth
-
-                        # if resource block bandwidth requires two timeslots
-                        if(req_time_slot == 2):
-                            # consume required bandwidth for the next timeslot
-                            self.valid_bandwidth_next_ts -= total_required_bandwidth
-
+                        self.valid_bandwidth[LinkType.UPLOAD] -= total_required_bandwidth
+                        package = copy(package)
+                        package.bits = trans_size
                         # notify request owner
-                        req.package.owner.UploadRequestResponse(
+                        package.owner.UploadRequestResponse(
                             NetworkTransmitResponse(
                                 True,
                                 self,
-                                req.package.name,
-                                trans_size,
-                                group,
-                                req_time_slot
+                                package,
+                                req_time_slots
                             )
                         )
-        # Reset
-        self.Reset()
+                        # create package to process
+                        self.pkg_in_proc[LinkType.UPLOAD].append(
+                            PackageProcessing(
+                                package,
+                                package.owner,
+                                req_time_slots
+                            )
+                        )
 
+    def CreateBroadcastRequest(self):
+        for package in self.recv_package:
+            social_group = package.social_group
+            self.sg_broadcast_req[social_group].append(
+                SocialGroupBroadcastRequest(
+                    package,
+                    self.sbscrb_social_vehs[social_group]
+                )
+            )
+
+    def ServeBroadcastRequest(self, eng):
+        for social_group in SocialGroup:
+            reqs_brdcst_done = []
+            # required resource block bandwidth for social group msg
+            req_bandwidth_per_rb = self.RequiredBandwidth(social_group)
+            # required timeslot for using this bandwidth
+            req_time_slots = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
+            for req_brdcst in self.sg_broadcast_req[social_group]:
+                package = req_brdcst.package
+                recvrs_done = []
+                # Not enought bandwidth for this type of social group request
+                if self.valid_bandwidth[LinkType.DOWNLOAD] < req_bandwidth_per_rb:
+                    break
+                for recvr_state in req_brdcst.recvr_stats:
+                    # Not enought bandwidth for this social group receiver
+                    if self.valid_bandwidth[LinkType.DOWNLOAD] < req_bandwidth_per_rb:
+                        break
+                    else:
+                        # allocate resource block for transmit request
+
+                        # the receiver of this package
+                        recvr = recvr_state.recvr
+                        # remaining bits to transmit to complete the package
+                        remain_bits = package.bits - recvr_state.bits_sent
+                        # get sinr/cqi for receiver
+                        _cqi, _sinr = GET_BS_CQI_SINR_5G(
+                            eng,
+                            [CandidateBaseStationInfo(self, social_group)],
+                            recvr.pos
+                        )
+                        # get the maximum transmission size per resource-block according to cqi
+                        rb_trans_size = eng.GetThroughputPerRB(
+                            float(_cqi),
+                            int(NET_RB_SLOT_SYMBOLS)
+                        )
+                        valid_resource_blocks = math.floor(
+                            self.valid_bandwidth[LinkType.UPLOAD] /
+                            req_bandwidth_per_rb
+                        )
+                        # available total transmission size
+                        valid_trans_size = rb_trans_size * valid_resource_blocks
+                        # get the actual transmission size
+                        trans_size = valid_trans_size if valid_trans_size < remain_bits else remain_bits
+                        # get the total required bandwidth
+                        total_required_bandwidth = (req_bandwidth_per_rb *
+                                                    math.ceil(trans_size/rb_trans_size))
+                        # consume required bandwidth
+                        self.valid_bandwidth[LinkType.DOWNLOAD] -= total_required_bandwidth
+                        # set package
+                        package = copy(package)
+                        package.bits = trans_size
+                        # notify receiver
+                        recvr.ReceivePackage(
+                            self,
+                            package,
+                            req_time_slots
+                        )
+                        # create package to process
+                        self.pkg_in_proc[LinkType.DOWNLOAD].append(
+                            PackageProcessing(
+                                package,
+                                recvr,
+                                req_time_slots
+                            )
+                        )
+                        # record recvr if package completely transmitted
+                        if(trans_size >= remain_bits):
+                            recvrs_done.append(recvr_state)
+                # remove receivers that has received the complete package
+                for recvr_state in recvrs_done:
+                    req_brdcst.recvr_stats.remove(recvr_state)
+                # record broadcast request if all reciever recieves package.
+                if len(req_brdcst.recvr_stats) == 0:
+                    reqs_brdcst_done.append(req_brdcst)
+            # remove completed broadcast requests
+            for req_brdcst in reqs_brdcst_done:
+                self.sg_broadcast_req[social_group].remove(req_brdcst)
+
+    def PropagateSocialPackage(self, cloud):
+        a = 0
+
+    def ReceivePropagation(self):
+        a = 0
+
+    # The reset function
     def Reset(self):
-        self.social_group_pending_request = (
-            [[] for x in range(len(SocialGroup))]
+        # request for uploading to this base station
+        self.sg_upload_req = (
+            [[] for x in SocialGroup]
         )
         # valid bandwidth for next timeslot (0.5ms per timeslot)
-        self.valid_bandwidth_next_ts = BS_ALL_BANDWIDTH*0.9
-        self.valid_bandwidth = self.valid_bandwidth_next_ts
+        self.valid_bandwidth = [BS_ALL_BANDWIDTH *
+                                0.9 for i in LinkType]
+        self.recv_package = []
 
-    def VehicleSubscribe(self, vid):
-        a = 0
+    # Function called by VehicleRecorder to subscribe to a specific social group on this base station
+    def VehicleSubscribe(self, vehicle, social_group):
+        if(vehicle not in self.sbscrb_social_vehs[social_group]):
+            self.sbscrb_social_vehs[social_group].append(vehicle)
+        else:
+            print(
+                "veh:{} subscription to bs:{} duplicated.".format(
+                    vehicle.name,
+                    self.name
+                )
+            )
 
-    def VehicleUnsubscribe(self, vid):
-        a = 0
+    # Function called by VehicleRecorder to unsubscribe to a specific social group on this base station
+    def VehicleUnsubscribe(self, vehicle, social_group):
+        if(vehicle in self.sbscrb_social_vehs[social_group]):
+            self.sbscrb_social_vehs[social_group].remove(vehicle)
+        else:
+            print(
+                "veh:{} try to unsubscribe from bs:{}, but not yet subscribed.".format(
+                    vehicle.name,
+                    self.name
+                )
+            )
 
+    # Helper functions
     def RequiredBandwidth(self, social_group):
         if(self.type == BaseStationType.UMA):
             return BS_UMA_RB_BANDWIDTH
@@ -121,8 +308,9 @@ class CandidateBaseStationInfo:
         self.transmitter = base_station
         self.transmit_social_group = social_group
 
-
 # (matlab.engine, [CandidateBaseStationInfo], (double,double))
+
+
 def GET_BS_CQI_SINR_5G(eng, BS_INTEREST_INFO, UE_POSITION):
     CQI_Iter = np.zeros(len(BS_INTEREST_INFO), dtype=float)
     SINR_Iter = np.zeros(len(BS_INTEREST_INFO), dtype=float)
@@ -186,6 +374,7 @@ def GET_BS_CQI_SINR_5G(eng, BS_INTEREST_INFO, UE_POSITION):
 
             # intf-vehicle height
             Intf_h_MS.append(0.8)
+
             # distance between vehicle and intf-station
             Intf_dist.append((pow((intf_BS_obj.pos[0] - UE_POSITION[0])**2 +
                                   (intf_BS_obj.pos[1] - UE_POSITION[1])**2, 0.5)))

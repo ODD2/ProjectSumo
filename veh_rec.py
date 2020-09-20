@@ -5,7 +5,7 @@ from numpy import random
 from queue import Queue
 from net_model import GET_BS_CQI_SINR_5G, BASE_STATION_CONTROLLER, BaseStationController, CandidateBaseStationInfo
 from net_pack import NetworkTransmitResponse, NetworkTransmitRequest, NetworkPackage, PackageProcessing
-from globs import SocialGroup, NetObjLayer, BaseStationType, NET_SG_RND_REQ_SIZE, PackageProcessType
+from globs import SocialGroup, NetObjLayer, BaseStationType, NET_SG_RND_REQ_SIZE, LinkType
 
 
 class BriefBaseStationInfo:
@@ -25,7 +25,7 @@ class ConnectionState(IntEnum):
 
 class SharedConnection:
     def __init__(self, rec):
-        self.share = 1
+        self.share = 0
         self.rec = rec
 
 
@@ -90,7 +90,7 @@ class VehicleRecorder:
         ]
 
         # The Social Group Upload Request Queue
-        self.social_up_queue = [Queue(0) for i in SocialGroup]
+        self.sg_upload_queue = [Queue(0) for i in SocialGroup]
 
         # The last time when this vehicle recorder generates upload request
         self.up_req_gen_time = 0
@@ -102,13 +102,16 @@ class VehicleRecorder:
         self.sync_time = 0
 
         # Upload/Download packages that're currently transmitting
-        self.pkg_in_proc = [[] for i in PackageProcessType]
+        self.pkg_in_proc = [[] for i in LinkType]
 
         # The network status monitor
         self.net_status = NetworkStatusMonitor()
 
         # The connetion lines currently drawn in SUMO
         self.con_state = {}
+
+    def __del__(self):
+        self.Clear()
 
     # General routine called by main
     def Update(self, eng):
@@ -118,7 +121,7 @@ class VehicleRecorder:
         self.LinkStateUpdate()
         self.GenerateUploadRequest()
         self.ServeUploadRequest()
-        self.ServePkgs()
+        self.ServePackage()
 
     # Update the vehicle's basic infos
     def UpdateVehicleInfo(self):
@@ -190,14 +193,9 @@ class VehicleRecorder:
         self.sbscrb_social_bs[bs_type][social_group] = bs_info
         # Register to base station, too.
         bs_ctrlr = bs_info.ctrlr
-        bs_ctrlr.VehicleSubscribe(self.name)
-        # Create connection recorder for this base station if not exists
-        if(bs_ctrlr.name not in self.con_state):
-            self.con_state[bs_ctrlr.name] = SharedConnection(
-                ConnectionRecorder(self, bs_ctrlr)
-            )
-        else:
-            self.con_state[bs_ctrlr.name].share += 1
+        bs_ctrlr.VehicleSubscribe(self, social_group)
+        # Update connection state
+        self.ConnectionChange(True, bs_ctrlr)
 
     #  Unsubscribe base station
     def UnsubscribeBS(self, bs_type, social_group):
@@ -206,9 +204,9 @@ class VehicleRecorder:
         self.sbscrb_social_bs[bs_type][social_group] = None
         # Unregister from base station
         bs_ctrlr = bs_info.ctrlr
-        bs_ctrlr.VehicleUnsubscribe(self.name)
-        # Break connection
-        self.con_state[bs_ctrlr.name].share -= 1
+        bs_ctrlr.VehicleUnsubscribe(self, social_group)
+        # Update connection state
+        self.ConnectionChange(False, bs_ctrlr)
 
     # Randomly generate network request for different social groups (NetworkTransmitRequest without cqi&sinr filled)
     # size in bits
@@ -218,7 +216,7 @@ class VehicleRecorder:
             for group in SocialGroup:
                 for _ in range(random.poisson(1)):
                     req_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
-                    self.social_up_queue[group].put(
+                    self.sg_upload_queue[group].put(
                         NetworkTransmitRequest(
                             NetworkPackage(
                                 str(self.up_req_counter),
@@ -236,14 +234,14 @@ class VehicleRecorder:
                     )
                     self.up_req_counter += 1
             return
-    # Serves upload requests
 
+    # Serves upload requests
     def ServeUploadRequest(self):
-        for group in SocialGroup:
-            if(self.social_up_queue[group].qsize() > 0):
-                bs_ctrlr_info = self.SelectSocialBS(group)
+        for social_group in SocialGroup:
+            if(self.sg_upload_queue[social_group].qsize() > 0):
+                bs_ctrlr_info = self.SelectSocialBS(social_group)
                 if(bs_ctrlr_info != None):
-                    request = self.social_up_queue[group].queue[0]
+                    request = self.sg_upload_queue[social_group].queue[0]
                     request.sinr = bs_ctrlr_info.sinr
                     request.cqi = bs_ctrlr_info.cqi
                     bs_ctrlr_info.ctrlr.Upload(
@@ -251,36 +249,42 @@ class VehicleRecorder:
                     )
 
     # Serves uploading/downloading packages
-    def ServePkgs(self):
-        for pkg_proc_type in PackageProcessType:
-            for pkg_proc in self.pkg_in_proc[pkg_proc_type]:
+    def ServePackage(self):
+        for link_type in LinkType:
+            pkg_procs_done = []
+            for pkg_proc in self.pkg_in_proc[link_type]:
                 pkg_proc.req_time_slots -= 1
                 if(pkg_proc.req_time_slots == 0):
-                    self.pkg_in_proc[pkg_proc_type].remove(pkg_proc)
+                    # collect packages that were transmitted
+                    pkg_procs_done.append(pkg_proc)
                     if(pkg_proc.opponent.name in self.con_state):
                         self.con_state[pkg_proc.opponent.name].rec.ChangeState(
                             ConnectionState.Success
                         )
-                    # TODO: do some logging stuff.
-                    print(
-                        "{}: {}:{} from:{} at:{} social:{} size:{} sender:{}".format(
-                            self.sync_time,
-                            pkg_proc_type.name.lower(),
-                            pkg_proc.package.name,
-                            pkg_proc.package.owner.name,
-                            pkg_proc.package.at,
-                            SocialGroup(
-                                pkg_proc.package.social_group
-                            ).name.lower(),
-                            pkg_proc.package.bits,
-                            pkg_proc.opponent.name,
+                        # TODO: do some logging stuff.
+                        print(
+                            "{}-{}: type:{} target:{} origin:{}-{}*-{}b-{}-{}s ".format(
+                                self.sync_time,
+                                self.name,
+                                link_type.name.lower(),
+                                pkg_proc.opponent.name,
+                                pkg_proc.package.owner.name,
+                                pkg_proc.package.name,
+                                pkg_proc.package.bits,
+                                SocialGroup(
+                                    pkg_proc.package.social_group
+                                ).name.lower(),
+                                pkg_proc.package.at,
+                            )
                         )
-                    )
-                else:
-                    if(pkg_proc.opponent.name in self.con_state):
-                        self.con_state[pkg_proc.opponent.name].rec.ChangeState(
-                            ConnectionState.Transmit
-                        )
+                    else:
+                        if(pkg_proc.opponent.name in self.con_state):
+                            self.con_state[pkg_proc.opponent.name].rec.ChangeState(
+                                ConnectionState.Transmit
+                            )
+            # remove transmitted packages
+            for pkg_proc in pkg_procs_done:
+                self.pkg_in_proc[link_type].remove(pkg_proc)
 
     # Select the service base station according to the social type provided.
     def SelectSocialBS(self, social_type):
@@ -290,7 +294,7 @@ class VehicleRecorder:
                     else self.sbscrb_social_bs[BaseStationType.UMA][social_type])
         elif(social_type == SocialGroup.GENERAL):
             return (self.sbscrb_social_bs[BaseStationType.UMI][social_type]
-                    if self.social_up_queue[SocialGroup.CRITICAL].qsize() == 0
+                    if self.sg_upload_queue[SocialGroup.CRITICAL].qsize() == 0
                     else self.sbscrb_social_bs[BaseStationType.UMA][social_type])
         else:
             return (self.sbscrb_social_bs[BaseStationType.UMA][social_type]
@@ -299,24 +303,19 @@ class VehicleRecorder:
 
     # Function called by BaseStationController to give response to requests
     def UploadRequestResponse(self, response: NetworkTransmitResponse):
-        queue = self.social_up_queue[response.social_group]
+        package = response.package
+        queue = self.sg_upload_queue[package.social_group]
         request = queue.queue[0]
-        if request.package.name != response.name:
+        if request.package.name != package.name:
             print("Response: Error message corrupted")
             return
 
         if response.status:
-            request.package.bits -= response.bits
+            request.package.bits -= package.bits
             # Add Request to transferring
-            self.pkg_in_proc[PackageProcessType.UPLOAD].append(
+            self.pkg_in_proc[LinkType.UPLOAD].append(
                 PackageProcessing(
-                    NetworkPackage(
-                        request.package.name,
-                        self,
-                        response.bits,
-                        request.package.social_group,
-                        request.package.at
-                    ),
+                    package,
                     response.sender,
                     response.req_time_slots
                 )
@@ -326,9 +325,16 @@ class VehicleRecorder:
                 queue.get()
 
     # Function called by BaseStationControllers to send packages
-    def ReceivePackage(self, pkg: NetworkPackage):
-        self.pkg_in_proc[pkg.social_group].append(pkg)
+    def ReceivePackage(self, sender, package, req_time_slots):
+        self.pkg_in_proc[LinkType.DOWNLOAD].append(
+            PackageProcessing(
+                package,
+                sender,
+                req_time_slots
+            )
+        )
 
+    # Update & Clean up the connection
     def LinkStateUpdate(self):
         ghost_con = []
         for name, struct in self.con_state.items():
@@ -345,11 +351,21 @@ class VehicleRecorder:
         for name in ghost_con:
             self.con_state.pop(name)
 
+    # The Connection manager to manage connection between self and others
+    def ConnectionChange(self, build, opponent):
+        if(build):
+            # Create connection recorder for this base station if not exists
+            if(opponent.name not in self.con_state):
+                self.con_state[opponent.name] = SharedConnection(
+                    ConnectionRecorder(self, opponent)
+                )
+            self.con_state[opponent.name].share += 1
+        else:
+            # Break connection
+            self.con_state[opponent.name].share -= 1
+
     def Clear(self):
         # Clear connection recorders
         for name in self.con_state:
             self.con_state[name].rec.Clean()
         self.con_state = {}
-
-    def __del__(self):
-        self.Clear()

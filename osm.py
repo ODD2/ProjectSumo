@@ -101,6 +101,7 @@ def main():
             # Newly Joined Vehicle: Create Vehicle Recorder For It
             if not v_id in vehicle_recorders:
                 vehicle_recorders[v_id] = VehicleRecorder(v_id)
+                print("{}: joined the map.".format(v_id))
 
         for i in range(TIMESLOTS_PER_STEP):
             # Update Vehicles
@@ -109,7 +110,7 @@ def main():
 
             # Update all BaseStations
             for base_station in BASE_STATION_CONTROLLER:
-                base_station.Update(eng)
+                base_station.Update(eng, {})
 
         # Find None-Updating Vehicles as Ghost Vehicles
         current_time = traci.simulation.getTime()
@@ -120,6 +121,7 @@ def main():
 
         # Remove Ghost Vehicles
         for v_id in ghost_vehicles:
+            print("{}: left the map.".format(v_id))
             vehicle_recorders[v_id].Clear()
             vehicle_recorders.pop(v_id)
 

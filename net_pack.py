@@ -19,12 +19,10 @@ class NetworkTransmitRequest:
 
 
 class NetworkTransmitResponse:
-    def __init__(self, status: bool, sender, name: str,  size: int, social_group: SocialGroup, time_slots=0):
+    def __init__(self, status: bool, sender, package: NetworkPackage, time_slots=0):
         self.status = status
         self.sender = sender
-        self.name = name
-        self.bits = size
-        self.social_group = social_group
+        self.package = package
         self.req_time_slots = time_slots
 
 

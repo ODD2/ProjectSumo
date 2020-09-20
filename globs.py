@@ -4,13 +4,12 @@ from numpy import random
 from enum import IntEnum, Enum
 
 
-class PackageProcessType(IntEnum):
+class LinkType(IntEnum):
     UPLOAD = 0
     DOWNLOAD = 1
 
-#
 
-
+# Base station type
 class BaseStationType(IntEnum):
     UMI = 0
     UMA = 1
@@ -22,7 +21,7 @@ class SocialGroup(IntEnum):
     GENERAL = 1
 
 
-#
+# Network object layer
 class NetObjLayer(IntEnum):
     BS_POI = 2
     BS_RAD_UMI = BS_POI - 1
