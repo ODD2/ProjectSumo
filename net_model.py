@@ -5,8 +5,8 @@ import math
 import numpy as np
 import traci
 from copy import copy
-from globs import *
 from net_pack import NetworkTransmitRequest, NetworkTransmitResponse, PackageProcessing, NetworkPackage
+from globs import *
 
 BASE_STATION_CONTROLLER = []
 
@@ -48,12 +48,12 @@ class BaseStationController:
 
         self.Reset()
 
-    def Update(self, eng, cloud):
+    def Update(self):
         self.ServePackage()
         self.CreateBroadcastRequest()
         # TODO: Propagate
-        self.ServeBroadcastRequest(eng)
-        self.ServeUploadRequest(eng)
+        self.ServeBroadcastRequest()
+        self.ServeUploadRequest()
         # Reset
         self.Reset()
 
@@ -75,6 +75,8 @@ class BaseStationController:
                     if(link_type == LinkType.UPLOAD):
                         # Save to local
                         self.recv_package.append(pkg_proc.package)
+
+                    TRACI_LOCK.acquire()
                     # log
                     print(
                         "{}-{}: type:{} target:{} origin:{}-{}*-{}b-{}-{}s ".format(
@@ -91,6 +93,8 @@ class BaseStationController:
                             pkg_proc.package.at,
                         )
                     )
+                    TRACI_LOCK.release()
+
             # remove transmitted packages
             for pkg_proc in pkg_procs_done:
                 # remove packages that has done transmitting
@@ -101,7 +105,7 @@ class BaseStationController:
         self.sg_upload_req[req.package.social_group].append(req)
 
     # Serve submitted upload requests
-    def ServeUploadRequest(self, eng):
+    def ServeUploadRequest(self):
         for social_group in SocialGroup:
             # Check if there exists pending requests
             if len(self.sg_upload_req[social_group.value]) > 0:
@@ -130,7 +134,7 @@ class BaseStationController:
                     else:
                         # allocate resource block for transmit request
                         # get the maximum transmission size per resource-block according to cqi
-                        rb_trans_size = eng.GetThroughputPerRB(
+                        rb_trans_size = MATLAB_ENG.GetThroughputPerRB(
                             float(req.cqi),
                             int(NET_RB_SLOT_SYMBOLS)
                         )
@@ -176,7 +180,7 @@ class BaseStationController:
                 )
             )
 
-    def ServeBroadcastRequest(self, eng):
+    def ServeBroadcastRequest(self):
         for social_group in SocialGroup:
             reqs_brdcst_done = []
             # required resource block bandwidth for social group msg
@@ -202,12 +206,11 @@ class BaseStationController:
                         remain_bits = package.bits - recvr_state.bits_sent
                         # get sinr/cqi for receiver
                         _cqi, _sinr = GET_BS_CQI_SINR_5G(
-                            eng,
                             [CandidateBaseStationInfo(self, social_group)],
                             recvr.pos
                         )
                         # get the maximum transmission size per resource-block according to cqi
-                        rb_trans_size = eng.GetThroughputPerRB(
+                        rb_trans_size = MATLAB_ENG.GetThroughputPerRB(
                             float(_cqi),
                             int(NET_RB_SLOT_SYMBOLS)
                         )
@@ -311,7 +314,7 @@ class CandidateBaseStationInfo:
 # (matlab.engine, [CandidateBaseStationInfo], (double,double))
 
 
-def GET_BS_CQI_SINR_5G(eng, BS_INTEREST_INFO, UE_POSITION):
+def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, UE_POSITION):
     CQI_Iter = np.zeros(len(BS_INTEREST_INFO), dtype=float)
     SINR_Iter = np.zeros(len(BS_INTEREST_INFO), dtype=float)
 
@@ -379,7 +382,7 @@ def GET_BS_CQI_SINR_5G(eng, BS_INTEREST_INFO, UE_POSITION):
             Intf_dist.append((pow((intf_BS_obj.pos[0] - UE_POSITION[0])**2 +
                                   (intf_BS_obj.pos[1] - UE_POSITION[1])**2, 0.5)))
 
-        (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx]) = eng.SINR_Channel_Model_5G(
+        (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx]) = MATLAB_ENG.SINR_Channel_Model_5G(
             float(UE_dist),
             float(h_BS),
             float(h_MS),

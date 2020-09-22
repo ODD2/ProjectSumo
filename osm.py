@@ -4,13 +4,17 @@ import traci
 import matlab.engine
 import math
 import numpy as np
+from threading import Thread
+from multiprocessing import Process
 from net_model import BaseStationController, BASE_STATION_CONTROLLER
 from veh_rec import VehicleRecorder
 from enum import IntEnum
+from datetime import datetime
 from globs import *
 
-
 # Base Station Indicator Creator
+
+
 def CreateBaseStationIndicator(name, setting):
     # Bs Info
     bs_type = setting["type"]
@@ -41,13 +45,6 @@ def CreateBaseStationIndicator(name, setting):
 
 
 def main():
-    # Create Matlab Engine
-    eng = matlab.engine.start_matlab()
-
-    # Add Matlab File Search Locations
-    eng.addpath(os.getcwd() + "\\matlab\\")
-    eng.addpath(os.getcwd() + "\\matlab\\SelectCQI_bySNR\\")
-
     # Setup Traci Environment
     if 'SUMO_HOME' in os.environ:
         tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
@@ -57,13 +54,15 @@ def main():
         sys.exit("please declare environment variable 'SUMO_HOME'")
 
     # Check Basic Requirements
-    if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_TIMESLOT < 0:
+    if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP < 0:
+        print("Error: seconds per simulation step should be larger than the value of seconds per network step.")
         return
-    if SIM_SECONDS_PER_STEP/NET_SECONDS_PER_TIMESLOT % 1 != 0:
+    if SIM_SECONDS_PER_STEP/NET_SECONDS_PER_STEP % 1 != 0:
+        print("Error: seconds per simulation step should be totally devided by the value of seconds per network step.")
         return
 
     # Start Traci
-    traci.start(["sumo-gui",
+    traci.start(["sumo",
                  "-c",
                  os.getcwd() + "\\osm.sumocfg",
                  "--start",
@@ -84,17 +83,12 @@ def main():
     vehicle_recorders = {}
 
     # Frequently used constants
-    TIMESLOTS_PER_STEP = int(SIM_SECONDS_PER_STEP/NET_SECONDS_PER_TIMESLOT)
+    TIMESLOTS_PER_STEP = int(SIM_SECONDS_PER_STEP/NET_SECONDS_PER_STEP)
 
     # Start Simulation
     step = 0
-    while step < 1000000:
+    while step < 1000:
         traci.simulationStep()
-        # if traci.inductionloop.getLastStepVehicleNumber("0") > 0:
-        #     iduloop_v1id = traci.inductionloop.getLastStepVehicleIDs("0")[0]
-        #     print("vehicle id:" + str(iduloop_v1id) + " (speed:" +
-        #           str(traci.vehicle.getSpeed(iduloop_v1id)) + ")")
-
         traci_vids = traci.vehicle.getIDList()
         # Loop Through All Vehicles
         for v_id in traci_vids:
@@ -104,15 +98,27 @@ def main():
                 print("{}: joined the map.".format(v_id))
 
         for i in range(TIMESLOTS_PER_STEP):
-            # Update Vehicles
+            veh_prls = []
+            # Update Vehicles (Parellelized)
             for v_id in traci_vids:
-                vehicle_recorders[v_id].Update(eng)
+                t = Thread(target=vehicle_recorders[v_id].Update)
+                t.start()
+                veh_prls.append(t)
+            # Wait all vehicles to finish their jobs
+            for t in veh_prls:
+                t.join()
 
-            # Update all BaseStations
+            bs_prls = []
+            # Update all BaseStations  (Parellelized)
             for base_station in BASE_STATION_CONTROLLER:
-                base_station.Update(eng, {})
+                t = Thread(target=base_station.Update)
+                t.start()
+                bs_prls.append(t)
+            # Wait all base stations to finish their jobs
+            for t in bs_prls:
+                t.join()
 
-        # Find None-Updating Vehicles as Ghost Vehicles
+          # Find None-Updating Vehicles as Ghost Vehicles
         current_time = traci.simulation.getTime()
         ghost_vehicles = []
         for v_id, vr_obj in vehicle_recorders.items():
@@ -130,5 +136,50 @@ def main():
     traci.close()
 
 
+def Job(mutex):
+    mutex.acquire()
+    print(traci.simulation.getTime())
+    mutex.release()
+
+
+def test():
+    # Setup Traci Environment
+    if 'SUMO_HOME' in os.environ:
+        tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
+        print(tools)
+        sys.path.append(tools)
+    else:
+        sys.exit("please declare environment variable 'SUMO_HOME'")
+
+    # Check Basic Requirements
+    if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP < 0:
+        print("Error: seconds per simulation step should be larger than the value of seconds per network step.")
+        return
+    if SIM_SECONDS_PER_STEP/NET_SECONDS_PER_STEP % 1 != 0:
+        print("Error: seconds per simulation step should be totally devided by the value of seconds per network step.")
+        return
+
+    # Start Traci
+    traci.start(["sumo-gui",
+                 "-c",
+                 os.getcwd() + "\\osm.sumocfg",
+                 "--start",
+                 "--step-length", str(SIM_SECONDS_PER_STEP),
+                 ])
+    step = 0
+    while step < 1000000:
+        traci.simulationStep()
+        l = []
+        for i in range(10):
+            t = Thread(target=Job, args=())
+            t.start()
+            l.append(t)
+        for t in l:
+            t.join()
+
+        step += 1
+
+
 if __name__ == "__main__":
     main()
+    # test()

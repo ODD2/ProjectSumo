@@ -1,11 +1,14 @@
 import traci
 import numpy as np
+import profile
+import net_model
 from enum import IntEnum
 from numpy import random
 from queue import Queue
 from net_model import GET_BS_CQI_SINR_5G, BASE_STATION_CONTROLLER, BaseStationController, CandidateBaseStationInfo
 from net_pack import NetworkTransmitResponse, NetworkTransmitRequest, NetworkPackage, PackageProcessing
 from globs import SocialGroup, NetObjLayer, BaseStationType, NET_SG_RND_REQ_SIZE, LinkType
+from globs import TRACI_LOCK, MATLAB_ENG
 
 
 class BriefBaseStationInfo:
@@ -35,6 +38,7 @@ class ConnectionRecorder:
         self.s2 = s2
         self.state = ConnectionState.Connect
         self.name = "con_{}_{}".format(s1.name, s2.name)
+        TRACI_LOCK.acquire()
         # Create line
         traci.polygon.add(
             self.name,
@@ -44,12 +48,15 @@ class ConnectionRecorder:
             "Line",
             NetObjLayer.CON_LINE, 0.1
         )
+        TRACI_LOCK.release()
 
     def Update(self):
+        TRACI_LOCK.acquire()
         traci.polygon.setShape(
             self.name,
             [self.s1.pos, self.s2.pos]
         )
+        TRACI_LOCK.release()
 
     def ChangeState(self, state: ConnectionState, force=False):
         if(not force and self.state > state):
@@ -57,15 +64,19 @@ class ConnectionRecorder:
 
         self.state = state
 
+        TRACI_LOCK.acquire()
         if(state == ConnectionState.Transmit):
             traci.polygon.setColor(self.name, (255, 165, 0, 255))
         elif(state == ConnectionState.Success):
             traci.polygon.setColor(self.name, (0, 255, 0, 255))
         else:
             traci.polygon.setColor(self.name, (0, 0, 0, 255))
+        TRACI_LOCK.release()
 
     def Clean(self):
+        TRACI_LOCK.acquire()
         traci.polygon.remove(self.name)
+        TRACI_LOCK.release()
 
 
 class NetworkStatusMonitor:
@@ -76,7 +87,7 @@ class NetworkStatusMonitor:
         self.step_send_package = 0
 
 
-class VehicleRecorder:
+class VehicleRecorder():
     def __init__(self, name):
         # Vehicle ID
         self.name = name
@@ -90,7 +101,7 @@ class VehicleRecorder:
         ]
 
         # The Social Group Upload Request Queue
-        self.sg_upload_queue = [Queue(0) for i in SocialGroup]
+        self.sg_upload_list = [[] for i in SocialGroup]
 
         # The last time when this vehicle recorder generates upload request
         self.up_req_gen_time = 0
@@ -114,10 +125,11 @@ class VehicleRecorder:
         self.Clear()
 
     # General routine called by main
-    def Update(self, eng):
+
+    def Update(self):
         self.UpdateVehicleInfo()
         self.CheckSubscribeBSValidity()
-        self.SelectBestSocialBS(eng)
+        self.SelectBestSocialBS()
         self.LinkStateUpdate()
         self.GenerateUploadRequest()
         self.ServeUploadRequest()
@@ -125,8 +137,10 @@ class VehicleRecorder:
 
     # Update the vehicle's basic infos
     def UpdateVehicleInfo(self):
+        TRACI_LOCK.acquire()
         self.pos = traci.vehicle.getPosition(self.name)
         self.sync_time = traci.simulation.getTime()
+        TRACI_LOCK.release()
 
     # Check if the latest subscribes base stations still has the validity to provide service
     def CheckSubscribeBSValidity(self):
@@ -148,7 +162,7 @@ class VehicleRecorder:
 
     # Find and subscribe the base station that provides the best connectivity according to it's social group,
     # also categorized by it's base station type.
-    def SelectBestSocialBS(self, eng):
+    def SelectBestSocialBS(self):
         bs_in_range = [[] for i in BaseStationType]
 
         # Find In-Range BaseStations
@@ -165,7 +179,6 @@ class VehicleRecorder:
             for social_type in SocialGroup:
                 # Get cqi & sinr for social type
                 _cqi, _sinr = GET_BS_CQI_SINR_5G(
-                    eng,
                     [
                         CandidateBaseStationInfo(bs_ctrlr, social_type)
                         for bs_ctrlr in bs_in_range[bs_type]
@@ -216,7 +229,7 @@ class VehicleRecorder:
             for group in SocialGroup:
                 for _ in range(random.poisson(1)):
                     req_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
-                    self.sg_upload_queue[group].put(
+                    self.sg_upload_list[group].append(
                         NetworkTransmitRequest(
                             NetworkPackage(
                                 str(self.up_req_counter),
@@ -238,15 +251,17 @@ class VehicleRecorder:
     # Serves upload requests
     def ServeUploadRequest(self):
         for social_group in SocialGroup:
-            if(self.sg_upload_queue[social_group].qsize() > 0):
+            if(len(self.sg_upload_list[social_group]) > 0):
                 bs_ctrlr_info = self.SelectSocialBS(social_group)
                 if(bs_ctrlr_info != None):
-                    request = self.sg_upload_queue[social_group].queue[0]
-                    request.sinr = bs_ctrlr_info.sinr
-                    request.cqi = bs_ctrlr_info.cqi
-                    bs_ctrlr_info.ctrlr.Upload(
-                        request
-                    )
+                    for req in self.sg_upload_list[social_group]:
+                        req.sinr = bs_ctrlr_info.sinr
+                        req.cqi = bs_ctrlr_info.cqi
+                        bs_ctrlr_info.ctrlr.Upload(
+                            req
+                        )
+                else:
+                    print("Error: No BS to serve request.")
 
     # Serves uploading/downloading packages
     def ServePackage(self):
@@ -294,7 +309,9 @@ class VehicleRecorder:
                     else self.sbscrb_social_bs[BaseStationType.UMA][social_type])
         elif(social_type == SocialGroup.GENERAL):
             return (self.sbscrb_social_bs[BaseStationType.UMI][social_type]
-                    if self.sg_upload_queue[SocialGroup.CRITICAL].qsize() == 0
+                    if (self.sbscrb_social_bs[BaseStationType.UMI][social_type] != None
+                        and
+                        len(self.sg_upload_list[SocialGroup.CRITICAL]) == 0)
                     else self.sbscrb_social_bs[BaseStationType.UMA][social_type])
         else:
             return (self.sbscrb_social_bs[BaseStationType.UMA][social_type]
@@ -304,10 +321,17 @@ class VehicleRecorder:
     # Function called by BaseStationController to give response to requests
     def UploadRequestResponse(self, response: NetworkTransmitResponse):
         package = response.package
-        queue = self.sg_upload_queue[package.social_group]
-        request = queue.queue[0]
-        if request.package.name != package.name:
-            print("Response: Error message corrupted")
+        request = None
+        # Search response package inside of the request list
+        for req in self.sg_upload_list[package.social_group]:
+            if(package.name == req.package.name):
+                request = req
+                break
+        # If the response package wasn't found inside the request list
+        # then it means that the request might not be this vehicle's,
+        # or meaning this request has already been processed
+        if(request == None):
+            print("Response: Error package not listed.")
             return
 
         if response.status:
@@ -322,7 +346,7 @@ class VehicleRecorder:
             )
             # Message Fully Requested. Pop!
             if(request.package.bits == 0):
-                queue.get()
+                self.sg_upload_list[package.social_group].remove(request)
 
     # Function called by BaseStationControllers to send packages
     def ReceivePackage(self, sender, package, req_time_slots):
@@ -353,6 +377,7 @@ class VehicleRecorder:
 
     # The Connection manager to manage connection between self and others
     def ConnectionChange(self, build, opponent):
+        return
         if(build):
             # Create connection recorder for this base station if not exists
             if(opponent.name not in self.con_state):

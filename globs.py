@@ -1,5 +1,8 @@
 import os
 import math
+import threading
+import matlab
+import os
 from numpy import random
 from enum import IntEnum, Enum
 
@@ -29,17 +32,19 @@ class NetObjLayer(IntEnum):
     CON_LINE = BS_POI + 1
 
 
+# Matlab
+MATLAB_ENG = matlab.engine.start_matlab()
+MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\")
+MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\SelectCQI_bySNR\\")
+# Traci
+TRACI_LOCK = threading.Lock()
 # Initialize Random (not sure if it's working)
 random.seed(132342421)
-# random.seed(1323)
-
 # Simulation Settings
 SIM_SECONDS_PER_STEP = 0.1
-
 # Network Settings
 NET_RB_SLOT_SYMBOLS = 14
-# NET_SECONDS_PER_TIMESLOT = 0.0005
-NET_SECONDS_PER_TIMESLOT = 0.1
+NET_SECONDS_PER_STEP = 0.1
 NET_RB_BANDWIDTH_TS = {180000: 1,
                        360000: 2}
 NET_SG_RND_REQ_SIZE = {
@@ -68,12 +73,6 @@ BS_UMI_CP_SOCIAL = {SocialGroup.CRITICAL: 2.34,
                     SocialGroup.GENERAL: 4.69}
 BS_ALL_BANDWIDTH = 10000000
 
-# BS_UMA_RADIUS = (10**((BS_UMA_TRANS_PWR-92.45-20*math.log(2, 10))/20))*1000
-# BS_UMI_RADIUS = (10**((BS_UMI_TRANS_PWR-92.45-20*math.log(3.5, 10))/20))*1000
-# BS_UMA_RADIUS = (10**((BS_UMA_TRANS_PWR-32.4-20*math.log(2000, 10))/30))*1000
-# BS_UMI_RADIUS = (10**((BS_UMI_TRANS_PWR-32.4-20*math.log(3500, 10))/31.9))*1000
-
-
 BS_SETTINGS = {
     "bs1": {
         "color": (0, 0, 0, 255),
@@ -100,5 +99,3 @@ BS_SETTINGS = {
         "type": BaseStationType.UMI,
     },
 }
-
-# Vehicle Recorder Settings
