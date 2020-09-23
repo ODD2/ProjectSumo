@@ -9,29 +9,50 @@ from net_pack import NetworkTransmitRequest, NetworkTransmitResponse, PackagePro
 from globs import *
 
 
-class CQI_SINR_MAP:
+class NetStatus:
+    def __init__(self):
+        self.cached = False
+        self.cqi = 0
+        self.sinr = 0
+
+
+class NetStatusCache:
     def __init__(self):
         self._map = {}
 
-    def Save(self, vehicle, bs_ctrlr, indicator):
-        if vehicle.name not in self._map:
-            print("Error!")
-        self._map[vehicle.name][bs_ctrlr.serial] = indicator
-
     def Get(self, vehicle, bs_ctrlr):
+        if vehicle.name not in self._map:
+            raise Exception("Error! vehicle should be in the map!!")
         return self._map[vehicle.name][bs_ctrlr.serial]
+
+    def isCache(self, vehicle, bs_ctrlr):
+        if vehicle.name not in self._map:
+            raise Exception("Error! vehicle should be in the map!!")
+        return self._map[vehicle.name][bs_ctrlr.serial].cached
+
+    def Cache(self, vehicle, bs_ctrlr, cqi, sinr):
+        if vehicle.name not in self._map:
+            raise Exception("Error! vehicle should be in the map!!")
+        status = self._map[vehicle.name][bs_ctrlr.serial]
+        status.cached = True
+        status.cqi = cqi
+        status.sinr = sinr
 
     def Initialize(self):
         globals()
         # remove ghosts
         for veh_id in SIM_STEP_INFO.ghost_veh_ids:
             self._map.pop(veh_id)
-        # initialize
-        for key in SIM_STEP_INFO.veh_ids:
-            self._map[key] = [
-                None
+        # add new vehicles
+        for veh_id in SIM_STEP_INFO.new_veh_ids:
+            self._map[veh_id] = [
+                NetStatus()
                 for i in range(len(BASE_STATION_CONTROLLER))
             ]
+        # initialize
+        for status_list in self._map.values():
+            for i in range(len(BASE_STATION_CONTROLLER)):
+                status_list[i].cached = False
 
 
 class ReceiverState:
@@ -341,29 +362,33 @@ class CandidateBaseStationInfo:
 
 
 BASE_STATION_CONTROLLER = []
-
-CQI_SINR_BUF = CQI_SINR_MAP()
+NET_STATUS_CACHE = NetStatusCache()
 
 
 # (matlab.engine, [CandidateBaseStationInfo], (double,double))
 def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, VEHICLE):
     globals()
-    # number of base stations that're in interest
+    # Number of base stations that're in interest
     BS_INTEREST_NUM = len(BS_INTEREST_INFO)
+    # Vehicle's position
+    POS_VEHICLE = VEHICLE.pos
+    # Buffering the distance between vehicle and transmitter
+    DISTANCE_CACHE = [None for i in range(len(BASE_STATION_CONTROLLER))]
+    # Connection Indicators
     CQI_Iter = np.zeros(BS_INTEREST_NUM, dtype=float)
     SINR_Iter = np.zeros(BS_INTEREST_NUM, dtype=float)
-    # vehicle's position
-    POS_VEHICLE = VEHICLE.pos
-    # buffering the distance between vehicle and transmitter
-    DISTANCE_BUF = [None for i in range(len(BASE_STATION_CONTROLLER))]
 
     for tx_BS_idx, tx_BS_info_obj in enumerate(BS_INTEREST_INFO):
         tx_BS_obj = tx_BS_info_obj.station
-        if(CQI_SINR_BUF.Get(VEHICLE, tx_BS_obj) != None):
-            (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx]) = CQI_SINR_BUF.Get(
+        if(NET_STATUS_CACHE.isCache(VEHICLE, tx_BS_obj)):
+            status = NET_STATUS_CACHE.Get(
                 VEHICLE,
                 tx_BS_obj
             )
+            CQI_Iter[tx_BS_idx] = status.cqi
+            SINR_Iter[tx_BS_idx] = status.sinr
+            continue
+
         tx_social_group = tx_BS_info_obj.social_group
         Intf_dist = []
         Intf_pwr_dBm = []
@@ -396,20 +421,17 @@ def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, VEHICLE):
 
         # height of vehicle
         h_MS = 0.8
-
-        # distance between vehicle and station
-        if(DISTANCE_BUF[tx_BS_idx] == None):
-            DISTANCE_BUF[tx_BS_idx] = pow((tx_BS_obj.pos[0] - POS_VEHICLE[0])**2 +
-                                          (tx_BS_obj.pos[1] - POS_VEHICLE[1])**2, 0.5)
-        UE_dist = DISTANCE_BUF[tx_BS_idx]
-
-        # up to 4 us
+        # delay spread. (up to 4 us)
         DS_Desired = np.random.normal(0, 4)
+        # distance between vehicle and station
+        if(DISTANCE_CACHE[tx_BS_idx] == None):
+            DISTANCE_CACHE[tx_BS_idx] = pow((tx_BS_obj.pos[0] - POS_VEHICLE[0])**2 +
+                                            (tx_BS_obj.pos[1] - POS_VEHICLE[1])**2, 0.5)
+        UE_dist = DISTANCE_CACHE[tx_BS_idx]
 
         for intf_BS_obj in BASE_STATION_CONTROLLER:
             if (intf_BS_obj == tx_BS_obj):
                 continue
-
             if (intf_BS_obj.type == BaseStationType.UMA):
                 # intf-station antenna height
                 Intf_h_BS.append(BS_UMA_HEIGHT)
@@ -420,16 +442,15 @@ def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, VEHICLE):
                 Intf_h_BS.append(BS_UMI_HEIGHT)
                 # intf-station transmission power
                 Intf_pwr_dBm.append(BS_UMI_TRANS_PWR)
-
             # intf-vehicle height
             Intf_h_MS.append(0.8)
-
             # distance between vehicle and intf-station
-            if(DISTANCE_BUF[intf_BS_obj.serial] == None):
-                DISTANCE_BUF[intf_BS_obj.serial] = (pow((intf_BS_obj.pos[0] - POS_VEHICLE[0])**2 +
-                                                        (intf_BS_obj.pos[1] - POS_VEHICLE[1])**2, 0.5))
-            Intf_dist.append(DISTANCE_BUF[intf_BS_obj.serial])
+            if(DISTANCE_CACHE[intf_BS_obj.serial] == None):
+                DISTANCE_CACHE[intf_BS_obj.serial] = (pow((intf_BS_obj.pos[0] - POS_VEHICLE[0])**2 +
+                                                          (intf_BS_obj.pos[1] - POS_VEHICLE[1])**2, 0.5))
+            Intf_dist.append(DISTANCE_CACHE[intf_BS_obj.serial])
 
+        # Get CQI & Sinr
         (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx]) = MATLAB_ENG.SINR_Channel_Model_5G(
             float(UE_dist),
             float(h_BS),
@@ -445,11 +466,12 @@ def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, VEHICLE):
             float(CP),
             True if tx_BS_obj.type == BaseStationType.UMA else False,
             nargout=2)
-        # Buffering
-        CQI_SINR_BUF.Save(
+        # Caching
+        NET_STATUS_CACHE.Cache(
             VEHICLE,
             tx_BS_obj,
-            (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx])
+            CQI_Iter[tx_BS_idx],
+            SINR_Iter[tx_BS_idx]
         )
 
     return CQI_Iter, SINR_Iter

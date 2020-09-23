@@ -6,7 +6,7 @@ import math
 import numpy as np
 from threading import Thread
 from multiprocessing import Process
-from net_model import BaseStationController, BASE_STATION_CONTROLLER, CQI_SINR_BUF
+from net_model import BaseStationController, BASE_STATION_CONTROLLER, NET_STATUS_CACHE
 from veh_rec import VehicleRecorder
 from enum import IntEnum
 from datetime import datetime
@@ -98,26 +98,26 @@ def main():
 
         # Network simulations
         for i in range(TIMESLOTS_PER_STEP):
-            CQI_SINR_BUF.Initialize()
+            NET_STATUS_CACHE.Initialize()
 
-            veh_prls = []
+            veh_thrds = []
             # Update Vehicles (Parellelized)
             for v_id in SIM_STEP_INFO.veh_ids:
                 t = Thread(target=vehicle_recorders[v_id].Update)
                 t.start()
-                veh_prls.append(t)
+                veh_thrds.append(t)
             # Wait until all vehicles to finished their jobs
-            for t in veh_prls:
+            for t in veh_thrds:
                 t.join()
 
-            # bs_prls = []
+            # bs_thrds = []
             # # Update all BaseStations  (Parellelized)
             # for base_station in BASE_STATION_CONTROLLER:
             #     t = Thread(target=base_station.Update)
             #     t.start()
-            #     bs_prls.append(t)
+            #     bs_thrds.append(t)
             # # Wait until all base stations finished their jobs
-            # for t in bs_prls:
+            # for t in bs_thrds:
             #     t.join()
 
         step += 1
