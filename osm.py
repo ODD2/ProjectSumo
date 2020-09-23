@@ -6,7 +6,7 @@ import math
 import numpy as np
 from threading import Thread
 from multiprocessing import Process
-from net_model import BaseStationController, BASE_STATION_CONTROLLER
+from net_model import BaseStationController, BASE_STATION_CONTROLLER, CQI_SINR_BUF
 from veh_rec import VehicleRecorder
 from enum import IntEnum
 from datetime import datetime
@@ -45,13 +45,6 @@ def CreateBaseStationIndicator(name, setting):
 
 
 def main():
-    # Setup Traci Environment
-    if 'SUMO_HOME' in os.environ:
-        tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
-        print(tools)
-        sys.path.append(tools)
-    else:
-        sys.exit("please declare environment variable 'SUMO_HOME'")
 
     # Check Basic Requirements
     if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP < 0:
@@ -67,6 +60,7 @@ def main():
                  os.getcwd() + "\\osm.sumocfg",
                  "--start",
                  "--step-length", str(SIM_SECONDS_PER_STEP),
+                 #  "--begin", "30"
                  ])
 
     # Create Base Station Icon and Radius in SUMO
@@ -75,9 +69,13 @@ def main():
 
     # Submit all base stations to the Network Model
     for name, setting in BS_SETTINGS.items():
-        BASE_STATION_CONTROLLER.append(BaseStationController(
-            name,
-            setting["pos"], setting["type"]))
+        BASE_STATION_CONTROLLER.append(
+            BaseStationController(
+                name,
+                setting["pos"], setting["type"],
+                len(BASE_STATION_CONTROLLER)
+            )
+        )
 
     # Vehicle Recorders
     vehicle_recorders = {}
@@ -89,97 +87,43 @@ def main():
     step = 0
     while step < 1000:
         traci.simulationStep()
-        traci_vids = traci.vehicle.getIDList()
-        # Loop Through All Vehicles
-        for v_id in traci_vids:
-            # Newly Joined Vehicle: Create Vehicle Recorder For It
-            if not v_id in vehicle_recorders:
-                vehicle_recorders[v_id] = VehicleRecorder(v_id)
-                print("{}: joined the map.".format(v_id))
+        SIM_STEP_INFO.Update()
+        # Remove ghost vehicles
+        for ghost in SIM_STEP_INFO.ghost_veh_ids:
+            vehicle_recorders.pop(ghost)
 
+        # Add new vehicles
+        for v_id in SIM_STEP_INFO.new_veh_ids:
+            vehicle_recorders[v_id] = VehicleRecorder(v_id)
+
+        # Network simulations
         for i in range(TIMESLOTS_PER_STEP):
+            CQI_SINR_BUF.Initialize()
+
             veh_prls = []
             # Update Vehicles (Parellelized)
-            for v_id in traci_vids:
+            for v_id in SIM_STEP_INFO.veh_ids:
                 t = Thread(target=vehicle_recorders[v_id].Update)
                 t.start()
                 veh_prls.append(t)
-            # Wait all vehicles to finish their jobs
+            # Wait until all vehicles to finished their jobs
             for t in veh_prls:
                 t.join()
 
-            bs_prls = []
-            # Update all BaseStations  (Parellelized)
-            for base_station in BASE_STATION_CONTROLLER:
-                t = Thread(target=base_station.Update)
-                t.start()
-                bs_prls.append(t)
-            # Wait all base stations to finish their jobs
-            for t in bs_prls:
-                t.join()
-
-          # Find None-Updating Vehicles as Ghost Vehicles
-        current_time = traci.simulation.getTime()
-        ghost_vehicles = []
-        for v_id, vr_obj in vehicle_recorders.items():
-            if vr_obj.sync_time < current_time:
-                ghost_vehicles.append(v_id)
-
-        # Remove Ghost Vehicles
-        for v_id in ghost_vehicles:
-            print("{}: left the map.".format(v_id))
-            vehicle_recorders[v_id].Clear()
-            vehicle_recorders.pop(v_id)
+            # bs_prls = []
+            # # Update all BaseStations  (Parellelized)
+            # for base_station in BASE_STATION_CONTROLLER:
+            #     t = Thread(target=base_station.Update)
+            #     t.start()
+            #     bs_prls.append(t)
+            # # Wait until all base stations finished their jobs
+            # for t in bs_prls:
+            #     t.join()
 
         step += 1
     # End Simulation
     traci.close()
 
 
-def Job(mutex):
-    mutex.acquire()
-    print(traci.simulation.getTime())
-    mutex.release()
-
-
-def test():
-    # Setup Traci Environment
-    if 'SUMO_HOME' in os.environ:
-        tools = os.path.join(os.environ['SUMO_HOME'], 'tools')
-        print(tools)
-        sys.path.append(tools)
-    else:
-        sys.exit("please declare environment variable 'SUMO_HOME'")
-
-    # Check Basic Requirements
-    if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP < 0:
-        print("Error: seconds per simulation step should be larger than the value of seconds per network step.")
-        return
-    if SIM_SECONDS_PER_STEP/NET_SECONDS_PER_STEP % 1 != 0:
-        print("Error: seconds per simulation step should be totally devided by the value of seconds per network step.")
-        return
-
-    # Start Traci
-    traci.start(["sumo-gui",
-                 "-c",
-                 os.getcwd() + "\\osm.sumocfg",
-                 "--start",
-                 "--step-length", str(SIM_SECONDS_PER_STEP),
-                 ])
-    step = 0
-    while step < 1000000:
-        traci.simulationStep()
-        l = []
-        for i in range(10):
-            t = Thread(target=Job, args=())
-            t.start()
-            l.append(t)
-        for t in l:
-            t.join()
-
-        step += 1
-
-
 if __name__ == "__main__":
     main()
-    # test()

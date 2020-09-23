@@ -8,7 +8,30 @@ from copy import copy
 from net_pack import NetworkTransmitRequest, NetworkTransmitResponse, PackageProcessing, NetworkPackage
 from globs import *
 
-BASE_STATION_CONTROLLER = []
+
+class CQI_SINR_MAP:
+    def __init__(self):
+        self._map = {}
+
+    def Save(self, vehicle, bs_ctrlr, indicator):
+        if vehicle.name not in self._map:
+            print("Error!")
+        self._map[vehicle.name][bs_ctrlr.serial] = indicator
+
+    def Get(self, vehicle, bs_ctrlr):
+        return self._map[vehicle.name][bs_ctrlr.serial]
+
+    def Initialize(self):
+        globals()
+        # remove ghosts
+        for veh_id in SIM_STEP_INFO.ghost_veh_ids:
+            self._map.pop(veh_id)
+        # initialize
+        for key in SIM_STEP_INFO.veh_ids:
+            self._map[key] = [
+                None
+                for i in range(len(BASE_STATION_CONTROLLER))
+            ]
 
 
 class ReceiverState:
@@ -28,12 +51,13 @@ class SocialGroupBroadcastRequest:
 
 
 class BaseStationController:
-    def __init__(self, name, pos, bs_type):
+    def __init__(self, name, pos, bs_type, serial):
         # Base station paremeters
         self.name = name
         self.pos = pos
         self.radius = BS_UMI_RADIUS if bs_type == BaseStationType.UMI else BS_UMA_RADIUS
         self.type = bs_type
+        self.serial = serial
 
         # vehicles that've subscribed to specific social groups
         self.sbscrb_social_vehs = [[] for i in SocialGroup]
@@ -76,11 +100,10 @@ class BaseStationController:
                         # Save to local
                         self.recv_package.append(pkg_proc.package)
 
-                    TRACI_LOCK.acquire()
                     # log
                     print(
                         "{}-{}: type:{} target:{} origin:{}-{}*-{}b-{}-{}s ".format(
-                            traci.simulation.getTime(),
+                            SIM_STEP_INFO.time,
                             self.name,
                             link_type.name.lower(),
                             pkg_proc.opponent.name,
@@ -93,7 +116,6 @@ class BaseStationController:
                             pkg_proc.package.at,
                         )
                     )
-                    TRACI_LOCK.release()
 
             # remove transmitted packages
             for pkg_proc in pkg_procs_done:
@@ -199,15 +221,20 @@ class BaseStationController:
                         break
                     else:
                         # allocate resource block for transmit request
-
                         # the receiver of this package
                         recvr = recvr_state.recvr
+
+                        # Check if this receiver is still in service
+                        if recvr.name not in SIM_STEP_INFO.veh_ids:
+                            recvrs_done.append(recvr_state)
+                            continue
+
                         # remaining bits to transmit to complete the package
                         remain_bits = package.bits - recvr_state.bits_sent
                         # get sinr/cqi for receiver
                         _cqi, _sinr = GET_BS_CQI_SINR_5G(
                             [CandidateBaseStationInfo(self, social_group)],
-                            recvr.pos
+                            recvr
                         )
                         # get the maximum transmission size per resource-block according to cqi
                         rb_trans_size = MATLAB_ENG.GetThroughputPerRB(
@@ -247,6 +274,7 @@ class BaseStationController:
                         # record recvr if package completely transmitted
                         if(trans_size >= remain_bits):
                             recvrs_done.append(recvr_state)
+
                 # remove receivers that has received the complete package
                 for recvr_state in recvrs_done:
                     req_brdcst.recvr_stats.remove(recvr_state)
@@ -307,20 +335,36 @@ class BaseStationController:
 
 
 class CandidateBaseStationInfo:
-    def __init__(self, base_station, social_group):
-        self.transmitter = base_station
-        self.transmit_social_group = social_group
+    def __init__(self, station, social_group):
+        self.station = station
+        self.social_group = social_group
+
+
+BASE_STATION_CONTROLLER = []
+
+CQI_SINR_BUF = CQI_SINR_MAP()
+
 
 # (matlab.engine, [CandidateBaseStationInfo], (double,double))
-
-
-def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, UE_POSITION):
-    CQI_Iter = np.zeros(len(BS_INTEREST_INFO), dtype=float)
-    SINR_Iter = np.zeros(len(BS_INTEREST_INFO), dtype=float)
+def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, VEHICLE):
+    globals()
+    # number of base stations that're in interest
+    BS_INTEREST_NUM = len(BS_INTEREST_INFO)
+    CQI_Iter = np.zeros(BS_INTEREST_NUM, dtype=float)
+    SINR_Iter = np.zeros(BS_INTEREST_NUM, dtype=float)
+    # vehicle's position
+    POS_VEHICLE = VEHICLE.pos
+    # buffering the distance between vehicle and transmitter
+    DISTANCE_BUF = [None for i in range(len(BASE_STATION_CONTROLLER))]
 
     for tx_BS_idx, tx_BS_info_obj in enumerate(BS_INTEREST_INFO):
-        tx_BS_obj = tx_BS_info_obj.transmitter
-        tx_social_group = tx_BS_info_obj.transmit_social_group
+        tx_BS_obj = tx_BS_info_obj.station
+        if(CQI_SINR_BUF.Get(VEHICLE, tx_BS_obj) != None):
+            (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx]) = CQI_SINR_BUF.Get(
+                VEHICLE,
+                tx_BS_obj
+            )
+        tx_social_group = tx_BS_info_obj.social_group
         Intf_dist = []
         Intf_pwr_dBm = []
         Intf_h_BS = []
@@ -354,8 +398,10 @@ def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, UE_POSITION):
         h_MS = 0.8
 
         # distance between vehicle and station
-        UE_dist = pow((tx_BS_obj.pos[0] - UE_POSITION[0])**2 +
-                      (tx_BS_obj.pos[1] - UE_POSITION[1])**2, 0.5)
+        if(DISTANCE_BUF[tx_BS_idx] == None):
+            DISTANCE_BUF[tx_BS_idx] = pow((tx_BS_obj.pos[0] - POS_VEHICLE[0])**2 +
+                                          (tx_BS_obj.pos[1] - POS_VEHICLE[1])**2, 0.5)
+        UE_dist = DISTANCE_BUF[tx_BS_idx]
 
         # up to 4 us
         DS_Desired = np.random.normal(0, 4)
@@ -379,8 +425,10 @@ def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, UE_POSITION):
             Intf_h_MS.append(0.8)
 
             # distance between vehicle and intf-station
-            Intf_dist.append((pow((intf_BS_obj.pos[0] - UE_POSITION[0])**2 +
-                                  (intf_BS_obj.pos[1] - UE_POSITION[1])**2, 0.5)))
+            if(DISTANCE_BUF[intf_BS_obj.serial] == None):
+                DISTANCE_BUF[intf_BS_obj.serial] = (pow((intf_BS_obj.pos[0] - POS_VEHICLE[0])**2 +
+                                                        (intf_BS_obj.pos[1] - POS_VEHICLE[1])**2, 0.5))
+            Intf_dist.append(DISTANCE_BUF[intf_BS_obj.serial])
 
         (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx]) = MATLAB_ENG.SINR_Channel_Model_5G(
             float(UE_dist),
@@ -397,5 +445,11 @@ def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, UE_POSITION):
             float(CP),
             True if tx_BS_obj.type == BaseStationType.UMA else False,
             nargout=2)
+        # Buffering
+        CQI_SINR_BUF.Save(
+            VEHICLE,
+            tx_BS_obj,
+            (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx])
+        )
 
     return CQI_Iter, SINR_Iter

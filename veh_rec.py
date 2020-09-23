@@ -8,7 +8,7 @@ from queue import Queue
 from net_model import GET_BS_CQI_SINR_5G, BASE_STATION_CONTROLLER, BaseStationController, CandidateBaseStationInfo
 from net_pack import NetworkTransmitResponse, NetworkTransmitRequest, NetworkPackage, PackageProcessing
 from globs import SocialGroup, NetObjLayer, BaseStationType, NET_SG_RND_REQ_SIZE, LinkType
-from globs import TRACI_LOCK, MATLAB_ENG
+from globs import TRACI_LOCK, MATLAB_ENG, SIM_STEP_INFO
 
 
 class BriefBaseStationInfo:
@@ -139,8 +139,8 @@ class VehicleRecorder():
     def UpdateVehicleInfo(self):
         TRACI_LOCK.acquire()
         self.pos = traci.vehicle.getPosition(self.name)
-        self.sync_time = traci.simulation.getTime()
         TRACI_LOCK.release()
+        self.sync_time = SIM_STEP_INFO.time
 
     # Check if the latest subscribes base stations still has the validity to provide service
     def CheckSubscribeBSValidity(self):
@@ -183,7 +183,7 @@ class VehicleRecorder():
                         CandidateBaseStationInfo(bs_ctrlr, social_type)
                         for bs_ctrlr in bs_in_range[bs_type]
                     ],
-                    self.pos
+                    self
                 )
                 bs_idx = np.argmax(_cqi)
                 self.SubscribeBS(
@@ -377,7 +377,6 @@ class VehicleRecorder():
 
     # The Connection manager to manage connection between self and others
     def ConnectionChange(self, build, opponent):
-        return
         if(build):
             # Create connection recorder for this base station if not exists
             if(opponent.name not in self.con_state):
@@ -389,6 +388,7 @@ class VehicleRecorder():
             # Break connection
             self.con_state[opponent.name].share -= 1
 
+    # Clean up
     def Clear(self):
         # Clear connection recorders
         for name in self.con_state:

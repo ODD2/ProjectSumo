@@ -3,6 +3,7 @@ import math
 import threading
 import matlab
 import os
+import traci
 from numpy import random
 from enum import IntEnum, Enum
 
@@ -32,15 +33,51 @@ class NetObjLayer(IntEnum):
     CON_LINE = BS_POI + 1
 
 
+class SimulateStepInfo:
+    def __init__(self):
+        self.new_veh_ids = []
+        self.veh_ids = []
+        self.ghost_veh_ids = []
+        self.time = 0
+
+    def Update(self):
+        self.time = traci.simulation.getTime()
+        cur_veh_ids = traci.vehicle.getIDList()
+        # Find the vehicles that've left the map
+        self.ghost_veh_ids = [
+            veh_id
+            for veh_id in self.veh_ids
+            if veh_id not in cur_veh_ids
+        ]
+        # Find the vehicles that've joined the map
+        self.new_veh_ids = [
+            veh_id
+            for veh_id in cur_veh_ids
+            if veh_id not in self.veh_ids
+        ]
+        # Update current vehicle ids
+        self.veh_ids = cur_veh_ids
+
+        for vid in self.new_veh_ids:
+            print("{}: joined the map.".format(vid))
+        for vid in self.ghost_veh_ids:
+            print("{}: left the map.".format(vid))
+
+
+# Threading -Traci
+TRACI_LOCK = threading.Lock()
+
 # Matlab
 MATLAB_ENG = matlab.engine.start_matlab()
 MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\")
 MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\SelectCQI_bySNR\\")
 # Traci
-TRACI_LOCK = threading.Lock()
+
+
 # Initialize Random (not sure if it's working)
 random.seed(132342421)
 # Simulation Settings
+SIM_STEP_INFO = SimulateStepInfo()
 SIM_SECONDS_PER_STEP = 0.1
 # Network Settings
 NET_RB_SLOT_SYMBOLS = 14
