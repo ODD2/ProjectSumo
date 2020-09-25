@@ -27,7 +27,8 @@ class NetworkTransmitResponse:
 
 
 class PackageProcessing:
-    def __init__(self, package: NetworkPackage, opponent, time_slots: float):
+    def __init__(self, package: NetworkPackage, opponent, bits, time_slots: float):
         self.package = package
         self.opponent = opponent
-        self.req_time_slots = time_slots
+        self.proc_bits = bits
+        self.time_slots = time_slots

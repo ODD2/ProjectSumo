@@ -85,7 +85,7 @@ def main():
 
     # Start Simulation
     step = 0
-    while step < 1000:
+    while step < (1/SIM_SECONDS_PER_STEP)*100:
         traci.simulationStep()
         SIM_STEP_INFO.Update()
         # Remove ghost vehicles
@@ -110,15 +110,15 @@ def main():
             for t in veh_thrds:
                 t.join()
 
-            # bs_thrds = []
-            # # Update all BaseStations  (Parellelized)
-            # for base_station in BASE_STATION_CONTROLLER:
-            #     t = Thread(target=base_station.Update)
-            #     t.start()
-            #     bs_thrds.append(t)
-            # # Wait until all base stations finished their jobs
-            # for t in bs_thrds:
-            #     t.join()
+            bs_thrds = []
+            # Update all BaseStations  (Parellelized)
+            for base_station in BASE_STATION_CONTROLLER:
+                t = Thread(target=base_station.Update)
+                t.start()
+                bs_thrds.append(t)
+            # Wait until all base stations finished their jobs
+            for t in bs_thrds:
+                t.join()
 
         step += 1
     # End Simulation

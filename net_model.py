@@ -20,23 +20,26 @@ class NetStatusCache:
     def __init__(self):
         self._map = {}
 
-    def Get(self, vehicle, bs_ctrlr):
-        if vehicle.name not in self._map:
-            raise Exception("Error! vehicle should be in the map!!")
-        return self._map[vehicle.name][bs_ctrlr.serial]
+    # param [(vehicle,bs_ctrlr,social_group)]
+    def GetMultiNetStatus(self, query_tuples):
+        result = []
+        for query_tuple in query_tuples:
+            result.append(self.GetNetStatus(query_tuple))
+        return result
 
-    def isCache(self, vehicle, bs_ctrlr):
-        if vehicle.name not in self._map:
+    # param [(vehicle,bs_ctrlr,social_group)]
+    def GetNetStatus(self, query_tuple):
+        if query_tuple[0].name not in self._map:
             raise Exception("Error! vehicle should be in the map!!")
-        return self._map[vehicle.name][bs_ctrlr.serial].cached
 
-    def Cache(self, vehicle, bs_ctrlr, cqi, sinr):
-        if vehicle.name not in self._map:
-            raise Exception("Error! vehicle should be in the map!!")
-        status = self._map[vehicle.name][bs_ctrlr.serial]
-        status.cached = True
-        status.cqi = cqi
-        status.sinr = sinr
+        net_stat = self._map[query_tuple[0].name][query_tuple[1].serial][query_tuple[2]]
+        if (not net_stat.cached):
+            (net_stat.cqi, net_stat.sinr) = GET_BS_CQI_SINR_5G(
+                query_tuple[0],
+                query_tuple[1],
+                query_tuple[2])
+            net_stat.cached = True
+        return net_stat
 
     def Initialize(self):
         globals()
@@ -46,26 +49,27 @@ class NetStatusCache:
         # add new vehicles
         for veh_id in SIM_STEP_INFO.new_veh_ids:
             self._map[veh_id] = [
-                NetStatus()
+                [NetStatus() for sg in SocialGroup]
                 for i in range(len(BASE_STATION_CONTROLLER))
             ]
         # initialize
-        for status_list in self._map.values():
-            for i in range(len(BASE_STATION_CONTROLLER)):
-                status_list[i].cached = False
+        for veh_status_list in self._map.values():
+            for bs_idx in range(len(BASE_STATION_CONTROLLER)):
+                for sg in SocialGroup:
+                    veh_status_list[bs_idx][sg].cached = False
 
 
-class ReceiverState:
-    def __init__(self, recvr):
-        self.bits_sent = 0
-        self.recvr = recvr
+# class ReceiverState:
+#     def __init__(self, recvr):
+#         self.bits_sent = 0
+#         self.recvr = recvr
 
 
 class SocialGroupBroadcastRequest:
     def __init__(self, package, recvrs):
         self.package = package
-        self.recvr_stats = [
-            ReceiverState(recvr)
+        self.recvrs = [
+            recvr
             for recvr in recvrs
             if recvr != package.owner
         ]
@@ -108,18 +112,21 @@ class BaseStationController:
             pkg_procs_done = []
             for pkg_proc in self.pkg_in_proc[link_type]:
                 # consume time slot
-                pkg_proc.req_time_slots -= 1
+                pkg_proc.time_slots -= 1
+                package = pkg_proc.package
                 # consume bandwidth
                 self.valid_bandwidth[link_type] -= self.RequiredBandwidth(
-                    pkg_proc.package.social_group
+                    package.social_group
                 )
-                if(pkg_proc.req_time_slots == 0):
+                if(pkg_proc.time_slots == 0):
                     # package that has done transmitting are collected
                     pkg_procs_done.append(pkg_proc)
                     # if the package is uploaded
                     if(link_type == LinkType.UPLOAD):
+                        local_pckg = copy(package)
+                        local_pckg.bits = pkg_proc.proc_bits
                         # Save to local
-                        self.recv_package.append(pkg_proc.package)
+                        self.recv_package.append(local_pckg)
 
                     # log
                     print(
@@ -128,13 +135,11 @@ class BaseStationController:
                             self.name,
                             link_type.name.lower(),
                             pkg_proc.opponent.name,
-                            pkg_proc.package.owner.name,
-                            pkg_proc.package.name,
-                            pkg_proc.package.bits,
-                            SocialGroup(
-                                pkg_proc.package.social_group
-                            ).name.lower(),
-                            pkg_proc.package.at,
+                            package.owner.name,
+                            package.name,
+                            pkg_proc.proc_bits,
+                            SocialGroup(package.social_group).name.lower(),
+                            package.at,
                         )
                     )
 
@@ -144,72 +149,88 @@ class BaseStationController:
                 self.pkg_in_proc[link_type].remove(pkg_proc)
 
     # Function called by VehicleRecorder to submit upload requests to this base station
-    def Upload(self, req: NetworkTransmitRequest):
-        self.sg_upload_req[req.package.social_group].append(req)
+    def Upload(self, package):
+        self.sg_upload_req[package.social_group].append(package)
 
     # Serve submitted upload requests
     def ServeUploadRequest(self):
+        globals()
         for social_group in SocialGroup:
             # Check if there exists pending requests
-            if len(self.sg_upload_req[social_group.value]) > 0:
-                # sort with cqi
-                requests = self.sg_upload_req[social_group.value]
-                requests.sort(reverse=True, key=(lambda x: x.cqi))
+            if len(self.sg_upload_req[social_group]) > 0:
                 # required resource block bandwidth for social group msg
                 req_bandwidth_per_rb = self.RequiredBandwidth(social_group)
                 # required timeslot for using this bandwidth
-                req_time_slots = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
+                time_slots = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
+
+                # fetch transmission size for each request
+                req_txs_list = []
+                for package in self.sg_upload_req[social_group]:
+                    trans_rate = MATLAB_ENG.GetThroughputPerRB(
+                        float(NET_STATUS_CACHE.GetNetStatus(
+                            (
+                                package.owner,
+                                self,
+                                social_group
+                            )
+                        ).cqi),
+                        int(NET_RB_SLOT_SYMBOLS)
+                    )
+                    req_txs_list.append((package, trans_rate))
+
+                # sort with trans size
+                req_txs_list.sort(
+                    reverse=True,
+                    key=(
+                        lambda req_txr: req_txr[1]
+                    )
+                )
+
                 # serve requests
-                for req in requests:
-                    package = req.package
+                for req_txs in req_txs_list:
+                    package = req_txs[0]
+                    rb_trans_size = req_txs[1]
                     if self.valid_bandwidth[LinkType.UPLOAD] < req_bandwidth_per_rb:
-                        package = copy(package)
-                        # no resource block to allocate
-                        package.bits = 0
                         # notify request owner
                         package.owner.UploadRequestResponse(
-                            NetworkTransmitResponse(
-                                False,
-                                self,
-                                package
-                            )
+                            self,
+                            package,
+                            0,
+                            0
                         )
                     else:
                         # allocate resource block for transmit request
-                        # get the maximum transmission size per resource-block according to cqi
-                        rb_trans_size = MATLAB_ENG.GetThroughputPerRB(
-                            float(req.cqi),
-                            int(NET_RB_SLOT_SYMBOLS)
-                        )
+
+                        # the useable resource blocks
                         valid_resource_blocks = math.floor(
                             self.valid_bandwidth[LinkType.UPLOAD] /
                             req_bandwidth_per_rb
                         )
+
                         # available total transmission size
                         valid_trans_size = rb_trans_size * valid_resource_blocks
-                        # get the actual transmission size
+
+                        # the actual transmission size
                         trans_size = valid_trans_size if valid_trans_size < package.bits else package.bits
                         total_required_bandwidth = (req_bandwidth_per_rb *
                                                     math.ceil(trans_size/rb_trans_size))
                         # consume required bandwidth
                         self.valid_bandwidth[LinkType.UPLOAD] -= total_required_bandwidth
-                        package = copy(package)
-                        package.bits = trans_size
-                        # notify request owner
+
+                        # reply request owner
                         package.owner.UploadRequestResponse(
-                            NetworkTransmitResponse(
-                                True,
-                                self,
-                                package,
-                                req_time_slots
-                            )
+                            self,
+                            package,
+                            trans_size,
+                            time_slots
                         )
                         # create package to process
                         self.pkg_in_proc[LinkType.UPLOAD].append(
                             PackageProcessing(
                                 package,
                                 package.owner,
-                                req_time_slots
+                                trans_size,
+                                time_slots
                             )
                         )
 
@@ -224,86 +245,101 @@ class BaseStationController:
             )
 
     def ServeBroadcastRequest(self):
+        globals()
         for social_group in SocialGroup:
-            reqs_brdcst_done = []
+            # record broadcast requests that're done
+            brdcst_reqs_done = []
             # required resource block bandwidth for social group msg
             req_bandwidth_per_rb = self.RequiredBandwidth(social_group)
             # required timeslot for using this bandwidth
-            req_time_slots = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
+            time_slots = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
             for req_brdcst in self.sg_broadcast_req[social_group]:
-                package = req_brdcst.package
-                recvrs_done = []
                 # Not enought bandwidth for this type of social group request
                 if self.valid_bandwidth[LinkType.DOWNLOAD] < req_bandwidth_per_rb:
                     break
-                for recvr_state in req_brdcst.recvr_stats:
-                    # Not enought bandwidth for this social group receiver
-                    if self.valid_bandwidth[LinkType.DOWNLOAD] < req_bandwidth_per_rb:
-                        break
-                    else:
-                        # allocate resource block for transmit request
-                        # the receiver of this package
-                        recvr = recvr_state.recvr
 
-                        # Check if this receiver is still in service
-                        if recvr.name not in SIM_STEP_INFO.veh_ids:
-                            recvrs_done.append(recvr_state)
-                            continue
+                package = req_brdcst.package
 
-                        # remaining bits to transmit to complete the package
-                        remain_bits = package.bits - recvr_state.bits_sent
-                        # get sinr/cqi for receiver
-                        _cqi, _sinr = GET_BS_CQI_SINR_5G(
-                            [CandidateBaseStationInfo(self, social_group)],
-                            recvr
-                        )
-                        # get the maximum transmission size per resource-block according to cqi
-                        rb_trans_size = MATLAB_ENG.GetThroughputPerRB(
-                            float(_cqi),
-                            int(NET_RB_SLOT_SYMBOLS)
-                        )
-                        valid_resource_blocks = math.floor(
-                            self.valid_bandwidth[LinkType.UPLOAD] /
-                            req_bandwidth_per_rb
-                        )
-                        # available total transmission size
-                        valid_trans_size = rb_trans_size * valid_resource_blocks
-                        # get the actual transmission size
-                        trans_size = valid_trans_size if valid_trans_size < remain_bits else remain_bits
-                        # get the total required bandwidth
-                        total_required_bandwidth = (req_bandwidth_per_rb *
-                                                    math.ceil(trans_size/rb_trans_size))
-                        # consume required bandwidth
-                        self.valid_bandwidth[LinkType.DOWNLOAD] -= total_required_bandwidth
-                        # set package
-                        package = copy(package)
-                        package.bits = trans_size
-                        # notify receiver
-                        recvr.ReceivePackage(
-                            self,
+                # Record receivers that're out of service
+                out_of_service_recvrs = []
+
+                # Find the lowest cqi in receiver lists
+                lowest_cqi_in_recvrs = 30
+                for recvr in req_brdcst.recvrs:
+                    # Check if this receiver is still in service
+                    if recvr.name not in SIM_STEP_INFO.veh_ids:
+                        out_of_service_recvrs.append(recvr)
+                        continue
+                    # Get net status of the recvr
+                    net_status = NET_STATUS_CACHE.GetNetStatus(
+                        (recvr, self, social_group)
+                    )
+                    # Check if net status cqi is lower
+                    if(net_status.cqi < lowest_cqi_in_recvrs):
+                        lowest_cqi_in_recvrs = net_status.cqi
+
+                # remove out of service receivers
+                for recvr in out_of_service_recvrs:
+                    req_brdcst.recvrs.remove(recvr)
+
+                # broadcast request done if theirs no one to serve
+                if(len(req_brdcst.recvrs) == 0):
+                    brdcst_reqs_done.append(req_brdcst)
+                    continue
+
+                # The maximum transmission size per resource-block according to cqi
+                rb_trans_size = MATLAB_ENG.GetThroughputPerRB(
+                    float(lowest_cqi_in_recvrs),
+                    int(NET_RB_SLOT_SYMBOLS)
+                )
+
+                # total resource blocks valid for this type of social message
+                valid_resource_blocks = math.floor(
+                    self.valid_bandwidth[LinkType.UPLOAD] /
+                    req_bandwidth_per_rb
+                )
+
+                # available total transmission size
+                valid_trans_size = rb_trans_size * valid_resource_blocks
+
+                # the actual transmission size
+                trans_size = valid_trans_size if valid_trans_size < package.bits else package.bits
+
+                # the total required bandwidth
+                total_required_bandwidth = (req_bandwidth_per_rb *
+                                            math.ceil(trans_size/rb_trans_size))
+
+                # consume required bandwidth
+                self.valid_bandwidth[LinkType.DOWNLOAD] -= total_required_bandwidth
+
+                # remove transmitted size
+                package.bits -= trans_size
+
+                for recvr in req_brdcst.recvrs:
+                    # notify receiver
+                    recvr.ReceivePackage(
+                        self,
+                        package,
+                        trans_size,
+                        time_slots
+                    )
+
+                    # package in process
+                    self.pkg_in_proc[LinkType.DOWNLOAD].append(
+                        PackageProcessing(
                             package,
-                            req_time_slots
+                            recvr,
+                            trans_size,
+                            time_slots
                         )
-                        # create package to process
-                        self.pkg_in_proc[LinkType.DOWNLOAD].append(
-                            PackageProcessing(
-                                package,
-                                recvr,
-                                req_time_slots
-                            )
-                        )
-                        # record recvr if package completely transmitted
-                        if(trans_size >= remain_bits):
-                            recvrs_done.append(recvr_state)
+                    )
 
-                # remove receivers that has received the complete package
-                for recvr_state in recvrs_done:
-                    req_brdcst.recvr_stats.remove(recvr_state)
-                # record broadcast request if all reciever recieves package.
-                if len(req_brdcst.recvr_stats) == 0:
-                    reqs_brdcst_done.append(req_brdcst)
+                # broadcast request done if all data have been transmitted
+                if package.bits == 0:
+                    brdcst_reqs_done.append(req_brdcst)
+                    continue
             # remove completed broadcast requests
-            for req_brdcst in reqs_brdcst_done:
+            for req_brdcst in brdcst_reqs_done:
                 self.sg_broadcast_req[social_group].remove(req_brdcst)
 
     def PropagateSocialPackage(self, cloud):
@@ -366,112 +402,79 @@ NET_STATUS_CACHE = NetStatusCache()
 
 
 # (matlab.engine, [CandidateBaseStationInfo], (double,double))
-def GET_BS_CQI_SINR_5G(BS_INTEREST_INFO, VEHICLE):
-    globals()
-    # Number of base stations that're in interest
-    BS_INTEREST_NUM = len(BS_INTEREST_INFO)
+def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group):
     # Vehicle's position
-    POS_VEHICLE = VEHICLE.pos
-    # Buffering the distance between vehicle and transmitter
-    DISTANCE_CACHE = [None for i in range(len(BASE_STATION_CONTROLLER))]
-    # Connection Indicators
-    CQI_Iter = np.zeros(BS_INTEREST_NUM, dtype=float)
-    SINR_Iter = np.zeros(BS_INTEREST_NUM, dtype=float)
+    Intf_dist = []
+    Intf_pwr_dBm = []
+    Intf_h_BS = []
+    Intf_h_MS = []
+    cqi = 0
+    sinr = 0
 
-    for tx_BS_idx, tx_BS_info_obj in enumerate(BS_INTEREST_INFO):
-        tx_BS_obj = tx_BS_info_obj.station
-        if(NET_STATUS_CACHE.isCache(VEHICLE, tx_BS_obj)):
-            status = NET_STATUS_CACHE.Get(
-                VEHICLE,
-                tx_BS_obj
-            )
-            CQI_Iter[tx_BS_idx] = status.cqi
-            SINR_Iter[tx_BS_idx] = status.sinr
+    # Confirm settings with 3GPP specs
+    if (bs_ctrlr.type == BaseStationType.UMA):
+        # height of antenna
+        h_BS = BS_UMA_HEIGHT
+        # UMA transmission power
+        tx_p_dBm = BS_UMA_TRANS_PWR
+        # resource block bandwidth
+        bandwidth = BS_UMA_RB_BANDWIDTH
+        # cyclic prefix
+        CP = BS_UMA_CP
+        # GHz
+        fc = BS_UMA_FREQ
+    else:
+        # height of antenna
+        h_BS = BS_UMI_HEIGHT
+        # UMI transmission power
+        tx_p_dBm = BS_UMI_TRANS_PWR
+        # resource block bandwidth
+        bandwidth = BS_UMI_RB_BANDWIDTH_SOCIAL[social_group]
+        # cyclic prefix
+        CP = BS_UMI_CP_SOCIAL[social_group]
+        # GHz
+        fc = BS_UMI_FREQ
+    # height of vehicle
+    h_MS = 0.8
+    # delay spread. (up to 4 us)
+    DS_Desired = np.random.normal(0, 4)
+    # distance between vehicle and station
+    UE_dist = pow((bs_ctrlr.pos[0] - vehicle.pos[0])**2 +
+                  (bs_ctrlr.pos[1] - vehicle.pos[1])**2, 0.5)
+
+    for intf_BS_obj in BASE_STATION_CONTROLLER:
+        if (intf_BS_obj == bs_ctrlr):
             continue
-
-        tx_social_group = tx_BS_info_obj.social_group
-        Intf_dist = []
-        Intf_pwr_dBm = []
-        Intf_h_BS = []
-        Intf_h_MS = []
-
-        # Confirm settings with 3GPP specs
-        if (tx_BS_obj.type == BaseStationType.UMA):
-            # height of antenna
-            h_BS = BS_UMA_HEIGHT
-            # UMA transmission power
-            tx_p_dBm = BS_UMA_TRANS_PWR
-            # resource block bandwidth
-            bandwidth = BS_UMA_RB_BANDWIDTH
-            # cyclic prefix
-            CP = BS_UMA_CP
-            # GHz
-            fc = BS_UMA_FREQ
+        if (intf_BS_obj.type == BaseStationType.UMA):
+            # intf-station antenna height
+            Intf_h_BS.append(BS_UMA_HEIGHT)
+            # intf-station transmission power
+            Intf_pwr_dBm.append(BS_UMA_TRANS_PWR)
         else:
-            # height of antenna
-            h_BS = BS_UMI_HEIGHT
-            # UMI transmission power
-            tx_p_dBm = BS_UMI_TRANS_PWR
-            # resource block bandwidth
-            bandwidth = BS_UMI_RB_BANDWIDTH_SOCIAL[tx_social_group]
-            # cyclic prefix
-            CP = BS_UMI_CP_SOCIAL[tx_social_group]
-            # GHz
-            fc = BS_UMI_FREQ
+            # intf-station antenna height
+            Intf_h_BS.append(BS_UMI_HEIGHT)
+            # intf-station transmission power
+            Intf_pwr_dBm.append(BS_UMI_TRANS_PWR)
+        # intf-vehicle height
+        Intf_h_MS.append(0.8)
+        # distance between vehicle and intf-station
+        Intf_dist.append(pow((intf_BS_obj.pos[0] - vehicle.pos[0])**2 +
+                             (intf_BS_obj.pos[1] - vehicle.pos[1])**2, 0.5))
 
-        # height of vehicle
-        h_MS = 0.8
-        # delay spread. (up to 4 us)
-        DS_Desired = np.random.normal(0, 4)
-        # distance between vehicle and station
-        if(DISTANCE_CACHE[tx_BS_idx] == None):
-            DISTANCE_CACHE[tx_BS_idx] = pow((tx_BS_obj.pos[0] - POS_VEHICLE[0])**2 +
-                                            (tx_BS_obj.pos[1] - POS_VEHICLE[1])**2, 0.5)
-        UE_dist = DISTANCE_CACHE[tx_BS_idx]
-
-        for intf_BS_obj in BASE_STATION_CONTROLLER:
-            if (intf_BS_obj == tx_BS_obj):
-                continue
-            if (intf_BS_obj.type == BaseStationType.UMA):
-                # intf-station antenna height
-                Intf_h_BS.append(BS_UMA_HEIGHT)
-                # intf-station transmission power
-                Intf_pwr_dBm.append(BS_UMA_TRANS_PWR)
-            else:
-                # intf-station antenna height
-                Intf_h_BS.append(BS_UMI_HEIGHT)
-                # intf-station transmission power
-                Intf_pwr_dBm.append(BS_UMI_TRANS_PWR)
-            # intf-vehicle height
-            Intf_h_MS.append(0.8)
-            # distance between vehicle and intf-station
-            if(DISTANCE_CACHE[intf_BS_obj.serial] == None):
-                DISTANCE_CACHE[intf_BS_obj.serial] = (pow((intf_BS_obj.pos[0] - POS_VEHICLE[0])**2 +
-                                                          (intf_BS_obj.pos[1] - POS_VEHICLE[1])**2, 0.5))
-            Intf_dist.append(DISTANCE_CACHE[intf_BS_obj.serial])
-
-        # Get CQI & Sinr
-        (CQI_Iter[tx_BS_idx], SINR_Iter[tx_BS_idx]) = MATLAB_ENG.SINR_Channel_Model_5G(
-            float(UE_dist),
-            float(h_BS),
-            float(h_MS),
-            float(fc),
-            float(tx_p_dBm),
-            float(bandwidth),
-            matlab.double(Intf_h_BS),
-            matlab.double(Intf_h_MS),
-            matlab.double(Intf_dist),
-            matlab.double(Intf_pwr_dBm),
-            float(DS_Desired),
-            float(CP),
-            True if tx_BS_obj.type == BaseStationType.UMA else False,
-            nargout=2)
-        # Caching
-        NET_STATUS_CACHE.Cache(
-            VEHICLE,
-            tx_BS_obj,
-            CQI_Iter[tx_BS_idx],
-            SINR_Iter[tx_BS_idx]
-        )
-
-    return CQI_Iter, SINR_Iter
+    # result
+    cqi, sinr = MATLAB_ENG.SINR_Channel_Model_5G(
+        float(UE_dist),
+        float(h_BS),
+        float(h_MS),
+        float(fc),
+        float(tx_p_dBm),
+        float(bandwidth),
+        matlab.double(Intf_h_BS),
+        matlab.double(Intf_h_MS),
+        matlab.double(Intf_dist),
+        matlab.double(Intf_pwr_dBm),
+        float(DS_Desired),
+        float(CP),
+        True if bs_ctrlr.type == BaseStationType.UMA else False,
+        nargout=2)
+    return cqi, sinr
