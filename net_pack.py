@@ -1,4 +1,3 @@
-
 from globs import SocialGroup
 
 
@@ -12,7 +11,7 @@ class NetworkPackage:
 
 
 class NetworkTransmitRequest:
-    def __init__(self, package: NetworkPackage,  cqi: float, sinr: float):
+    def __init__(self, package: NetworkPackage, cqi: float, sinr: float):
         self.package = package
         self.cqi = cqi
         self.sinr = sinr
@@ -27,8 +26,11 @@ class NetworkTransmitResponse:
 
 
 class PackageProcessing:
-    def __init__(self, package: NetworkPackage, opponent, bits, time_slots: float):
+    def __init__(self, package: NetworkPackage, opponent, bits: int, tx_ts: int, of_ts: int):
         self.package = package
         self.opponent = opponent
         self.proc_bits = bits
-        self.time_slots = time_slots
+        # transmission time slots
+        self.tx_ts = tx_ts
+        # offset time slots
+        self.of_ts = of_ts

@@ -48,20 +48,26 @@ def main():
 
     # Check Basic Requirements
     if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP < 0:
-        print("Error: seconds per simulation step should be larger than the value of seconds per network step.")
+        print(
+            "Error: seconds per simulation step should be larger than the value of seconds per network step."
+        )
         return
-    if SIM_SECONDS_PER_STEP/NET_SECONDS_PER_STEP % 1 != 0:
-        print("Error: seconds per simulation step should be totally devided by the value of seconds per network step.")
+    if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP % 1 != 0:
+        print(
+            "Error: seconds per simulation step should be totally devided by the value of seconds per network step."
+        )
         return
 
     # Start Traci
-    traci.start(["sumo",
-                 "-c",
-                 os.getcwd() + "\\osm.sumocfg",
-                 "--start",
-                 "--step-length", str(SIM_SECONDS_PER_STEP),
-                 #  "--begin", "30"
-                 ])
+    traci.start([
+        "sumo",
+        "-c",
+        os.getcwd() + "\\osm.sumocfg",
+        "--start",
+        "--step-length",
+        str(SIM_SECONDS_PER_STEP),
+        #  "--begin", "30"
+    ])
 
     # Create Base Station Icon and Radius in SUMO
     for name, setting in BS_SETTINGS.items():
@@ -70,24 +76,24 @@ def main():
     # Submit all base stations to the Network Model
     for name, setting in BS_SETTINGS.items():
         BASE_STATION_CONTROLLER.append(
-            BaseStationController(
-                name,
-                setting["pos"], setting["type"],
-                len(BASE_STATION_CONTROLLER)
-            )
-        )
+            BaseStationController(name, setting["pos"], setting["type"],
+                                  len(BASE_STATION_CONTROLLER)))
 
     # Vehicle Recorders
     vehicle_recorders = {}
 
     # Frequently used constants
-    TIMESLOTS_PER_STEP = int(SIM_SECONDS_PER_STEP/NET_SECONDS_PER_STEP)
+    NET_STEPS_PER_SIM_STEP = int(SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP)
+    TOTAL_SIM_STEPS = (1 / SIM_SECONDS_PER_STEP) * 100
 
     # Start Simulation
     step = 0
-    while step < (1/SIM_SECONDS_PER_STEP)*100:
+    while step < TOTAL_SIM_STEPS:
         traci.simulationStep()
         SIM_STEP_INFO.Update()
+        # Flush NetStatusCache because the vehicles might move in this step.
+        NET_STATUS_CACHE.Flush()
+
         # Remove ghost vehicles
         for ghost in SIM_STEP_INFO.ghost_veh_ids:
             vehicle_recorders.pop(ghost)
@@ -97,28 +103,34 @@ def main():
             vehicle_recorders[v_id] = VehicleRecorder(v_id)
 
         # Network simulations
-        for i in range(TIMESLOTS_PER_STEP):
-            NET_STATUS_CACHE.Initialize()
+        for _ in range(NET_STEPS_PER_SIM_STEP):
+            # Time slots per network simulation step
+            for ts in range(1, NET_TS_PER_STEP+1):
+                veh_thrds = []
+                # Update vehicles (Parellelized)
+                for v_id in SIM_STEP_INFO.veh_ids:
+                    t = Thread(
+                        target=vehicle_recorders[v_id].Update,
+                        args=(ts)
+                    )
+                    t.start()
+                    veh_thrds.append(t)
+                # Wait until all vehicles to finished their jobs
+                for t in veh_thrds:
+                    t.join()
 
-            veh_thrds = []
-            # Update Vehicles (Parellelized)
-            for v_id in SIM_STEP_INFO.veh_ids:
-                t = Thread(target=vehicle_recorders[v_id].Update)
-                t.start()
-                veh_thrds.append(t)
-            # Wait until all vehicles to finished their jobs
-            for t in veh_thrds:
-                t.join()
-
-            bs_thrds = []
-            # Update all BaseStations  (Parellelized)
-            for base_station in BASE_STATION_CONTROLLER:
-                t = Thread(target=base_station.Update)
-                t.start()
-                bs_thrds.append(t)
-            # Wait until all base stations finished their jobs
-            for t in bs_thrds:
-                t.join()
+                bs_thrds = []
+                # Update all base stations  (Parellelized)
+                for base_station in BASE_STATION_CONTROLLER:
+                    t = Thread(
+                        target=base_station.Update,
+                        args=(ts)
+                    )
+                    t.start()
+                    bs_thrds.append(t)
+                # Wait until all base stations finished their jobs
+                for t in bs_thrds:
+                    t.join()
 
         step += 1
     # End Simulation

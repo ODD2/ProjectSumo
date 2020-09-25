@@ -45,15 +45,11 @@ class SimulateStepInfo:
         cur_veh_ids = traci.vehicle.getIDList()
         # Find the vehicles that've left the map
         self.ghost_veh_ids = [
-            veh_id
-            for veh_id in self.veh_ids
-            if veh_id not in cur_veh_ids
+            veh_id for veh_id in self.veh_ids if veh_id not in cur_veh_ids
         ]
         # Find the vehicles that've joined the map
         self.new_veh_ids = [
-            veh_id
-            for veh_id in cur_veh_ids
-            if veh_id not in self.veh_ids
+            veh_id for veh_id in cur_veh_ids if veh_id not in self.veh_ids
         ]
         # Update current vehicle ids
         self.veh_ids = cur_veh_ids
@@ -73,7 +69,6 @@ MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\")
 MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\SelectCQI_bySNR\\")
 # Traci
 
-
 # Initialize Random (not sure if it's working)
 random.seed(132342421)
 # Simulation Settings
@@ -82,8 +77,8 @@ SIM_SECONDS_PER_STEP = 0.1
 # Network Settings
 NET_RB_SLOT_SYMBOLS = 14
 NET_SECONDS_PER_STEP = 0.1
-NET_RB_BANDWIDTH_TS = {180000: 1,
-                       360000: 2}
+NET_TS_PER_STEP = 2
+NET_RB_BANDWIDTH_TS = {180000: 1, 360000: 2}
 NET_SG_RND_REQ_SIZE = {
     # SocialGroup.CRITICAL: [300, 1100],
     # SocialGroup.GENERAL: [64, 2048],
@@ -92,23 +87,31 @@ NET_SG_RND_REQ_SIZE = {
 }
 
 # Base Station Settings
+BS_TOTAL_BANDWIDTH = {
+    BaseStationType.UMA: 20000000,
+    BaseStationType.UMI: 10000000
+}
 BS_UMA_FREQ = 2.0  # Ghz
-BS_UMI_FREQ = 3.5  # Ghz
 BS_UMA_TRANS_PWR = 23
-BS_UMI_TRANS_PWR = 10
 BS_UMA_HEIGHT = 25
-BS_UMI_HEIGHT = 10
 BS_UMA_RB_BANDWIDTH = 360000
-BS_UMI_RB_BANDWIDTH_SOCIAL = {SocialGroup.CRITICAL: 180000,
-                              SocialGroup.GENERAL: 360000}
-BS_UMI_RADIUS_COLOR = (178, 178, 76, 128)
 BS_UMA_RADIUS_COLOR = (178, 76, 76, 128)
 BS_UMA_RADIUS = 500
-BS_UMI_RADIUS = 50
 BS_UMA_CP = 4.69
-BS_UMI_CP_SOCIAL = {SocialGroup.CRITICAL: 2.34,
-                    SocialGroup.GENERAL: 4.69}
-BS_ALL_BANDWIDTH = 10000000
+BS_UMI_FREQ = 3.5  # Ghz
+BS_UMI_TRANS_PWR = 10
+BS_UMI_HEIGHT = 10
+BS_UMI_RADIUS_COLOR = (178, 178, 76, 128)
+BS_UMI_RADIUS = 50
+BS_UMI_CP_SOCIAL = {
+    SocialGroup.CRITICAL: 2.34,
+    SocialGroup.GENERAL: 4.69
+}
+BS_UMI_RB_BANDWIDTH_SOCIAL = {
+    SocialGroup.CRITICAL: 180000,
+    SocialGroup.GENERAL: 360000
+}
+
 
 BS_SETTINGS = {
     "bs1": {
