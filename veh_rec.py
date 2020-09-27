@@ -1,14 +1,12 @@
 import traci
-import numpy as np
-import profile
-import net_model
 from enum import IntEnum
 from numpy import random
-from queue import Queue
-from net_model import NET_STATUS_CACHE, BASE_STATION_CONTROLLER, BaseStationController, CandidateBaseStationInfo
-from net_pack import NetworkPackage, PackageProcessing
 from globs import SocialGroup, NetObjLayer, BaseStationType, NET_SG_RND_REQ_SIZE, LinkType
-from globs import TRACI_LOCK, MATLAB_ENG, SIM_STEP_INFO, NET_TS_PER_STEP
+from globs import TRACI_LOCK, MATLAB_ENG, SUMO_STEP_INFO
+from net_model import NET_STATUS_CACHE, BASE_STATION_CONTROLLER, BaseStationController
+from net_app import AppDataHeader, AppData, VehicleApplication
+from net_pack import NetworkPackage
+from sim_log import DEBUG, ERROR
 
 
 class ConnectionState(IntEnum):
@@ -83,17 +81,8 @@ class VehicleRecorder():
         self.sbscrb_social_bs = [[None for j in range(len(SocialGroup))]
                                  for i in range(len(BaseStationType))]
 
-        # The Social Group Upload Request Queue
-        self.sg_upload_list = [[] for i in SocialGroup]
-
-        # The last time when this vehicle recorder generates upload request
-        self.up_last_pkg_gen_time = 0
-
-        # Package counter for upload req
-        self.up_pkg_counter = 0
-
-        # The last time when this vehicle recorder updates
-        self.sync_time = 0
+        # Create the vehicle application
+        self.app = VehicleApplication(self)
 
         # Upload/Download packages that're currently transmitting
         self.pkg_in_proc = [[] for i in LinkType]
@@ -107,27 +96,29 @@ class VehicleRecorder():
     def __del__(self):
         self.Clear()
 
-    # General routine called by main
-    def Update(self, ts):
-        # only operate per network simulation step, not per time slot.
-        if(ts == 1):
-            self.CheckSubscribeBSValidity()
-            self.SelectBestSocialBS()
-            self.UpdateVehicleInfo()
-            self.GenerateUploadRequest()
-        # operate per time slot
-        self.LinkStateUpdate()
-        self.ServeUploadRequest()
-        self.ServePackage()
+    # Update per sumo simulation step
+    def UpdateSS(self):
+        self.UpdateVehicleInfo()
+        self.CheckSubscribeBSValidity()
+        self.SelectBestSocialBS()
 
-    # Update the vehicle's basic infos
+    # Update per network simulation step
+    def UpdateNS(self, ns):
+        self.app.Run()
+        self.RequestUploadResource()
+
+    # Update per timeslot
+    def UpdateT(self, ts):
+        self.LinkStateUpdate()
+        self.ProcessPackage(ts)
+
+    # Update vehicle info from sumo
     def UpdateVehicleInfo(self):
         TRACI_LOCK.acquire()
         self.pos = traci.vehicle.getPosition(self.name)
         TRACI_LOCK.release()
-        self.sync_time = SIM_STEP_INFO.time
 
-    # Check if the latest subscribes base stations still has the validity to provide service
+    # Check if the latest subscription base stations still provide services
     def CheckSubscribeBSValidity(self):
         invalid_bs = []
         for bs_type in BaseStationType:
@@ -200,75 +191,135 @@ class VehicleRecorder():
         # Update connection state
         self.ConnectionChange(False, bs_ctrlr)
 
-    # Randomly generate network request for different social groups (NetworkTransmitRequest without cqi&sinr filled)
-    # size in bits
-    def GenerateUploadRequest(self):
-        if (self.sync_time - self.up_last_pkg_gen_time > 1):
-            self.up_last_pkg_gen_time = self.sync_time
-            for group in SocialGroup:
-                for _ in range(random.poisson(1)):
-                    req_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
-                    self.sg_upload_list[group].append(
-                        NetworkPackage(
-                            str(self.up_pkg_counter),
-                            self,
-                            random.randint(req_size_rnd_range[0],
-                                           req_size_rnd_range[1] + 1) * 8,
-                            group,
-                            self.sync_time,
-                        ), )
-                    self.up_pkg_counter += 1
-
-    # Serves upload requests
-    def ServeUploadRequest(self):
+    # Submit upload requests
+    def RequestUploadResource(self):
         for social_group in SocialGroup:
-            if (len(self.sg_upload_list[social_group]) > 0):
+            appdata_list = self.app.sg_appdatas[social_group]
+            if (len(appdata_list) > 0):
                 bs_ctrlr = self.SelectSocialBS(social_group)
                 if (bs_ctrlr != None):
-                    for pkg in self.sg_upload_list[social_group]:
-                        bs_ctrlr.Upload(pkg)
+                    appdata_list_total_bits = 0
+                    for appdata in appdata_list:
+                        appdata_list_total_bits += appdata.bits
+                    bs_ctrlr.ReceiveUploadRequest(
+                        self,
+                        social_group,
+                        appdata_list_total_bits,
+                    )
                 else:
-                    print("Error: No BS to serve request.")
+                    ERROR.Log("Error: No BS to serve request.")
+
+    # Function called by BaseStationController to give resource block to upload requests
+    def UploadResourceGranted(self, bs_ctrlr, social_group, total_bits, trans_ts, offset_ts):
+        self.SendPackage(
+            self.CreatePackage(
+                bs_ctrlr,
+                social_group,
+                total_bits,
+                trans_ts,
+                offset_ts
+            )
+        )
+
+    # Create package
+    def CreatePackage(self, dest, social_group, total_bits, trans_ts, offset_ts):
+        # the number of appdata waiting for services
+        datas_count = len(self.app.sg_appdatas[social_group])
+        # the serving appdata index
+        data_delivering = 0
+        # the appdatas collected in the package
+        package_datas = []
+        # while there's still space for allocation
+        remain_bits = total_bits
+        while(remain_bits > 0 and data_delivering < datas_count):
+            appdata = self.app.sg_appdatas[social_group][data_delivering]
+            data_size = remain_bits if appdata.bits > remain_bits else appdata.bits
+            package_datas.append(
+                AppData(
+                    appdata.header,
+                    data_size,
+                    appdata.offset
+                )
+            )
+            # consume available bits
+            remain_bits -= data_size
+            # consume remaining bits
+            appdata.bits -= data_size
+            # add delivered bits
+            appdata.offset += data_size
+            # if there's no remaining bits left, work on to the next appdata
+            if(appdata.bits == 0):
+                data_delivering += 1
+
+        # Remove appdata from list if it has no remaining bits to transmit
+        self.app.sg_appdatas[social_group] = self.app.sg_appdatas[social_group][data_delivering:]
+        # Create Package
+        return NetworkPackage(
+            self,
+            dest,
+            social_group,
+            total_bits - remain_bits,
+            package_datas,
+            trans_ts,
+            offset_ts
+        )
+
+    # Send package
+    def SendPackage(self, package):
+        self.pkg_in_proc[LinkType.UPLINK].append(
+            package
+        )
+        package.dest.ReceivePackage(package)
 
     # Serves uploading/downloading packages
-    def ServePackage(self):
-        for link_type in LinkType:
-            pkg_procs_done = []
-            for pkg_proc in self.pkg_in_proc[link_type]:
-                if(pkg_proc.of_ts > 0):
-                    pkg_proc.of_ts -= 1
-                    continue
+    def ProcessPackage(self, timeslot):
+        # Download
+        for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
+            if timeslot == (pkg.offset_ts + pkg.trans_ts):
+                # log
+                DEBUG.Log(
+                    "[{}-package][{}][{}]:{}ts receive.(src:{} bits:{}b appdatas:{})".format(
+                        self.name,
+                        LinkType.DOWNLINK.name.lower(),
+                        pkg.social_group.name.lower(),
+                        timeslot,
+                        pkg.src.name,
+                        pkg.bits,
+                        len(pkg.appdatas)
+                    )
+                )
+                self.PackageDelivered(pkg)
+        # .remove delivered packages
+        self.pkg_in_proc[LinkType.DOWNLINK] = [
+            pkg
+            for pkg in self.pkg_in_proc[LinkType.DOWNLINK]
+            if (pkg.offset_ts+pkg.trans_ts) > timeslot
+        ]
+        # Upload
+        for pkg in self.pkg_in_proc[LinkType.UPLINK]:
+            if(pkg.offset_ts == timeslot):
+                DEBUG.Log(
+                    "[{}-package][{}][{}]:{}ts delivery.(dest:{} bits:{}b appdatas:{})".format(
+                        self.name,
+                        LinkType.UPLINK.name.lower(),
+                        pkg.social_group.name.lower(),
+                        timeslot,
+                        pkg.dest.name,
+                        pkg.bits,
+                        len(pkg.appdatas),
+                    )
+                )
+        # . remove sent packages
+        self.pkg_in_proc[LinkType.UPLINK] = [
+            pkg
+            for pkg in self.pkg_in_proc[LinkType.UPLINK]
+            if(pkg.offset_ts) > timeslot
+        ]
 
-                pkg = pkg_proc.package
-                pkg_proc.time_slots -= 1
-                if (pkg_proc.time_slots == 0):
-                    # collect packages that were transmitted
-                    pkg_procs_done.append(pkg_proc)
-                    # TODO: do some logging stuff.
-                    print("{}-{}: type:{} target:{} origin:{}-{}*-{}b-{}-{}s ".
-                          format(
-                              self.sync_time,
-                              self.name,
-                              link_type.name.lower(),
-                              pkg_proc.opponent.name,
-                              pkg.owner.name,
-                              pkg.name,
-                              pkg_proc.proc_bits,
-                              SocialGroup(pkg.social_group).name.lower(),
-                              pkg.at,
-                          ))
-                    if (pkg_proc.opponent.name in self.con_state):
-                        self.con_state[pkg_proc.opponent.name].rec.ChangeState(
-                            ConnectionState.Success
-                        )
-                else:
-                    if (pkg_proc.opponent.name in self.con_state):
-                        self.con_state[pkg_proc.opponent.name].rec.ChangeState(
-                            ConnectionState.Transmit)
-
-            # remove transmitted packages
-            for pkg_proc in pkg_procs_done:
-                self.pkg_in_proc[link_type].remove(pkg_proc)
+    # Process package that're delivered
+    def PackageDelivered(self, package):
+        for appdata in package.appdatas:
+            self.app.ReceiveData(package.social_group, appdata)
 
     # Select the service base station according to the social type provided.
     def SelectSocialBS(self, social_type):
@@ -281,7 +332,7 @@ class VehicleRecorder():
             return (
                 self.sbscrb_social_bs[BaseStationType.UMI][social_type] if
                 (self.sbscrb_social_bs[BaseStationType.UMI][social_type] !=
-                 None and len(self.sg_upload_list[SocialGroup.CRITICAL]) == 0)
+                 None and len(self.app.sg_appdatas[SocialGroup.CRITICAL]) == 0)
                 else self.sbscrb_social_bs[BaseStationType.UMA][social_type])
         else:
             return (
@@ -289,37 +340,9 @@ class VehicleRecorder():
                 self.sbscrb_social_bs[BaseStationType.UMA][social_type] != None
                 else self.sbscrb_social_bs[BaseStationType.UMI][social_type])
 
-    # Function called by BaseStationController to give response to requests
-    def UploadRequestResponse(self, sender, package, bits, tx_ts, of_ts):
-        #  no bits to transfer, request denied
-        if (not bits > 0):
-            return
-
-        # make package in process state
-        self.pkg_in_proc[LinkType.UPLOAD].append(
-            PackageProcessing(
-                package,
-                sender,
-                bits,
-                tx_ts,
-                of_ts
-            )
-        )
-
-        if (package.bits <= bits):
-            self.sg_upload_list[package.social_group].remove(package)
-
     # Function called by BaseStationControllers to send packages
-    def ReceivePackage(self, sender, package, bits, tx_ts, of_ts):
-        self.pkg_in_proc[LinkType.DOWNLOAD].append(
-            PackageProcessing(
-                package,
-                sender,
-                bits,
-                tx_ts,
-                of_ts
-            )
-        )
+    def ReceivePackage(self, package,):
+        self.pkg_in_proc[LinkType.DOWNLINK].append(package)
 
     # Update & Clean up the connection
     def LinkStateUpdate(self):

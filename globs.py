@@ -1,16 +1,18 @@
 import os
 import math
 import threading
-import matlab
 import os
 import traci
+import sys
+import matlab.engine
 from numpy import random
 from enum import IntEnum, Enum
 
 
+# Link type
 class LinkType(IntEnum):
-    UPLOAD = 0
-    DOWNLOAD = 1
+    UPLINK = 0
+    DOWNLINK = 1
 
 
 # Base station type
@@ -33,7 +35,8 @@ class NetObjLayer(IntEnum):
     CON_LINE = BS_POI + 1
 
 
-class SimulateStepInfo:
+# Sumo Simulation Infos
+class SumoStepInfo:
     def __init__(self):
         self.new_veh_ids = []
         self.veh_ids = []
@@ -54,11 +57,6 @@ class SimulateStepInfo:
         # Update current vehicle ids
         self.veh_ids = cur_veh_ids
 
-        for vid in self.new_veh_ids:
-            print("{}: joined the map.".format(vid))
-        for vid in self.ghost_veh_ids:
-            print("{}: left the map.".format(vid))
-
 
 # Threading -Traci
 TRACI_LOCK = threading.Lock()
@@ -67,51 +65,95 @@ TRACI_LOCK = threading.Lock()
 MATLAB_ENG = matlab.engine.start_matlab()
 MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\")
 MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\SelectCQI_bySNR\\")
-# Traci
 
-# Initialize Random (not sure if it's working)
+# Random Number Generator
+# . initialize the rng
 random.seed(132342421)
-# Simulation Settings
-SIM_STEP_INFO = SimulateStepInfo()
-SIM_SECONDS_PER_STEP = 0.1
+
+# Sumo Simulation Settings
+# . simulation scaler
+SUMO_SIM_TIME_SCALER = 100
+# . seconds per sumo simulation step
+SUMO_SECONDS_PER_STEP = 0.001*SUMO_SIM_TIME_SCALER
+# . sumo simulation step info
+SUMO_STEP_INFO = SumoStepInfo()
+# . total sumo simulation steps
+SUMO_TOTAL_STEPS = (1 / SUMO_SECONDS_PER_STEP) * 100
+
 # Network Settings
+# . resource block symbols
 NET_RB_SLOT_SYMBOLS = 14
-NET_SECONDS_PER_STEP = 0.1
-NET_TS_PER_STEP = 2
-NET_RB_BANDWIDTH_TS = {180000: 1, 360000: 2}
+# . seconds per network simulation step
+NET_SECONDS_PER_STEP = 0.001*SUMO_SIM_TIME_SCALER
+# . network simulation steps per sumo simulation step
+NET_STEPS_PER_SUMO_STEP = int(SUMO_SECONDS_PER_STEP / NET_SECONDS_PER_STEP)
+# . seconds per network timeslot
+NET_SECONDS_PER_TS = 0.0005*SUMO_SIM_TIME_SCALER
+# . network timeslots per network simulation step
+NET_TS_PER_NET_STEP = int(NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS)
+# . resource block bandwidth units
+NET_RB_BW_UNIT = 180000
+# . resource block bandwidth required timeslot(s)
+NET_RB_BW_REQ_TS = {2 * NET_RB_BW_UNIT: 1,
+                    1 * NET_RB_BW_UNIT: 2}
+# . social group random request size
 NET_SG_RND_REQ_SIZE = {
-    # SocialGroup.CRITICAL: [300, 1100],
-    # SocialGroup.GENERAL: [64, 2048],
-    SocialGroup.CRITICAL: [10, 50],
-    SocialGroup.GENERAL: [20, 100],
+    SocialGroup.CRITICAL: [300, 1100],
+    SocialGroup.GENERAL: [64, 2048],
+    # SocialGroup.CRITICAL: [10, 50],
+    # SocialGroup.GENERAL: [20, 100],
 }
 
 # Base Station Settings
+# . base station's total bandwidth
 BS_TOTAL_BANDWIDTH = {
     BaseStationType.UMA: 20000000,
     BaseStationType.UMI: 10000000
+    # BaseStationType.UMA: 200000,
+    # BaseStationType.UMI: 100000,
 }
-BS_UMA_FREQ = 2.0  # Ghz
-BS_UMA_TRANS_PWR = 23
-BS_UMA_HEIGHT = 25
-BS_UMA_RB_BANDWIDTH = 360000
-BS_UMA_RADIUS_COLOR = (178, 76, 76, 128)
-BS_UMA_RADIUS = 500
+# . base station's frequency
+BS_FREQ = {
+    # Ghz
+    BaseStationType.UMA: 2,
+    BaseStationType.UMI: 3.5,
+}
+# . base station's maximum power
+BS_TRANS_PWR = {
+    # dBm
+    BaseStationType.UMA: 23,
+    BaseStationType.UMI: 10,
+}
+# . base station's antenna height
+BS_HEIGHT = {
+    # m
+    BaseStationType.UMA: 25,
+    BaseStationType.UMI: 10
+}
+# . base station's radius color
+BS_RADIUS_COLOR = {
+    BaseStationType.UMA: (178, 76, 76, 128),
+    BaseStationType.UMI: (178, 178, 76, 128)
+}
+# . base station's radius
+BS_RADIUS = {
+    BaseStationType.UMA: 500,
+    BaseStationType.UMI: 50,
+}
+# . uma base station's cyclic prefix
 BS_UMA_CP = 4.69
-BS_UMI_FREQ = 3.5  # Ghz
-BS_UMI_TRANS_PWR = 10
-BS_UMI_HEIGHT = 10
-BS_UMI_RADIUS_COLOR = (178, 178, 76, 128)
-BS_UMI_RADIUS = 50
+# . umi base station's cyclic prefix
 BS_UMI_CP_SOCIAL = {
     SocialGroup.CRITICAL: 2.34,
     SocialGroup.GENERAL: 4.69
 }
-BS_UMI_RB_BANDWIDTH_SOCIAL = {
-    SocialGroup.CRITICAL: 180000,
-    SocialGroup.GENERAL: 360000
+# . uma base station's resource block bandwidth
+BS_UMA_RB_BW = 1 * NET_RB_BW_UNIT
+# . umi base station's resource block bandwidth
+BS_UMI_RB_BW_SG = {
+    SocialGroup.CRITICAL: 2 * NET_RB_BW_UNIT,
+    SocialGroup.GENERAL: 1 * NET_RB_BW_UNIT
 }
-
 
 BS_SETTINGS = {
     "bs1": {
@@ -139,3 +181,24 @@ BS_SETTINGS = {
         "type": BaseStationType.UMI,
     },
 }
+
+# Frequently used constants
+TS_PER_NET_STEP = int(NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS)
+
+
+# Basic Requirement Check
+if SUMO_SECONDS_PER_STEP < NET_SECONDS_PER_STEP:
+    print(
+        "Error: seconds per simulation step should be larger than the value of seconds per network step."
+    )
+    sys.exit()
+if SUMO_SECONDS_PER_STEP / NET_SECONDS_PER_STEP % 1 != 0:
+    print(
+        "Error: seconds per simulation step should be totally devided by the value of seconds per network step."
+    )
+    sys.exit()
+if NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS % 1 != 0:
+    print(
+        "Error: seconds per network simulation step should be totally devided by the value of seconds per network timeslot."
+    )
+    sys.exit()

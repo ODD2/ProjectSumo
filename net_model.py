@@ -1,12 +1,13 @@
+import traci
 import os
 import sys
-import matlab.engine
 import math
-import numpy as np
-import traci
-from copy import copy
-from net_pack import NetworkTransmitRequest, NetworkTransmitResponse, PackageProcessing, NetworkPackage
 from globs import *
+from numpy import random
+from net_app import AppDataHeader, AppData, NetworkCoreApplication
+from net_alloc import ResourceAllocatorOMA
+from net_pack import NetworkPackage
+from sim_log import DEBUG, ERROR
 
 
 class NetStatus:
@@ -32,23 +33,24 @@ class NetStatusCache:
         if query_tuple[0].name not in self._map:
             raise Exception("Error! vehicle should be in the map!!")
 
-        net_stat = self._map[query_tuple[0].name][query_tuple[1].serial][
-            query_tuple[2]]
+        net_stat = self._map[query_tuple[0].name][query_tuple[1].serial][query_tuple[2]]
         if (not net_stat.cached):
-            (net_stat.cqi,
-             net_stat.sinr) = GET_BS_CQI_SINR_5G(query_tuple[0],
-                                                 query_tuple[1],
-                                                 query_tuple[2])
+            (net_stat.cqi, net_stat.sinr) = GET_BS_CQI_SINR_5G(
+                query_tuple[0],
+                query_tuple[1],
+                query_tuple[2]
+            )
             net_stat.cached = True
         return net_stat
 
+    # clean
     def Flush(self):
         globals()
         # remove ghosts
-        for veh_id in SIM_STEP_INFO.ghost_veh_ids:
+        for veh_id in SUMO_STEP_INFO.ghost_veh_ids:
             self._map.pop(veh_id)
         # add new vehicles
-        for veh_id in SIM_STEP_INFO.new_veh_ids:
+        for veh_id in SUMO_STEP_INFO.new_veh_ids:
             self._map[veh_id] = [[NetStatus() for sg in SocialGroup]
                                  for i in range(len(BASE_STATION_CONTROLLER))]
         # initialize
@@ -58,119 +60,135 @@ class NetStatusCache:
                     veh_status_list[bs_idx][sg].cached = False
 
 
-# class ReceiverState:
-#     def __init__(self, recvr):
-#         self.bits_sent = 0
-#         self.recvr = recvr
+class UploadRequest:
+    def __init__(self, sender, total_bits):
+        self.sender = sender
+        self.total_bits = total_bits
 
 
-class SocialGroupBroadcastRequest:
-    def __init__(self, package, recvrs):
-        self.package = package
-        self.recvrs = [recvr for recvr in recvrs if recvr != package.owner]
+class ResendRequest:
+    def __init__(self, sender, header: AppDataHeader, offset: int, bits: int):
+        self.sender = sender
+        self.header = header
+        self.offset = offset
+        self.bits = bits
 
 
+# Broadcast Object
+class BroadcastObject():
+    def __init__(self):
+        self.name = "broadcast"
+
+
+# Base station controller: allocate resource for upload/download requests
 class BaseStationController:
     def __init__(self, name, pos, bs_type, serial):
         # Base station paremeters
         self.name = name
         self.pos = pos
-        self.radius = BS_UMI_RADIUS if bs_type == BaseStationType.UMI else BS_UMA_RADIUS
         self.type = bs_type
+        self.radius = BS_RADIUS[bs_type]
         self.serial = serial
 
         # vehicles that've subscribed to specific social groups
-        self.sbscrb_social_vehs = [[] for i in SocialGroup]
+        self.sg_sub_vehs = [[] for i in SocialGroup]
 
         # Upload/Download packages that're currently transmitting
         self.pkg_in_proc = [[] for i in LinkType]
 
-        # request for sending to other objects
-        self.sg_broadcast_req = ([[] for x in range(len(SocialGroup))])
+        # upload requests
+        self.sg_upload_req = ([[] for x in SocialGroup])
 
-        self.Reset()
+        # broadcast reqeusts
+        self.sg_brdcst_datas = ([[] for x in SocialGroup])
 
-    def Update(self, ts):
-        self.ServePackage()
-        self.CreateBroadcastRequest()
-        # TODO: Propagate
-        if(ts == 1):
-            self.ServeBroadcastRequest()
-            self.ServeUploadRequest()
-        # Reset
-        self.Reset()
+        # resend requests
+        self.sg_resend_req = ([[] for x in SocialGroup])
 
-    # Serves uploading/downloading packages
-    def ServePackage(self):
-        for link_type in LinkType:
-            pkg_procs_done = []
-            for pkg_proc in self.pkg_in_proc[link_type]:
-                # consume time slot
-                pkg_proc.time_slots -= 1
-                package = pkg_proc.package
-                # consume bandwidth
-                self.valid_bandwidth[link_type] -= self.RequiredBandwidth(
-                    package.social_group)
-                if (pkg_proc.time_slots == 0):
-                    # package that has done transmitting are collected
-                    pkg_procs_done.append(pkg_proc)
-                    # if the package is uploaded
-                    if (link_type == LinkType.UPLOAD):
-                        local_pckg = copy(package)
-                        local_pckg.bits = pkg_proc.proc_bits
-                        # Save to local
-                        self.recv_package.append(local_pckg)
+    # Called every network step
+    def UpdateNS(self, ns):
+        self.ArrangeUplinkResource()
+        self.ArrangeDownlinkResource()
 
-                    # log
-                    print("{}-{}: type:{} target:{} origin:{}-{}*-{}b-{}-{}s ".
-                          format(
-                              SIM_STEP_INFO.time,
-                              self.name,
-                              link_type.name.lower(),
-                              pkg_proc.opponent.name,
-                              package.owner.name,
-                              package.name,
-                              pkg_proc.proc_bits,
-                              SocialGroup(package.social_group).name.lower(),
-                              package.at,
-                          ))
+    # Called every timeslot
+    def UpdateT(self, ts):
+        self.ProcessPackage(ts)
 
-            # remove transmitted packages
-            for pkg_proc in pkg_procs_done:
-                # remove packages that has done transmitting
-                self.pkg_in_proc[link_type].remove(pkg_proc)
+    # process uploading/downloading packages
+    def ProcessPackage(self, timeslot):
+        # Upload
+        for pkg in self.pkg_in_proc[LinkType.UPLINK]:
+            if timeslot == (pkg.offset_ts + pkg.trans_ts):
+                # log
+                DEBUG.Log(
+                    "[{}-package][{}][{}]:{}ts receive.(src:{} bits:{}b appdatas:{})".format(
+                        self.name,
+                        LinkType.UPLINK.name.lower(),
+                        pkg.social_group.name.lower(),
+                        timeslot,
+                        pkg.src.name,
+                        pkg.bits,
+                        len(pkg.appdatas)
+                    )
+                )
+                self.PackageDelivered(pkg)
+        # .remove delivered packages
+        self.pkg_in_proc[LinkType.UPLINK] = [
+            pkg
+            for pkg in self.pkg_in_proc[LinkType.UPLINK]
+            if (pkg.offset_ts+pkg.trans_ts) > timeslot
+        ]
+        # Download
+        for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
+            if(pkg.offset_ts == timeslot):
+                DEBUG.Log(
+                    "[{}-package][{}][{}]:{}ts delivery.(dest:{} bits:{}b appdatas:{})".format(
+                        self.name,
+                        LinkType.DOWNLINK.name.lower(),
+                        pkg.social_group.name.lower(),
+                        timeslot,
+                        pkg.dest.name,
+                        pkg.bits,
+                        len(pkg.appdatas),
+                    )
+                )
+        # . remove sent packages
+        self.pkg_in_proc[LinkType.DOWNLINK] = [
+            pkg
+            for pkg in self.pkg_in_proc[LinkType.DOWNLINK]
+            if(pkg.offset_ts) > timeslot
+        ]
+
+    # process delivered packages
+    def PackageDelivered(self, package):
+        globals()
+        NET_CORE_CONTROLLER.PackageDelivered(package)
 
     # Function called by VehicleRecorder to submit upload requests to this base station
-    def Upload(self, package):
-        self.sg_upload_req[package.social_group].append(package)
+    def ReceiveUploadRequest(self, sender, social_group: SocialGroup, total_bits: int):
+        self.sg_upload_req[social_group].append(
+            UploadRequest(sender, total_bits)
+        )
 
-    # Serve submitted upload requests
-    def ServeUploadRequest(self):
+    # arrange uplink resource
+    def ArrangeUplinkResource(self):
         globals()
-        # allocation resources per timeslot
-        alloc_resrs_per_ts = BS_TOTAL_BANDWIDTH[self.type]*0.9 / 180000
-        alloc_resource = [
-            [
-                False for i in range(NET_TS_PER_STEP)
-            ]
-            for i in range(alloc_resrs_per_ts)
-        ]
+        # OMA resource allocator
+        ra_oma = ResourceAllocatorOMA(
+            BS_TOTAL_BANDWIDTH[self.type]*0.9
+        )
+        # Serve requests
         for social_group in SocialGroup:
             # Check if there exists pending requests
-            if len(self.sg_upload_req[social_group]) > 0:
-                # required resource block bandwidth for social group msg
-                req_bandwidth_per_rb = self.RequiredBandwidth(social_group)
-                # required timeslot for using this bandwidth
-                tx_ts = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
-
-                # fetch transmission size for each request
-                req_txr_list = []
-                for package in self.sg_upload_req[social_group]:
-                    trans_rate = MATLAB_ENG.GetThroughputPerRB(
+            if (len(self.sg_upload_req[social_group]) > 0 and ra_oma.Spare()):
+                # fetch resource block trans size for every request
+                req_rbsize_pairs = []
+                for req in self.sg_upload_req[social_group]:
+                    rbsize = MATLAB_ENG.GetThroughputPerRB(
                         float(
                             NET_STATUS_CACHE.GetNetStatus(
                                 (
-                                    package.owner,
+                                    req.sender,
                                     self,
                                     social_group
                                 )
@@ -178,210 +196,218 @@ class BaseStationController:
                         ),
                         int(NET_RB_SLOT_SYMBOLS)
                     )
-                    req_txr_list.append((package, trans_rate))
-
-                # sort with trans size
-                req_txr_list.sort(
+                    req_rbsize_pairs.append((req, rbsize))
+                # sort with resource block size (the larger size the higher priority)
+                req_rbsize_pairs.sort(
                     reverse=True,
                     key=(
-                        lambda req_txr: req_txr[1]
+                        lambda req_rbsize_pair: req_rbsize_pair[1]
                     )
                 )
-
+                # required resource block bandwidth for social group msg
+                req_bw_per_rb = self.RequiredBandwidth(social_group)
+                # required timeslots for using this bandwidth
+                req_ts_per_rb = NET_RB_BW_REQ_TS[req_bw_per_rb]
                 # serve requests
-                for req_txr in req_txr_list:
-                    package = req_txr[0]
-                    rb_trans_size = req_txr[1]
-                    if self.valid_bandwidth[LinkType.UPLOAD] < req_bandwidth_per_rb:
-                        # notify request owner
-                        package.owner.UploadRequestResponse(
+                for req_rbsize_pair in req_rbsize_pairs:
+                    req = req_rbsize_pair[0]
+                    rbsize = req_rbsize_pair[1]
+                    total_req_rb = math.ceil(req.total_bits / rbsize)
+
+                    for _ in range(total_req_rb):
+                        # allocate
+                        offset_ts = ra_oma.Allocate(
+                            req_bw_per_rb, req_ts_per_rb
+                        )
+
+                        # unable to allocate
+                        if(offset_ts < 0):
+                            break
+
+                        # notify request owner for granting resource
+                        req.sender.UploadResourceGranted(
                             self,
-                            package,
-                            0,
-                            0,
-                            0
+                            social_group,
+                            rbsize,
+                            req_ts_per_rb,
+                            offset_ts
                         )
                     else:
-                        # allocate resource block for transmit request
-
-                        # the useable resource blocks
-                        valid_resource_blocks = math.floor(
-                            self.valid_bandwidth[LinkType.UPLOAD] /
-                            req_bandwidth_per_rb)
-
-                        # available total transmission size
-                        valid_trans_size = rb_trans_size * valid_resource_blocks
-
-                        # the actual transmission size
-                        trans_size = valid_trans_size if valid_trans_size < package.bits else package.bits
-                        total_required_bandwidth = (
-                            req_bandwidth_per_rb *
-                            math.ceil(trans_size / rb_trans_size))
-                        # consume required bandwidth
-                        self.valid_bandwidth[
-                            LinkType.UPLOAD] -= total_required_bandwidth
-
-                        # reply request owner
-                        package.owner.UploadRequestResponse(
-                            self,
-                            package,
-                            trans_size,
-                            tx_ts,
-                            of_ts
-                        )
-
-                        # create package to process
-                        self.pkg_in_proc[LinkType.UPLOAD].append(
-                            PackageProcessing(
-                                package,
-                                package.owner,
-                                trans_size,
-                                tx_ts,
-                                of_ts
-                            )
-                        )
-
-    def CreateBroadcastRequest(self):
-        for package in self.recv_package:
-            social_group = package.social_group
-            self.sg_broadcast_req[social_group].append(
-                SocialGroupBroadcastRequest(
-                    package, self.sbscrb_social_vehs[social_group]))
-
-    def ServeBroadcastRequest(self):
-        self.ServeBroadCastRequestOMA()
-
-    def ServeBroadCastRequestOMA(self):
-        globals()
-        for social_group in SocialGroup:
-            # record broadcast requests that're done
-            brdcst_reqs_done = []
-            # required resource block bandwidth for social group msg
-            req_bandwidth_per_rb = self.RequiredBandwidth(social_group)
-            # required timeslot for using this bandwidth
-            tx_ts = NET_RB_BANDWIDTH_TS[req_bandwidth_per_rb]
-            for req_brdcst in self.sg_broadcast_req[social_group]:
-                # Not enought bandwidth for this type of social group request
-                if self.valid_bandwidth[
-                        LinkType.DOWNLOAD] < req_bandwidth_per_rb:
-                    break
-
-                package = req_brdcst.package
-
-                # Record receivers that're out of service
-                out_of_service_recvrs = []
-
-                # Find the lowest cqi in receiver lists
-                lowest_cqi_in_recvrs = 30
-                for recvr in req_brdcst.recvrs:
-                    # Check if this receiver is still in service
-                    if recvr.name not in SIM_STEP_INFO.veh_ids:
-                        out_of_service_recvrs.append(recvr)
+                        # if the allocation process above wasn't interrupted
+                        # continue allocation for the same resource block settings
                         continue
-                    # Get net status of the recvr
-                    net_status = NET_STATUS_CACHE.GetNetStatus(
-                        (recvr, self, social_group))
-                    # Check if net status cqi is lower
-                    if (net_status.cqi < lowest_cqi_in_recvrs):
-                        lowest_cqi_in_recvrs = net_status.cqi
 
-                # remove out of service receivers
-                for recvr in out_of_service_recvrs:
-                    req_brdcst.recvrs.remove(recvr)
-
-                # broadcast request done if theirs no one to serve
-                if (len(req_brdcst.recvrs) == 0):
-                    brdcst_reqs_done.append(req_brdcst)
-                    continue
-
-                # The maximum transmission size per resource-block according to cqi
-                rb_trans_size = MATLAB_ENG.GetThroughputPerRB(
-                    float(lowest_cqi_in_recvrs), int(NET_RB_SLOT_SYMBOLS))
-
-                # total resource blocks valid for this type of social message
-                valid_resource_blocks = math.floor(
-                    self.valid_bandwidth[LinkType.UPLOAD] /
-                    req_bandwidth_per_rb)
-
-                # available total transmission size
-                valid_trans_size = rb_trans_size * valid_resource_blocks
-
-                # the actual transmission size
-                trans_size = valid_trans_size if valid_trans_size < package.bits else package.bits
-
-                # the total required bandwidth
-                total_required_bandwidth = (
-                    req_bandwidth_per_rb *
-                    math.ceil(trans_size / rb_trans_size))
-
-                # consume required bandwidth
-                self.valid_bandwidth[
-                    LinkType.DOWNLOAD] -= total_required_bandwidth
-
-                # remove transmitted size
-                package.bits -= trans_size
-
-                for recvr in req_brdcst.recvrs:
-                    # notify receiver
-                    recvr.ReceivePackage(self, package, trans_size, tx_ts)
-
-                    # package in process
-                    self.pkg_in_proc[LinkType.DOWNLOAD].append(
-                        PackageProcessing(package, recvr, trans_size,
-                                          tx_ts))
-
-                # broadcast request done if all data have been transmitted
-                if package.bits == 0:
-                    brdcst_reqs_done.append(req_brdcst)
-                    continue
-            # remove completed broadcast requests
-            for req_brdcst in brdcst_reqs_done:
-                self.sg_broadcast_req[social_group].remove(req_brdcst)
-
-    def ServeBroadCastRequestNOMA(self):
-        a = 0
-
-    def PropagateSocialPackage(self, cloud):
-        a = 0
-
-    def ReceivePropagation(self):
-        a = 0
-
-    # The reset function
-    def Reset(self):
-        # request for uploading to this base station
+                    # if the allocation process above was interrupted(break)
+                    # then allocation for the same resource block settings(bandwidth,timeslots)
+                    # will result in failure, too.
+                    break
+        # Clean requests
         self.sg_upload_req = ([[] for x in SocialGroup])
-        # valid bandwidth for next timeslot (0.5ms per timeslot)
-        self.valid_bandwidth = [0 * 0.9 for i in LinkType]
-        self.recv_package = []
+
+    # arrange downlink resource
+    def ArrangeDownlinkResource(self):
+        self.ArrangeDownlinkResourceOMA()
+
+    # arrange downlink resource in OMA
+    def ArrangeDownlinkResourceOMA(self):
+        globals()
+        # OMA resource allocator
+        ra_oma = ResourceAllocatorOMA(
+            BS_TOTAL_BANDWIDTH[self.type]*0.9
+        )
+        # TODO: Serve Resend Requests
+
+        # Serve Broadcast Appdatas
+        for social_group in SocialGroup:
+            # if this base station has no subscribers in this social group
+            if(len(self.sg_sub_vehs[social_group]) == 0):
+                # clear all broadcast appdatas of this social group
+                # cause there's no receiver
+                self.sg_brdcst_datas[social_group] = []
+                continue
+            # calculate the total bits for this social group to send all its broadcast appdatas
+            sg_total_bits = 0
+            for appdata in self.sg_brdcst_datas[social_group]:
+                sg_total_bits += appdata.bits
+            # if this social group has no data to broadcast
+            if(sg_total_bits == 0):
+                continue
+            # find the lowest cqi in the social group subscribers
+            netstatus = NET_STATUS_CACHE.GetMultiNetStatus([
+                (veh, self, social_group) for veh in self.sg_sub_vehs[social_group]
+            ])
+            lowest_cqi = netstatus[0].cqi
+            for status in netstatus:
+                if(status.cqi < lowest_cqi):
+                    lowest_cqi = status.cqi
+            # calculate the resource block size for the cqi
+            sg_rb_bits = MATLAB_ENG.GetThroughputPerRB(
+                float(lowest_cqi),
+                int(NET_RB_SLOT_SYMBOLS)
+            )
+            # required resource block bandwidth for this social group msg
+            sg_rb_bw = self.RequiredBandwidth(social_group)
+            # required timeslots for using this bandwidth
+            sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
+            # total required resource blocks for this social group
+            sg_total_req_rb = math.ceil(sg_total_bits/sg_rb_bits)
+            # allocate resource blocks
+            for _ in range(sg_total_req_rb):
+                offset_ts = ra_oma.Allocate(
+                    sg_rb_bw, sg_rb_ts
+                )
+                # unable to allocate
+                if(offset_ts < 0):
+                    break
+                # collect appdatas this package is delivering
+                package_appdatas = []
+                remain_bits = sg_rb_bits
+                # the appdata index that is currently collecting
+                data_delivering = 0
+                # the total amount of appdatas
+                datas_count = len(self.sg_brdcst_datas[social_group])
+                # start appdata collection
+                while(data_delivering < datas_count and remain_bits > 0):
+                    appdata = self.sg_brdcst_datas[social_group][data_delivering]
+                    trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
+                    package_appdatas.append(
+                        AppData(
+                            appdata.header,
+                            trans_bits,
+                            appdata.offset
+                        )
+                    )
+                    # consume remain bits
+                    remain_bits -= trans_bits
+                    # consume bits to deliver
+                    appdata.bits -= trans_bits
+                    # add delivered bits
+                    appdata.offset += trans_bits
+                    # if there's no bits to deliver move on to the next appdata
+                    if(appdata.bits == 0):
+                        data_delivering += 1
+                # collection done, remove appdatas that have been delivered
+                self.sg_brdcst_datas[social_group] = self.sg_brdcst_datas[social_group][data_delivering:]
+                # create package
+                package = NetworkPackage(
+                    self,
+                    BROADCAST_OBJECT,
+                    social_group,
+                    sg_rb_bits-remain_bits,
+                    package_appdatas,
+                    sg_rb_ts,
+                    offset_ts
+                )
+                # send package
+                for veh in self.sg_sub_vehs[social_group]:
+                    veh.ReceivePackage(package)
+                # put package in process list
+                self.pkg_in_proc[LinkType.DOWNLINK].append(package)
+
+    # arrange downlink resource in NOMA
+    def ArrangeDownlinkResourceNOMA(self):
+        a = 0
+
+    # Function called by VehicleRecorder to deliver package to this base station
+    def ReceivePackage(self, package):
+        self.pkg_in_proc[LinkType.UPLINK].append(package)
+
+    # Function called by NetworkCoreController to propagate appdata
+    def ReceivePropagation(self, social_group: SocialGroup, header: AppDataHeader):
+        self.sg_brdcst_datas[social_group].append(
+            AppData(
+                header,
+                header.total_bits,
+                0
+            )
+        )
 
     # Function called by VehicleRecorder to subscribe to a specific social group on this base station
     def VehicleSubscribe(self, vehicle, social_group):
-        if (vehicle not in self.sbscrb_social_vehs[social_group]):
-            self.sbscrb_social_vehs[social_group].append(vehicle)
+        if (vehicle not in self.sg_sub_vehs[social_group]):
+            self.sg_sub_vehs[social_group].append(vehicle)
         else:
-            print("veh:{} subscription to bs:{} duplicated.".format(
-                vehicle.name, self.name))
+            ERROR.Log(
+                "veh:{} subscription to bs:{} duplicated.".format(
+                    vehicle.name,
+                    self.name
+                )
+            )
 
     # Function called by VehicleRecorder to unsubscribe to a specific social group on this base station
     def VehicleUnsubscribe(self, vehicle, social_group):
-        if (vehicle in self.sbscrb_social_vehs[social_group]):
-            self.sbscrb_social_vehs[social_group].remove(vehicle)
+        if (vehicle in self.sg_sub_vehs[social_group]):
+            self.sg_sub_vehs[social_group].remove(vehicle)
         else:
-            print(
-                "veh:{} try to unsubscribe from bs:{}, but not yet subscribed."
-                .format(vehicle.name, self.name))
+            ERROR.Log(
+                "veh:{} try to unsubscribe from bs:{}, but not yet subscribed.".format(
+                    vehicle.name, self.name
+                )
+            )
 
     # Helper functions
     def RequiredBandwidth(self, social_group):
         if (self.type == BaseStationType.UMA):
-            return BS_UMA_RB_BANDWIDTH
+            return BS_UMA_RB_BW
         elif (self.type == BaseStationType.UMI):
-            return BS_UMI_RB_BANDWIDTH_SOCIAL[social_group]
+            return BS_UMI_RB_BW_SG[social_group]
 
 
-BASE_STATION_CONTROLLER = []
-NET_STATUS_CACHE = NetStatusCache()
+# The Central controller of the base station network
+class NetworkCoreController:
+    def __init__(self):
+        self.name = "core"
+        self.data_owners = {}
+        self.app = NetworkCoreApplication(self)
+
+    def PackageDelivered(self, package):
+        for appdata in package.appdatas:
+            self.app.ReceiveData(package.social_group, appdata)
+
+    def StartPropagation(self, social_group: SocialGroup, header: AppDataHeader):
+        globals()
+        for bs_ctrlr in BASE_STATION_CONTROLLER:
+            bs_ctrlr.ReceivePropagation(social_group, header)
 
 
 # (matlab.engine, [CandidateBaseStationInfo], (double,double))
@@ -396,31 +422,27 @@ def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group):
 
     # Confirm settings with 3GPP specs
     if (bs_ctrlr.type == BaseStationType.UMA):
-        # height of antenna
-        h_BS = BS_UMA_HEIGHT
-        # UMA transmission power
-        tx_p_dBm = BS_UMA_TRANS_PWR
         # resource block bandwidth
-        bandwidth = BS_UMA_RB_BANDWIDTH
+        bandwidth = BS_UMA_RB_BW
         # cyclic prefix
         CP = BS_UMA_CP
-        # GHz
-        fc = BS_UMA_FREQ
-    else:
-        # height of antenna
-        h_BS = BS_UMI_HEIGHT
-        # UMI transmission power
-        tx_p_dBm = BS_UMI_TRANS_PWR
+    elif(bs_ctrlr.type == BaseStationType.UMI):
         # resource block bandwidth
-        bandwidth = BS_UMI_RB_BANDWIDTH_SOCIAL[social_group]
+        bandwidth = BS_UMI_RB_BW_SG[social_group]
         # cyclic prefix
         CP = BS_UMI_CP_SOCIAL[social_group]
-        # GHz
-        fc = BS_UMI_FREQ
+
+    # Height of antenna
+    h_BS = BS_HEIGHT[bs_ctrlr.type]
+    # Transmission power
+    tx_p_dBm = BS_TRANS_PWR[bs_ctrlr.type]
+    # Transmission frequency.(Ghz)
+    fc = BS_FREQ[bs_ctrlr.type]
     # height of vehicle
     h_MS = 0.8
     # delay spread. (up to 4 us)
-    DS_Desired = np.random.normal(0, 4)
+    # DS_Desired = random.normal(0, 4)
+    DS_Desired = 0.5
     # distance between vehicle and station
     UE_dist = pow((bs_ctrlr.pos[0] - vehicle.pos[0])**2 +
                   (bs_ctrlr.pos[1] - vehicle.pos[1])**2, 0.5)
@@ -428,22 +450,21 @@ def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group):
     for intf_BS_obj in BASE_STATION_CONTROLLER:
         if (intf_BS_obj == bs_ctrlr):
             continue
-        if (intf_BS_obj.type == BaseStationType.UMA):
-            # intf-station antenna height
-            Intf_h_BS.append(BS_UMA_HEIGHT)
-            # intf-station transmission power
-            Intf_pwr_dBm.append(BS_UMA_TRANS_PWR)
-        else:
-            # intf-station antenna height
-            Intf_h_BS.append(BS_UMI_HEIGHT)
-            # intf-station transmission power
-            Intf_pwr_dBm.append(BS_UMI_TRANS_PWR)
+
+        # intf-station antenna height
+        Intf_h_BS.append(BS_HEIGHT[intf_BS_obj.type])
+        # intf-station transmission power
+        Intf_pwr_dBm.append(BS_TRANS_PWR[intf_BS_obj.type])
         # intf-vehicle height
         Intf_h_MS.append(0.8)
         # distance between vehicle and intf-station
         Intf_dist.append(
-            pow((intf_BS_obj.pos[0] - vehicle.pos[0])**2 +
-                (intf_BS_obj.pos[1] - vehicle.pos[1])**2, 0.5))
+            pow(
+                (intf_BS_obj.pos[0] - vehicle.pos[0])**2 +
+                (intf_BS_obj.pos[1] - vehicle.pos[1])**2,
+                0.5
+            )
+        )
 
     # result
     cqi, sinr = MATLAB_ENG.SINR_Channel_Model_5G(
@@ -462,3 +483,9 @@ def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group):
         True if bs_ctrlr.type == BaseStationType.UMA else False,
         nargout=2)
     return cqi, sinr
+
+
+NET_CORE_CONTROLLER = NetworkCoreController()
+BASE_STATION_CONTROLLER = []
+NET_STATUS_CACHE = NetStatusCache()
+BROADCAST_OBJECT = BroadcastObject()

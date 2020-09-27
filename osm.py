@@ -4,13 +4,14 @@ import traci
 import matlab.engine
 import math
 import numpy as np
-from threading import Thread
-from multiprocessing import Process
-from net_model import BaseStationController, BASE_STATION_CONTROLLER, NET_STATUS_CACHE
-from veh_rec import VehicleRecorder
 from enum import IntEnum
 from datetime import datetime
 from globs import *
+from threading import Thread
+from net_model import BaseStationController, BASE_STATION_CONTROLLER, NET_STATUS_CACHE
+from veh_rec import VehicleRecorder
+from sim_log import DEBUG
+
 
 # Base Station Indicator Creator
 
@@ -27,15 +28,12 @@ def CreateBaseStationIndicator(name, setting):
 
     # Create Polygon
     coef = pow(3, 0.5) / 2
+    radius_color = BS_RADIUS_COLOR[bs_type]
+    radius = BS_RADIUS[bs_type]
     if bs_type == BaseStationType.UMI:
         radius_layer = NetObjLayer.BS_RAD_UMI
-        radius_color = BS_UMI_RADIUS_COLOR
-        radius = BS_UMI_RADIUS
     else:
         radius_layer = NetObjLayer.BS_RAD_UMA
-        radius_color = BS_UMA_RADIUS_COLOR
-        radius = BS_UMA_RADIUS
-
     traci.polygon.add("poly_" + name + "_radius",
                       [(x - radius * coef, y + radius / 2),
                        (x - radius * coef, y - radius / 2), (x, y - radius),
@@ -44,28 +42,56 @@ def CreateBaseStationIndicator(name, setting):
                       radius_color, True, "net_bs_radius", radius_layer)
 
 
+def ParallelUpdateSS(objs):
+    threads = []
+    # Update vehicles (Parellelized)
+    for obj in objs:
+        threads.append(Thread(target=obj.UpdateSS))
+        threads[-1].start()
+    # Wait until all vehicles to finished their jobs
+    for t in threads:
+        t.join()
+
+
+def ParallelUpdateNS(objs, ns):
+    # Debug
+    for obj in objs:
+        obj.UpdateNS(ns)
+    return
+
+    threads = []
+    # Update vehicles (Parellelized)
+    for obj in objs:
+        threads.append(Thread(target=obj.UpdateNS), args=(ns,))
+        threads[-1].start()
+    # Wait until all vehicles to finished their jobs
+    for t in threads:
+        t.join()
+
+
+def ParallelUpdateT(objs, ts):
+    # Debug
+    for obj in objs:
+        obj.UpdateT(ts)
+    return
+
+    threads = []
+    for obj in objs:
+        threads.append(Thread(target=obj.UpdateT, args=(ts,)))
+        threads[-1].start()
+    for t in threads:
+        t.join()
+
+
 def main():
-
-    # Check Basic Requirements
-    if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP < 0:
-        print(
-            "Error: seconds per simulation step should be larger than the value of seconds per network step."
-        )
-        return
-    if SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP % 1 != 0:
-        print(
-            "Error: seconds per simulation step should be totally devided by the value of seconds per network step."
-        )
-        return
-
     # Start Traci
     traci.start([
-        "sumo",
+        "sumo-gui",
         "-c",
         os.getcwd() + "\\osm.sumocfg",
         "--start",
         "--step-length",
-        str(SIM_SECONDS_PER_STEP),
+        str(SUMO_SECONDS_PER_STEP),
         #  "--begin", "30"
     ])
 
@@ -76,63 +102,55 @@ def main():
     # Submit all base stations to the Network Model
     for name, setting in BS_SETTINGS.items():
         BASE_STATION_CONTROLLER.append(
-            BaseStationController(name, setting["pos"], setting["type"],
-                                  len(BASE_STATION_CONTROLLER)))
+            BaseStationController(
+                name,
+                setting["pos"],
+                setting["type"],
+                len(BASE_STATION_CONTROLLER)
+            )
+        )
 
     # Vehicle Recorders
     vehicle_recorders = {}
 
-    # Frequently used constants
-    NET_STEPS_PER_SIM_STEP = int(SIM_SECONDS_PER_STEP / NET_SECONDS_PER_STEP)
-    TOTAL_SIM_STEPS = (1 / SIM_SECONDS_PER_STEP) * 100
-
     # Start Simulation
     step = 0
-    while step < TOTAL_SIM_STEPS:
+    while step < SUMO_TOTAL_STEPS:
         traci.simulationStep()
-        SIM_STEP_INFO.Update()
-        # Flush NetStatusCache because the vehicles might move in this step.
-        NET_STATUS_CACHE.Flush()
+        # Fetch the newest sumo simulation informations
+        SUMO_STEP_INFO.Update()
 
-        # Remove ghost vehicles
-        for ghost in SIM_STEP_INFO.ghost_veh_ids:
+        # Remove ghost(non-exist) vehicles
+        for ghost in SUMO_STEP_INFO.ghost_veh_ids:
+            DEBUG.Log("{}: left the map.".format(ghost))
             vehicle_recorders.pop(ghost)
-
         # Add new vehicles
-        for v_id in SIM_STEP_INFO.new_veh_ids:
+        for v_id in SUMO_STEP_INFO.new_veh_ids:
+            DEBUG.Log("{}: joined the map.".format(v_id))
             vehicle_recorders[v_id] = VehicleRecorder(v_id)
 
-        # Network simulations
-        for _ in range(NET_STEPS_PER_SIM_STEP):
-            # Time slots per network simulation step
-            for ts in range(1, NET_TS_PER_STEP+1):
-                veh_thrds = []
-                # Update vehicles (Parellelized)
-                for v_id in SIM_STEP_INFO.veh_ids:
-                    t = Thread(
-                        target=vehicle_recorders[v_id].Update,
-                        args=(ts)
-                    )
-                    t.start()
-                    veh_thrds.append(t)
-                # Wait until all vehicles to finished their jobs
-                for t in veh_thrds:
-                    t.join()
+        # Reset network status cache because vehicle positions have updated,
+        # which means the cqi/sinr should be re-estimated.
+        NET_STATUS_CACHE.Flush()
 
-                bs_thrds = []
-                # Update all base stations  (Parellelized)
-                for base_station in BASE_STATION_CONTROLLER:
-                    t = Thread(
-                        target=base_station.Update,
-                        args=(ts)
-                    )
-                    t.start()
-                    bs_thrds.append(t)
-                # Wait until all base stations finished their jobs
-                for t in bs_thrds:
-                    t.join()
+        # Create vehicle_recorder list
+        vehicles = list(vehicle_recorders.values())
+
+        # Update vehicle recorders for sumo simulation
+        ParallelUpdateSS(vehicles)
+        # Network simulations per sumo simulation step
+        for ns in range(NET_STEPS_PER_SUMO_STEP):
+            # Update vehicle recorders for network simulation step
+            ParallelUpdateNS(vehicles, ns)
+            # Update base stations for network simulation step
+            ParallelUpdateNS(BASE_STATION_CONTROLLER, ns)
+
+            # Time slots per network simulation step
+            for ts in range(0, NET_TS_PER_NET_STEP+1):
+                ParallelUpdateT(vehicles + BASE_STATION_CONTROLLER, ts)
 
         step += 1
+
     # End Simulation
     traci.close()
 
