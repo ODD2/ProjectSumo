@@ -44,7 +44,7 @@ class Application:
             )
             return False
         # the receive data is already intact
-        elif(owner_datas[appdata.header.serial].offset ==
+        elif(owner_datas[appdata.header.serial].bits ==
              owner_datas[appdata.header.serial].header.total_bits):
             return False
         # for deform data, process receive data
