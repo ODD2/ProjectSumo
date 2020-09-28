@@ -118,15 +118,15 @@ def main():
     while step < SUMO_TOTAL_STEPS:
         traci.simulationStep()
         # Fetch the newest sumo simulation informations
-        SUMO_STEP_INFO.Update()
+        SIM_INFO.UpdateSS()
 
         # Remove ghost(non-exist) vehicles
-        for ghost in SUMO_STEP_INFO.ghost_veh_ids:
-            DEBUG.Log("{}: left the map.".format(ghost))
+        for ghost in SIM_INFO.ghost_veh_ids:
+            DEBUG.Log("[{}]: left the map.".format(ghost))
             vehicle_recorders.pop(ghost)
         # Add new vehicles
-        for v_id in SUMO_STEP_INFO.new_veh_ids:
-            DEBUG.Log("{}: joined the map.".format(v_id))
+        for v_id in SIM_INFO.new_veh_ids:
+            DEBUG.Log("[{}]: joined the map.".format(v_id))
             vehicle_recorders[v_id] = VehicleRecorder(v_id)
 
         # Reset network status cache because vehicle positions have updated,
@@ -140,6 +140,7 @@ def main():
         ParallelUpdateSS(vehicles)
         # Network simulations per sumo simulation step
         for ns in range(NET_STEPS_PER_SUMO_STEP):
+            SIM_INFO.UpdateNS(ns)
             # Update vehicle recorders for network simulation step
             ParallelUpdateNS(vehicles, ns)
             # Update base stations for network simulation step
@@ -147,6 +148,7 @@ def main():
 
             # Time slots per network simulation step
             for ts in range(0, NET_TS_PER_NET_STEP+1):
+                SIM_INFO.UpdateTS(ts)
                 ParallelUpdateT(vehicles + BASE_STATION_CONTROLLER, ts)
 
         step += 1

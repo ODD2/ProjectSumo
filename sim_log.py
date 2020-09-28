@@ -1,5 +1,5 @@
 from datetime import datetime
-from globs import SUMO_STEP_INFO
+from globs import SIM_INFO
 
 
 class Logger:
@@ -7,8 +7,14 @@ class Logger:
         self.file = open("log/"+file, "w")
 
     def Log(self, msg: str):
-        self.file.write("[{}]".format(SUMO_STEP_INFO.time) + msg+"\n")
-        print("[{}]".format(SUMO_STEP_INFO.time) + msg+"\n")
+        log = "[{}s][{}n/{}t]{}".format(
+            SIM_INFO.time,
+            SIM_INFO.ns,
+            SIM_INFO.ts,
+            msg
+        )
+        self.file.write(log+'\n')
+        print(log)
 
 
 class Printer(Logger):
@@ -17,7 +23,6 @@ class Printer(Logger):
 
     def Log(self, msg: str):
         Logger.Log(self, msg)
-        print("[{}]".format(SUMO_STEP_INFO.time) + msg+"\n")
 
 
 DEBUG = Logger(

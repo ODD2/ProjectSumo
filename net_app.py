@@ -1,5 +1,5 @@
 import sys
-from globs import SUMO_STEP_INFO, SocialGroup, NET_SG_RND_REQ_SIZE
+from globs import SIM_INFO, SocialGroup, NET_SG_RND_REQ_SIZE
 from sim_log import DEBUG, ERROR
 from numpy import random
 
@@ -11,12 +11,28 @@ class AppDataHeader:
         self.serial = serial
         self.at = at
 
+    def __str__(self):
+        return "AppDataHeader({}-{},{}b,{}s)".format(
+            self.owner.name,
+            self.serial,
+            self.total_bits,
+            self.at
+        )
+
 
 class AppData:
     def __init__(self, header: AppDataHeader, bits: int, offset: int):
         self.header = header
         self.bits = bits
         self.offset = offset
+
+    def __str__(self):
+        return "Appdata({}-{},{}o+{}b)".format(
+            self.header.owner.name,
+            self.header.serial,
+            self.offset,
+            self.bits
+        )
 
 
 class Application:
@@ -26,7 +42,7 @@ class Application:
     # function called by it's owner
     # returns true if this appdata became "intact" after receive
     # any other cases, e.g. appdata is already intact , will return false
-    def ReceiveData(self, social_group: SocialGroup, appdata: AppData):
+    def RecvData(self, social_group: SocialGroup, appdata: AppData):
         # receive the first data from the data's owner
         if (appdata.header.owner.name not in self.data_inbox):
             self.data_inbox[appdata.header.owner.name] = {}
@@ -74,34 +90,32 @@ class VehicleApplication(Application):
         # The last time when this vehicle recorder generates upload request
         self.prev_gen_time = 0
         # The social group upload data list
-        self.sg_appdatas = [[] for i in SocialGroup]
+        self.datas = [[] for i in SocialGroup]
         # Package counter for upload req
-        self.appdata_counter = 0
+        self.data_counter = 0
 
     def Run(self):
-        self.GenerateSocialGroupAppData()
+        self.SendData()
 
-    def ReceiveData(self, social_group: SocialGroup, appdata: AppData):
+    # Receive application data
+    def RecvData(self, social_group: SocialGroup, appdata: AppData):
         # if the appdata was sent by this application, don't receive it.
         if(appdata.header.owner == self.vehicle):
             return
         # if the appdata became intact
-        if(Application.ReceiveData(self, social_group, appdata)):
-            header = appdata.header
+        if(Application.RecvData(self, social_group, appdata)):
             DEBUG.Log(
-                "[{}-app]:app data received.(origin:{}-{} bits:{}b at:{}s)".format(
+                "[{}][app][{}]:data intact.({})".format(
                     self.vehicle.name,
-                    header.owner.name,
-                    header.serial,
-                    header.total_bits,
-                    header.at,
+                    social_group.name.lower(),
+                    appdata.header
                 )
             )
 
-    # Randomly generate application data for different social groups
-    def GenerateSocialGroupAppData(self):
-        if (SUMO_STEP_INFO.time - self.prev_gen_time > 1):
-            self.prev_gen_time = SUMO_STEP_INFO.time
+    # Send application data
+    def SendData(self):
+        if (SIM_INFO.time - self.prev_gen_time > 1):
+            self.prev_gen_time = SIM_INFO.time
             for group in SocialGroup:
                 # TODO: Make the random poisson be social group dependent
                 for _ in range(random.poisson(1)):
@@ -114,19 +128,19 @@ class VehicleApplication(Application):
                     ) * 8
 
                     # create appdata
-                    self.sg_appdatas[group].append(
+                    self.datas[group].append(
                         AppData(
                             AppDataHeader(
                                 self.vehicle,
                                 data_size,
-                                self.appdata_counter,
-                                SUMO_STEP_INFO.time
+                                self.data_counter,
+                                SIM_INFO.time
                             ),
                             data_size,
                             0
                         )
                     )
-                    self.appdata_counter += 1
+                    self.data_counter += 1
 
 
 class NetworkCoreApplication(Application):
@@ -134,20 +148,17 @@ class NetworkCoreApplication(Application):
         super().__init__()
         self.core_ctrlr = core_ctrlr
 
-    def ReceiveData(self, social_group: SocialGroup, appdata: AppData):
-        if(Application.ReceiveData(self, social_group, appdata)):
-            header = appdata.header
+    def RecvData(self, social_group: SocialGroup, appdata: AppData):
+        if(Application.RecvData(self, social_group, appdata)):
             DEBUG.Log(
-                "[{}-app]:app data received.(origin:{}-{} bits:{}b at:{}s)".format(
+                "[{}][app][{}]:data intact.({})".format(
                     self.core_ctrlr.name,
-                    header.owner.name,
-                    header.serial,
-                    header.total_bits,
-                    header.at,
+                    social_group.name.lower(),
+                    appdata.header
                 )
             )
             # propagate the appdata to other base stations
             self.core_ctrlr.StartPropagation(
                 social_group,
-                header
+                appdata.header
             )

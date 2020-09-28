@@ -47,10 +47,10 @@ class NetStatusCache:
     def Flush(self):
         globals()
         # remove ghosts
-        for veh_id in SUMO_STEP_INFO.ghost_veh_ids:
+        for veh_id in SIM_INFO.ghost_veh_ids:
             self._map.pop(veh_id)
         # add new vehicles
-        for veh_id in SUMO_STEP_INFO.new_veh_ids:
+        for veh_id in SIM_INFO.new_veh_ids:
             self._map[veh_id] = [[NetStatus() for sg in SocialGroup]
                                  for i in range(len(BASE_STATION_CONTROLLER))]
         # initialize
@@ -121,14 +121,10 @@ class BaseStationController:
             if timeslot == (pkg.offset_ts + pkg.trans_ts):
                 # log
                 DEBUG.Log(
-                    "[{}-package][{}][{}]:{}ts receive.(src:{} bits:{}b appdatas:{})".format(
+                    "[{}][package][{}]:receive.({})".format(
                         self.name,
-                        LinkType.UPLINK.name.lower(),
                         pkg.social_group.name.lower(),
-                        timeslot,
-                        pkg.src.name,
-                        pkg.bits,
-                        len(pkg.appdatas)
+                        pkg
                     )
                 )
                 self.PackageDelivered(pkg)
@@ -142,14 +138,10 @@ class BaseStationController:
         for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
             if(pkg.offset_ts == timeslot):
                 DEBUG.Log(
-                    "[{}-package][{}][{}]:{}ts delivery.(dest:{} bits:{}b appdatas:{})".format(
+                    "[{}][package][{}]:delivery.({})".format(
                         self.name,
-                        LinkType.DOWNLINK.name.lower(),
                         pkg.social_group.name.lower(),
-                        timeslot,
-                        pkg.dest.name,
-                        pkg.bits,
-                        len(pkg.appdatas),
+                        pkg
                     )
                 )
         # . remove sent packages
@@ -402,7 +394,7 @@ class NetworkCoreController:
 
     def PackageDelivered(self, package):
         for appdata in package.appdatas:
-            self.app.ReceiveData(package.social_group, appdata)
+            self.app.RecvData(package.social_group, appdata)
 
     def StartPropagation(self, social_group: SocialGroup, header: AppDataHeader):
         globals()

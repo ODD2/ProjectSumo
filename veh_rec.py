@@ -2,7 +2,7 @@ import traci
 from enum import IntEnum
 from numpy import random
 from globs import SocialGroup, NetObjLayer, BaseStationType, NET_SG_RND_REQ_SIZE, LinkType
-from globs import TRACI_LOCK, MATLAB_ENG, SUMO_STEP_INFO
+from globs import TRACI_LOCK, MATLAB_ENG, SIM_INFO
 from net_model import NET_STATUS_CACHE, BASE_STATION_CONTROLLER, BaseStationController
 from net_app import AppDataHeader, AppData, VehicleApplication
 from net_pack import NetworkPackage
@@ -78,8 +78,8 @@ class VehicleRecorder():
         self.pos = (0, 0)
 
         # Best connectivity base station for each social group, categorized by base station type
-        self.sbscrb_social_bs = [[None for j in range(len(SocialGroup))]
-                                 for i in range(len(BaseStationType))]
+        self.sub_sg_bs = [[None for j in range(len(SocialGroup))]
+                          for i in range(len(BaseStationType))]
 
         # Create the vehicle application
         self.app = VehicleApplication(self)
@@ -123,10 +123,10 @@ class VehicleRecorder():
         invalid_bs = []
         for bs_type in BaseStationType:
             for social_group in SocialGroup:
-                if (self.sbscrb_social_bs[bs_type][social_group] == None):
+                if (self.sub_sg_bs[bs_type][social_group] == None):
                     continue
                 else:
-                    bs_ctrlr = self.sbscrb_social_bs[bs_type][social_group]
+                    bs_ctrlr = self.sub_sg_bs[bs_type][social_group]
                     if (bs_ctrlr not in invalid_bs):
                         distance = pow((self.pos[0] - bs_ctrlr.pos[0])**2 +
                                        (self.pos[1] - bs_ctrlr.pos[1])**2, 0.5)
@@ -171,21 +171,21 @@ class VehicleRecorder():
     # Subscribe base station
     def SubscribeBS(self, bs_type, social_group, bs_ctrlr):
         # Unsubscribe the previous base station
-        if (self.sbscrb_social_bs[bs_type][social_group] != None):
+        if (self.sub_sg_bs[bs_type][social_group] != None):
             self.UnsubscribeBS(bs_type, social_group)
 
         # Subscribe the new one
-        self.sbscrb_social_bs[bs_type][social_group] = bs_ctrlr
+        self.sub_sg_bs[bs_type][social_group] = bs_ctrlr
         # Register to base station, too.
         bs_ctrlr.VehicleSubscribe(self, social_group)
         # Update connection state
         self.ConnectionChange(True, bs_ctrlr)
 
-    #  Unsubscribe base station
+    # Unsubscribe base station
     def UnsubscribeBS(self, bs_type, social_group):
         # Unsubscribe the base station
-        bs_ctrlr = self.sbscrb_social_bs[bs_type][social_group]
-        self.sbscrb_social_bs[bs_type][social_group] = None
+        bs_ctrlr = self.sub_sg_bs[bs_type][social_group]
+        self.sub_sg_bs[bs_type][social_group] = None
         # Unregister from base station
         bs_ctrlr.VehicleUnsubscribe(self, social_group)
         # Update connection state
@@ -194,17 +194,16 @@ class VehicleRecorder():
     # Submit upload requests
     def RequestUploadResource(self):
         for social_group in SocialGroup:
-            appdata_list = self.app.sg_appdatas[social_group]
-            if (len(appdata_list) > 0):
+            if (len(self.app.datas[social_group]) > 0):
                 bs_ctrlr = self.SelectSocialBS(social_group)
                 if (bs_ctrlr != None):
-                    appdata_list_total_bits = 0
-                    for appdata in appdata_list:
-                        appdata_list_total_bits += appdata.bits
+                    sg_total_bits = 0
+                    for appdata in self.app.datas[social_group]:
+                        sg_total_bits += appdata.bits
                     bs_ctrlr.ReceiveUploadRequest(
                         self,
                         social_group,
-                        appdata_list_total_bits,
+                        sg_total_bits,
                     )
                 else:
                     ERROR.Log("Error: No BS to serve request.")
@@ -224,7 +223,7 @@ class VehicleRecorder():
     # Create package
     def CreatePackage(self, dest, social_group, total_bits, trans_ts, offset_ts):
         # the number of appdata waiting for services
-        datas_count = len(self.app.sg_appdatas[social_group])
+        datas_count = len(self.app.datas[social_group])
         # the serving appdata index
         data_delivering = 0
         # the appdatas collected in the package
@@ -232,7 +231,7 @@ class VehicleRecorder():
         # while there's still space for allocation
         remain_bits = total_bits
         while(remain_bits > 0 and data_delivering < datas_count):
-            appdata = self.app.sg_appdatas[social_group][data_delivering]
+            appdata = self.app.datas[social_group][data_delivering]
             data_size = remain_bits if appdata.bits > remain_bits else appdata.bits
             package_datas.append(
                 AppData(
@@ -252,9 +251,8 @@ class VehicleRecorder():
                 data_delivering += 1
 
         # Remove appdata from list if it has no remaining bits to transmit
-        self.app.sg_appdatas[social_group] = self.app.sg_appdatas[social_group][data_delivering:]
-        # Create Package
-        return NetworkPackage(
+        self.app.datas[social_group] = self.app.datas[social_group][data_delivering:]
+        package = NetworkPackage(
             self,
             dest,
             social_group,
@@ -263,6 +261,18 @@ class VehicleRecorder():
             trans_ts,
             offset_ts
         )
+
+        # log
+        DEBUG.Log(
+            "[{}][package][{}]:create.({})".format(
+                self.name,
+                social_group.name.lower(),
+                package
+            )
+        )
+
+        # Create Package
+        return package
 
     # Send package
     def SendPackage(self, package):
@@ -278,14 +288,10 @@ class VehicleRecorder():
             if timeslot == (pkg.offset_ts + pkg.trans_ts):
                 # log
                 DEBUG.Log(
-                    "[{}-package][{}][{}]:{}ts receive.(src:{} bits:{}b appdatas:{})".format(
+                    "[{}][package][{}]:receive.({})".format(
                         self.name,
-                        LinkType.DOWNLINK.name.lower(),
                         pkg.social_group.name.lower(),
-                        timeslot,
-                        pkg.src.name,
-                        pkg.bits,
-                        len(pkg.appdatas)
+                        pkg,
                     )
                 )
                 self.PackageDelivered(pkg)
@@ -299,14 +305,10 @@ class VehicleRecorder():
         for pkg in self.pkg_in_proc[LinkType.UPLINK]:
             if(pkg.offset_ts == timeslot):
                 DEBUG.Log(
-                    "[{}-package][{}][{}]:{}ts delivery.(dest:{} bits:{}b appdatas:{})".format(
+                    "[{}][package][{}]:delivery.({})".format(
                         self.name,
-                        LinkType.UPLINK.name.lower(),
                         pkg.social_group.name.lower(),
-                        timeslot,
-                        pkg.dest.name,
-                        pkg.bits,
-                        len(pkg.appdatas),
+                        pkg,
                     )
                 )
         # . remove sent packages
@@ -319,26 +321,26 @@ class VehicleRecorder():
     # Process package that're delivered
     def PackageDelivered(self, package):
         for appdata in package.appdatas:
-            self.app.ReceiveData(package.social_group, appdata)
+            self.app.RecvData(package.social_group, appdata)
 
     # Select the service base station according to the social type provided.
     def SelectSocialBS(self, social_type):
         if (social_type == SocialGroup.CRITICAL):
             return (
-                self.sbscrb_social_bs[BaseStationType.UMI][social_type] if
-                self.sbscrb_social_bs[BaseStationType.UMI][social_type] != None
-                else self.sbscrb_social_bs[BaseStationType.UMA][social_type])
+                self.sub_sg_bs[BaseStationType.UMI][social_type] if
+                self.sub_sg_bs[BaseStationType.UMI][social_type] != None
+                else self.sub_sg_bs[BaseStationType.UMA][social_type])
         elif (social_type == SocialGroup.GENERAL):
             return (
-                self.sbscrb_social_bs[BaseStationType.UMI][social_type] if
-                (self.sbscrb_social_bs[BaseStationType.UMI][social_type] !=
-                 None and len(self.app.sg_appdatas[SocialGroup.CRITICAL]) == 0)
-                else self.sbscrb_social_bs[BaseStationType.UMA][social_type])
+                self.sub_sg_bs[BaseStationType.UMI][social_type] if
+                (self.sub_sg_bs[BaseStationType.UMI][social_type] !=
+                 None and len(self.app.datas[SocialGroup.CRITICAL]) == 0)
+                else self.sub_sg_bs[BaseStationType.UMA][social_type])
         else:
             return (
-                self.sbscrb_social_bs[BaseStationType.UMA][social_type] if
-                self.sbscrb_social_bs[BaseStationType.UMA][social_type] != None
-                else self.sbscrb_social_bs[BaseStationType.UMI][social_type])
+                self.sub_sg_bs[BaseStationType.UMA][social_type] if
+                self.sub_sg_bs[BaseStationType.UMA][social_type] != None
+                else self.sub_sg_bs[BaseStationType.UMI][social_type])
 
     # Function called by BaseStationControllers to send packages
     def ReceivePackage(self, package,):
