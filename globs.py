@@ -30,13 +30,13 @@ class SocialGroup(IntEnum):
 # Network object layer
 class NetObjLayer(IntEnum):
     BS_POI = 2
-    BS_RAD_UMI = BS_POI - 1
     BS_RAD_UMA = BS_POI - 2
+    BS_RAD_UMI = BS_POI - 1
     CON_LINE = BS_POI + 1
 
 
 # Simulation Infos
-class SimInfo:
+class SumoSimInfo:
     def __init__(self):
         self.new_veh_ids = []
         self.veh_ids = []
@@ -74,18 +74,15 @@ TRACI_LOCK = threading.Lock()
 
 # Matlab
 MATLAB_ENG = matlab.engine.start_matlab()
-MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\")
-MATLAB_ENG.addpath(os.getcwd() + "\\matlab\\SelectCQI_bySNR\\")
+MATLAB_ENG.addpath(os.getcwd() + "/matlab/")
+MATLAB_ENG.addpath(os.getcwd() + "/matlab/SelectCQI_bySNR/")
 
 # Random Number Generator
 # . initialize the rng
 random.seed(132342421)
-
-# Global Simulation Settings
-# . global simulation info
-SIM_INFO = SimInfo()
-
 # Sumo Simulation Settings
+# . simulation info
+SUMO_SIM_INFO = SumoSimInfo()
 # . simulation scaler
 SUMO_SIM_TIME_SCALER = 100
 # . seconds per sumo simulation step
@@ -145,8 +142,8 @@ BS_HEIGHT = {
 }
 # . base station's radius color
 BS_RADIUS_COLOR = {
-    BaseStationType.UMA: (178, 76, 76, 128),
-    BaseStationType.UMI: (178, 178, 76, 128)
+    BaseStationType.UMA: (255, 0, 0, 64),
+    BaseStationType.UMI: (0, 255, 0, 64)
 }
 # . base station's radius
 BS_RADIUS = {

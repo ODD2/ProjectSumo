@@ -2,7 +2,7 @@ import traci
 from enum import IntEnum
 from numpy import random
 from globs import SocialGroup, NetObjLayer, BaseStationType, NET_SG_RND_REQ_SIZE, LinkType
-from globs import TRACI_LOCK, MATLAB_ENG, SIM_INFO
+from globs import TRACI_LOCK, MATLAB_ENG, SUMO_SIM_INFO
 from net_model import NET_STATUS_CACHE, BASE_STATION_CONTROLLER, BaseStationController
 from net_app import AppDataHeader, AppData, VehicleApplication
 from net_pack import NetworkPackage
@@ -295,6 +295,13 @@ class VehicleRecorder():
                     )
                 )
                 self.PackageDelivered(pkg)
+                self.con_state[pkg.src.name].rec.ChangeState(
+                    ConnectionState.Success
+                )
+            else:
+                self.con_state[pkg.src.name].rec.ChangeState(
+                    ConnectionState.Transmit
+                )
         # .remove delivered packages
         self.pkg_in_proc[LinkType.DOWNLINK] = [
             pkg
@@ -305,11 +312,18 @@ class VehicleRecorder():
         for pkg in self.pkg_in_proc[LinkType.UPLINK]:
             if(pkg.offset_ts == timeslot):
                 DEBUG.Log(
-                    "[{}][package][{}]:delivery.({})".format(
+                    "[{}][package][{}]:deliver.({})".format(
                         self.name,
                         pkg.social_group.name.lower(),
                         pkg,
                     )
+                )
+                self.con_state[pkg.dest.name].rec.ChangeState(
+                    ConnectionState.Success
+                )
+            else:
+                self.con_state[pkg.dest.name].rec.ChangeState(
+                    ConnectionState.Transmit
                 )
         # . remove sent packages
         self.pkg_in_proc[LinkType.UPLINK] = [

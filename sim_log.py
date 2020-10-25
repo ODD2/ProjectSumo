@@ -1,5 +1,5 @@
 from datetime import datetime
-from globs import SIM_INFO
+from globs import SUMO_SIM_INFO
 
 
 class Logger:
@@ -8,9 +8,9 @@ class Logger:
 
     def Log(self, msg: str):
         log = "[{}s][{}n/{}t]{}".format(
-            SIM_INFO.time,
-            SIM_INFO.ns,
-            SIM_INFO.ts,
+            SUMO_SIM_INFO.time,
+            SUMO_SIM_INFO.ns,
+            SUMO_SIM_INFO.ts,
             msg
         )
         self.file.write(log+'\n')

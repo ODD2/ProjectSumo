@@ -47,10 +47,10 @@ class NetStatusCache:
     def Flush(self):
         globals()
         # remove ghosts
-        for veh_id in SIM_INFO.ghost_veh_ids:
+        for veh_id in SUMO_SIM_INFO.ghost_veh_ids:
             self._map.pop(veh_id)
         # add new vehicles
-        for veh_id in SIM_INFO.new_veh_ids:
+        for veh_id in SUMO_SIM_INFO.new_veh_ids:
             self._map[veh_id] = [[NetStatus() for sg in SocialGroup]
                                  for i in range(len(BASE_STATION_CONTROLLER))]
         # initialize
@@ -138,7 +138,7 @@ class BaseStationController:
         for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
             if(pkg.offset_ts == timeslot):
                 DEBUG.Log(
-                    "[{}][package][{}]:delivery.({})".format(
+                    "[{}][package][{}]:deliver.({})".format(
                         self.name,
                         pkg.social_group.name.lower(),
                         pkg

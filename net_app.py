@@ -1,5 +1,5 @@
 import sys
-from globs import SIM_INFO, SocialGroup, NET_SG_RND_REQ_SIZE
+from globs import SUMO_SIM_INFO, SocialGroup, NET_SG_RND_REQ_SIZE
 from sim_log import DEBUG, ERROR
 from numpy import random
 
@@ -114,11 +114,11 @@ class VehicleApplication(Application):
 
     # Send application data
     def SendData(self):
-        if (SIM_INFO.time - self.prev_gen_time > 1):
-            self.prev_gen_time = SIM_INFO.time
+        if (SUMO_SIM_INFO.time - self.prev_gen_time > 1):
+            self.prev_gen_time = SUMO_SIM_INFO.time
             for group in SocialGroup:
                 # TODO: Make the random poisson be social group dependent
-                for _ in range(random.poisson(1)):
+                for _ in range(random.poisson(10)):
                     # get the range of random generated data size (byte)
                     data_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
                     # size of data (bit)
@@ -134,7 +134,7 @@ class VehicleApplication(Application):
                                 self.vehicle,
                                 data_size,
                                 self.data_counter,
-                                SIM_INFO.time
+                                SUMO_SIM_INFO.time
                             ),
                             data_size,
                             0
