@@ -19,10 +19,11 @@ class NetworkPackage:
         self.offset_ts = offset_ts
 
     def __str__(self):
-        return "NetworkPackage({}>{},{},{}b,{}o+{}t,[{}])".format(
+        return "NetworkPackage({}>{},{}-Q{},{}b,{}o+{}t,[{}])".format(
             self.src.name,
             self.dest.name,
             self.social_group.fname.lower(),
+            self.social_group.qos,
             self.bits,
             self.offset_ts,
             self.trans_ts,

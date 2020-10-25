@@ -97,13 +97,13 @@ class BaseStationController:
         self.pkg_in_proc = [[] for i in LinkType]
 
         # upload requests
-        self.sg_upload_req = ([[] for x in SocialGroup])
+        self.sg_upload_req = ([{} for x in range(NET_QOS_CHNLS)])
 
         # broadcast reqeusts
-        self.sg_brdcst_datas = ([[] for x in SocialGroup])
+        self.sg_brdcst_datas = ([{} for x in range(NET_QOS_CHNLS)])
 
-        # resend requests
-        self.sg_resend_req = ([[] for x in SocialGroup])
+        # TODO: resend requests
+        # self.sg_resend_req = ([[] for x in SocialGroup])
 
     # Called every network step
     def UpdateNS(self, ns):
@@ -158,7 +158,9 @@ class BaseStationController:
 
     # Function called by VehicleRecorder to submit upload requests to this base station
     def ReceiveUploadRequest(self, sender, social_group: SocialGroup, total_bits: int):
-        self.sg_upload_req[social_group].append(
+        if social_group not in self.sg_upload_req[social_group.qos]:
+            self.sg_upload_req[social_group.qos][social_group] = []
+        self.sg_upload_req[social_group.qos][social_group].append(
             UploadRequest(sender, total_bits)
         )
 
@@ -170,71 +172,72 @@ class BaseStationController:
             BS_TOTAL_BANDWIDTH[self.type]*0.9
         )
         # Serve requests
-        for social_group in SocialGroup:
-            # Check if there exists pending requests
-            if (len(self.sg_upload_req[social_group]) > 0 and ra_oma.Spare()):
-                # fetch resource block trans size for every request
-                req_rbsize_pairs = []
-                for req in self.sg_upload_req[social_group]:
-                    rbsize = MATLAB_ENG.GetThroughputPerRB(
-                        float(
-                            NET_STATUS_CACHE.GetNetStatus(
-                                (
-                                    req.sender,
-                                    self,
-                                    social_group
-                                )
-                            ).cqi
-                        ),
-                        int(NET_RB_SLOT_SYMBOLS)
-                    )
-                    req_rbsize_pairs.append((req, rbsize))
-                # sort with resource block size (the larger size the higher priority)
-                req_rbsize_pairs.sort(
-                    reverse=True,
-                    key=(
-                        lambda req_rbsize_pair: req_rbsize_pair[1]
-                    )
-                )
-                # required resource block bandwidth for social group msg
-                req_bw_per_rb = self.RequiredBandwidth(social_group)
-                # required timeslots for using this bandwidth
-                req_ts_per_rb = NET_RB_BW_REQ_TS[req_bw_per_rb]
-                # serve requests
-                for req_rbsize_pair in req_rbsize_pairs:
-                    req = req_rbsize_pair[0]
-                    rbsize = req_rbsize_pair[1]
-                    total_req_rb = math.ceil(req.total_bits / rbsize)
-
-                    for _ in range(total_req_rb):
-                        # allocate
-                        offset_ts = ra_oma.Allocate(
-                            req_bw_per_rb, req_ts_per_rb
+        for qos in range(NET_QOS_CHNLS):
+            for social_group in self.sg_upload_req[qos].keys():
+                # Check if there exists pending requests
+                if (len(self.sg_upload_req[qos][social_group]) > 0 and ra_oma.Spare()):
+                    # fetch resource block trans size for every request
+                    req_rbsize_pairs = []
+                    for req in self.sg_upload_req[qos][social_group]:
+                        rbsize = MATLAB_ENG.GetThroughputPerRB(
+                            float(
+                                NET_STATUS_CACHE.GetNetStatus(
+                                    (
+                                        req.sender,
+                                        self,
+                                        social_group
+                                    )
+                                ).cqi
+                            ),
+                            int(NET_RB_SLOT_SYMBOLS)
                         )
-
-                        # unable to allocate
-                        if(offset_ts < 0):
-                            break
-
-                        # notify request owner for granting resource
-                        req.sender.UploadResourceGranted(
-                            self,
-                            social_group,
-                            rbsize,
-                            req_ts_per_rb,
-                            offset_ts
+                        req_rbsize_pairs.append((req, rbsize))
+                    # sort with resource block size (the larger size the higher priority)
+                    req_rbsize_pairs.sort(
+                        reverse=True,
+                        key=(
+                            lambda req_rbsize_pair: req_rbsize_pair[1]
                         )
-                    else:
-                        # if the allocation process above wasn't interrupted
-                        # continue allocation for the same resource block settings
-                        continue
+                    )
+                    # required resource block bandwidth for social group msg
+                    req_bw_per_rb = self.RequiredBandwidth(social_group)
+                    # required timeslots for using this bandwidth
+                    req_ts_per_rb = NET_RB_BW_REQ_TS[req_bw_per_rb]
+                    # serve requests
+                    for req_rbsize_pair in req_rbsize_pairs:
+                        req = req_rbsize_pair[0]
+                        rbsize = req_rbsize_pair[1]
+                        total_req_rb = math.ceil(req.total_bits / rbsize)
 
-                    # if the allocation process above was interrupted(break)
-                    # then allocation for the same resource block settings(bandwidth,timeslots)
-                    # will result in failure, too.
-                    break
+                        for _ in range(total_req_rb):
+                            # allocate
+                            offset_ts = ra_oma.Allocate(
+                                req_bw_per_rb, req_ts_per_rb
+                            )
+
+                            # unable to allocate
+                            if(offset_ts < 0):
+                                break
+
+                            # notify request owner for granting resource
+                            req.sender.UploadResourceGranted(
+                                self,
+                                social_group,
+                                rbsize,
+                                req_ts_per_rb,
+                                offset_ts
+                            )
+                        else:
+                            # if the allocation process above wasn't interrupted
+                            # continue allocation for the same resource block settings
+                            continue
+
+                        # if the allocation process above was interrupted(break)
+                        # then allocation for the same resource block settings(bandwidth,timeslots)
+                        # will result in failure, too.
+                        break
         # Clean requests
-        self.sg_upload_req = ([[] for x in SocialGroup])
+        self.sg_upload_req = ([{} for x in range(NET_QOS_CHNLS)])
 
     # arrange downlink resource
     def ArrangeDownlinkResource(self):
@@ -250,91 +253,92 @@ class BaseStationController:
         # TODO: Serve Resend Requests
 
         # Serve Broadcast Appdatas
-        for social_group in SocialGroup:
-            # if this base station has no subscribers in this social group
-            if(len(self.sg_sub_vehs[social_group]) == 0):
-                # clear all broadcast appdatas of this social group
-                # cause there's no receiver
-                self.sg_brdcst_datas[social_group] = []
-                continue
-            # calculate the total bits for this social group to send all its broadcast appdatas
-            sg_total_bits = 0
-            for appdata in self.sg_brdcst_datas[social_group]:
-                sg_total_bits += appdata.bits
-            # if this social group has no data to broadcast
-            if(sg_total_bits == 0):
-                continue
-            # find the lowest cqi in the social group subscribers
-            netstatus = NET_STATUS_CACHE.GetMultiNetStatus([
-                (veh, self, social_group) for veh in self.sg_sub_vehs[social_group]
-            ])
-            lowest_cqi = netstatus[0].cqi
-            for status in netstatus:
-                if(status.cqi < lowest_cqi):
-                    lowest_cqi = status.cqi
-            # calculate the resource block size for the cqi
-            sg_rb_bits = MATLAB_ENG.GetThroughputPerRB(
-                float(lowest_cqi),
-                int(NET_RB_SLOT_SYMBOLS)
-            )
-            # required resource block bandwidth for this social group msg
-            sg_rb_bw = self.RequiredBandwidth(social_group)
-            # required timeslots for using this bandwidth
-            sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
-            # total required resource blocks for this social group
-            sg_total_req_rb = math.ceil(sg_total_bits/sg_rb_bits)
-            # allocate resource blocks
-            for _ in range(sg_total_req_rb):
-                offset_ts = ra_oma.Allocate(
-                    sg_rb_bw, sg_rb_ts
+        for qos in range(NET_QOS_CHNLS):
+            for social_group in self.sg_brdcst_datas[qos].keys():
+                # if this base station has no subscribers in this social group
+                if(len(self.sg_sub_vehs[social_group]) == 0):
+                    # clear all broadcast appdatas of this social group
+                    # cause there's no receiver
+                    self.sg_brdcst_datas[qos][social_group] = []
+                    continue
+                # calculate the total bits for this social group to send all its broadcast appdatas
+                sg_total_bits = 0
+                for appdata in self.sg_brdcst_datas[qos][social_group]:
+                    sg_total_bits += appdata.bits
+                # if this social group has no data to broadcast
+                if(sg_total_bits == 0):
+                    continue
+                # find the lowest cqi in the social group subscribers
+                netstatus = NET_STATUS_CACHE.GetMultiNetStatus([
+                    (veh, self, social_group) for veh in self.sg_sub_vehs[social_group]
+                ])
+                lowest_cqi = netstatus[0].cqi
+                for status in netstatus:
+                    if(status.cqi < lowest_cqi):
+                        lowest_cqi = status.cqi
+                # calculate the resource block size for the cqi
+                sg_rb_bits = MATLAB_ENG.GetThroughputPerRB(
+                    float(lowest_cqi),
+                    int(NET_RB_SLOT_SYMBOLS)
                 )
-                # unable to allocate
-                if(offset_ts < 0):
-                    break
-                # collect appdatas this package is delivering
-                package_appdatas = []
-                remain_bits = sg_rb_bits
-                # the appdata index that is currently collecting
-                data_delivering = 0
-                # the total amount of appdatas
-                datas_count = len(self.sg_brdcst_datas[social_group])
-                # start appdata collection
-                while(data_delivering < datas_count and remain_bits > 0):
-                    appdata = self.sg_brdcst_datas[social_group][data_delivering]
-                    trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
-                    package_appdatas.append(
-                        AppData(
-                            appdata.header,
-                            trans_bits,
-                            appdata.offset
-                        )
+                # required resource block bandwidth for this social group msg
+                sg_rb_bw = self.RequiredBandwidth(social_group)
+                # required timeslots for using this bandwidth
+                sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
+                # total required resource blocks for this social group
+                sg_total_req_rb = math.ceil(sg_total_bits/sg_rb_bits)
+                # allocate resource blocks
+                for _ in range(sg_total_req_rb):
+                    offset_ts = ra_oma.Allocate(
+                        sg_rb_bw, sg_rb_ts
                     )
-                    # consume remain bits
-                    remain_bits -= trans_bits
-                    # consume bits to deliver
-                    appdata.bits -= trans_bits
-                    # add delivered bits
-                    appdata.offset += trans_bits
-                    # if there's no bits to deliver move on to the next appdata
-                    if(appdata.bits == 0):
-                        data_delivering += 1
-                # collection done, remove appdatas that have been delivered
-                self.sg_brdcst_datas[social_group] = self.sg_brdcst_datas[social_group][data_delivering:]
-                # create package
-                package = NetworkPackage(
-                    self,
-                    BROADCAST_OBJECT,
-                    social_group,
-                    sg_rb_bits-remain_bits,
-                    package_appdatas,
-                    sg_rb_ts,
-                    offset_ts
-                )
-                # send package
-                for veh in self.sg_sub_vehs[social_group]:
-                    veh.ReceivePackage(package)
-                # put package in process list
-                self.pkg_in_proc[LinkType.DOWNLINK].append(package)
+                    # unable to allocate
+                    if(offset_ts < 0):
+                        break
+                    # collect appdatas this package is delivering
+                    package_appdatas = []
+                    remain_bits = sg_rb_bits
+                    # the appdata index that is currently collecting
+                    data_delivering = 0
+                    # the total amount of appdatas
+                    datas_count = len(self.sg_brdcst_datas[qos][social_group])
+                    # start appdata collection
+                    while(data_delivering < datas_count and remain_bits > 0):
+                        appdata = self.sg_brdcst_datas[qos][social_group][data_delivering]
+                        trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
+                        package_appdatas.append(
+                            AppData(
+                                appdata.header,
+                                trans_bits,
+                                appdata.offset
+                            )
+                        )
+                        # consume remain bits
+                        remain_bits -= trans_bits
+                        # consume bits to deliver
+                        appdata.bits -= trans_bits
+                        # add delivered bits
+                        appdata.offset += trans_bits
+                        # if there's no bits to deliver move on to the next appdata
+                        if(appdata.bits == 0):
+                            data_delivering += 1
+                    # collection done, remove appdatas that have been delivered
+                    self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][data_delivering:]
+                    # create package
+                    package = NetworkPackage(
+                        self,
+                        BROADCAST_OBJECT,
+                        social_group,
+                        sg_rb_bits-remain_bits,
+                        package_appdatas,
+                        sg_rb_ts,
+                        offset_ts
+                    )
+                    # send package
+                    for veh in self.sg_sub_vehs[social_group]:
+                        veh.ReceivePackage(package)
+                    # put package in process list
+                    self.pkg_in_proc[LinkType.DOWNLINK].append(package)
 
     # arrange downlink resource in NOMA
     def ArrangeDownlinkResourceNOMA(self):
@@ -346,7 +350,10 @@ class BaseStationController:
 
     # Function called by NetworkCoreController to propagate appdata
     def ReceivePropagation(self, social_group: SocialGroup, header: AppDataHeader):
-        self.sg_brdcst_datas[social_group].append(
+        if(social_group not in self.sg_brdcst_datas[social_group.qos]):
+            self.sg_brdcst_datas[social_group.qos][social_group] = []
+
+        self.sg_brdcst_datas[social_group.qos][social_group].append(
             AppData(
                 header,
                 header.total_bits,

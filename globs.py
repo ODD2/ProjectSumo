@@ -92,8 +92,8 @@ SUMO_SECONDS_PER_STEP = 0.001*SUMO_SIM_TIME_SCALER
 SUMO_TOTAL_STEPS = (1 / SUMO_SECONDS_PER_STEP) * 100
 
 # Network Settings
-# . total QoS network channels.
-NET_QOS_CHNL = max(SocialGroup, key=lambda x: x.qos)
+# . total QoS network channels. qos channel starts from 0.
+NET_QOS_CHNLS = (max(SocialGroup, key=lambda x: x.qos).qos) + 1
 # . resource block symbols
 NET_RB_SLOT_SYMBOLS = 14
 # . seconds per network simulation step
