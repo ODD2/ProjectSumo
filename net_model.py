@@ -123,7 +123,7 @@ class BaseStationController:
                 DEBUG.Log(
                     "[{}][package][{}]:receive.({})".format(
                         self.name,
-                        pkg.social_group.name.lower(),
+                        pkg.social_group.fname.lower(),
                         pkg
                     )
                 )
@@ -140,7 +140,7 @@ class BaseStationController:
                 DEBUG.Log(
                     "[{}][package][{}]:deliver.({})".format(
                         self.name,
-                        pkg.social_group.name.lower(),
+                        pkg.social_group.fname.lower(),
                         pkg
                     )
                 )

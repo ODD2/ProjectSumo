@@ -107,7 +107,7 @@ class VehicleApplication(Application):
             DEBUG.Log(
                 "[{}][app][{}]:data intact.({})".format(
                     self.vehicle.name,
-                    social_group.name.lower(),
+                    social_group.fname.lower(),
                     appdata.header
                 )
             )
@@ -153,7 +153,7 @@ class NetworkCoreApplication(Application):
             DEBUG.Log(
                 "[{}][app][{}]:data intact.({})".format(
                     self.core_ctrlr.name,
-                    social_group.name.lower(),
+                    social_group.fname.lower(),
                     appdata.header
                 )
             )

@@ -78,8 +78,8 @@ class VehicleRecorder():
         self.pos = (0, 0)
 
         # Best connectivity base station for each social group, categorized by base station type
-        self.sub_sg_bs = [[None for j in range(len(SocialGroup))]
-                          for i in range(len(BaseStationType))]
+        self.sub_sg_bs = [[None for j in SocialGroup]
+                          for i in BaseStationType]
 
         # Create the vehicle application
         self.app = VehicleApplication(self)
@@ -266,7 +266,7 @@ class VehicleRecorder():
         DEBUG.Log(
             "[{}][package][{}]:create.({})".format(
                 self.name,
-                social_group.name.lower(),
+                social_group.fname.lower(),
                 package
             )
         )
@@ -290,7 +290,7 @@ class VehicleRecorder():
                 DEBUG.Log(
                     "[{}][package][{}]:receive.({})".format(
                         self.name,
-                        pkg.social_group.name.lower(),
+                        pkg.social_group.fname.lower(),
                         pkg,
                     )
                 )
@@ -314,7 +314,7 @@ class VehicleRecorder():
                 DEBUG.Log(
                     "[{}][package][{}]:deliver.({})".format(
                         self.name,
-                        pkg.social_group.name.lower(),
+                        pkg.social_group.fname.lower(),
                         pkg,
                     )
                 )

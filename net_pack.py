@@ -22,7 +22,7 @@ class NetworkPackage:
         return "NetworkPackage({}>{},{},{}b,{}o+{}t,[{}])".format(
             self.src.name,
             self.dest.name,
-            self.social_group.name.lower(),
+            self.social_group.fname.lower(),
             self.bits,
             self.offset_ts,
             self.trans_ts,

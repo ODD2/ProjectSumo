@@ -5,6 +5,7 @@ import os
 import traci
 import sys
 import matlab.engine
+from sg_meta import SocialGroupMeta
 from numpy import random
 from enum import IntEnum, Enum
 
@@ -21,8 +22,8 @@ class BaseStationType(IntEnum):
     UMA = 1
 
 
-# Lower Value Has Higher Priority
-class SocialGroup(IntEnum):
+# SocialGroup and QOS priority(Lower value has higher priority, 0 is the lowest value.)
+class SocialGroup(metaclass=SocialGroupMeta):
     CRITICAL = 0
     GENERAL = 1
 
@@ -91,6 +92,8 @@ SUMO_SECONDS_PER_STEP = 0.001*SUMO_SIM_TIME_SCALER
 SUMO_TOTAL_STEPS = (1 / SUMO_SECONDS_PER_STEP) * 100
 
 # Network Settings
+# . total QoS network channels.
+NET_QOS_CHNL = max(SocialGroup, key=lambda x: x.qos)
 # . resource block symbols
 NET_RB_SLOT_SYMBOLS = 14
 # . seconds per network simulation step
@@ -113,6 +116,7 @@ NET_SG_RND_REQ_SIZE = {
     # SocialGroup.CRITICAL: [10, 50],
     # SocialGroup.GENERAL: [20, 100],
 }
+
 
 # Base Station Settings
 # . base station's total bandwidth
