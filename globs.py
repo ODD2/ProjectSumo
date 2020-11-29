@@ -77,6 +77,7 @@ TRACI_LOCK = threading.Lock()
 MATLAB_ENG = matlab.engine.start_matlab()
 MATLAB_ENG.addpath(os.getcwd() + "/matlab/")
 MATLAB_ENG.addpath(os.getcwd() + "/matlab/SelectCQI_bySNR/")
+MATLAB_ENG.addpath(os.getcwd() + "/matlab/NomaPlannerV1/")
 
 # Random Number Generator
 # . initialize the rng

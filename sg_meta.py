@@ -9,8 +9,10 @@ class SocialGroupIterator:
         self.sg = sg
         # member variable to keep track of current index
         self._index = 0
-        self._sg_var = [i[1] for i in inspect.getmembers(
-            sg) if not i[0].startswith('_') and not inspect.isroutine(i[1])]
+        self._sg_var = [
+            i[1] for i in inspect.getmembers(sg)
+            if not i[0].startswith('_') and not inspect.isroutine(i[1])
+        ]
 
     def __next__(self):
         ''''Returns the next value from team object's lists '''

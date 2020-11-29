@@ -1,0 +1,23 @@
+function [snr]=BLER2SNR(BLER, CQI)
+% [snr]=BLER2SNR(BLER, CQI)
+%Given the used CQI-level and the BLER, output the linearly-approximated
+%bler from the SNR-BLER curve
+    load('SNR_BLER_CQI.mat');
+
+    [~, BLER_LEVEL ~] = size(snr_to_bler_with_cqi);
+    y_bler = snr_to_bler_with_cqi(2, :, CQI);
+    x_snr = snr_to_bler_with_cqi(1, :, CQI);
+    
+    if( BLER <= y_bler(1))
+        snr = x_snr(1)
+    elseif( 
+    end
+    
+    last = 1.0;
+    for b=1:BLER_LEVEL
+        if(last <= BLER && BLER <= y_bler(b))
+            %found the interval containing the 'BLER'
+            break;
+        end
+    end
+end

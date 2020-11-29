@@ -1,0 +1,24 @@
+function [bler]=GetBLERfrom_CQI_and_SNR(cqi, snr)
+    if nargin < 2
+        ME = MException('MyComponent:invalidFormat', sprintf('ERROR INPUT!\n [cqi_index]=SelectCQI(snr, BLER_UPPERBOUND)\n'));
+        throw(ME); %terminate
+    end
+    load('SNR_BLER_CQI.mat');
+
+    [~, BLER_LEVEL CQI_LEVEL] = size(snr_to_bler_with_cqi);
+    cqi_index = 0;
+    for index = CQI_LEVEL:-1:1
+        for b = BLER_LEVEL:-1:1
+            %the 1st-row is the SNR
+            %the 2nd-row is the BLER
+            snr = snr_to_bler_with_cqi(1, b, index);
+            bler = snr_to_bler_with_cqi(2, b, index);
+            if( bler <= BLER_UPPERBOUND)
+                if(snr <= SNR_UPPERBOUND)
+                    cqi_index = index;
+                    return; 
+                end
+            end
+        end
+    end
+end

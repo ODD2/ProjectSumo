@@ -241,7 +241,8 @@ class BaseStationController:
 
     # arrange downlink resource
     def ArrangeDownlinkResource(self):
-        self.ArrangeDownlinkResourceOMA()
+        # self.ArrangeDownlinkResourceOMA()
+        self.ArrangeDownlinkResourceNOMA()
 
     # arrange downlink resource in OMA
     def ArrangeDownlinkResourceOMA(self):
@@ -342,9 +343,72 @@ class BaseStationController:
 
     # arrange downlink resource in NOMA
     def ArrangeDownlinkResourceNOMA(self):
-        a = 0
+        globals()
+        # TODO: Serve Resend Requests
+
+        # Simulation config for matlab optimizer
+        SIM_CONF = {
+            "rbf_h": float(100),
+            "rbf_w": float(2),
+            "max_pwr": float(10),
+        }
+        # Qos group config for optimizer
+        QoS_GP_CONF = []
+
+        # Collect group configs
+        for qos in range(NET_QOS_CHNLS):
+            # a group config type in pyton
+            QoS_GP_CONF.append([])
+            for social_group in self.sg_brdcst_datas[qos].keys():
+                # if this base station has no subscribers in this social group
+                group_size = len(self.sg_sub_vehs[social_group])
+                if(group_size == 0):
+                    # clear all broadcast appdatas of this social group
+                    # cause there's no receiver
+                    self.sg_brdcst_datas[qos][social_group] = []
+                    continue
+                # calculate the total bits for this social group to send all its broadcast appdatas
+                sg_total_bits = 0
+                for appdata in self.sg_brdcst_datas[qos][social_group]:
+                    sg_total_bits += appdata.bits
+                # if this social group has no data to broadcast
+                if(sg_total_bits == 0):
+                    continue
+                # find the lowest cqi in the social group subscribers
+                netstatus = NET_STATUS_CACHE.GetMultiNetStatus([
+                    (veh, self, social_group) for veh in self.sg_sub_vehs[social_group]
+                ])
+                lowest_cqi = netstatus[0].cqi
+                for status in netstatus:
+                    if(status.cqi < lowest_cqi):
+                        lowest_cqi = status.cqi
+                # required resource block bandwidth for this social group msg
+                sg_rb_bw = self.RequiredBandwidth(social_group)
+                # required timeslots for using this bandwidth
+                sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
+
+                QoS_GP_CONF[-1].append({
+                    "gid": float(social_group.gid),
+                    "rbf_w": float(sg_rb_ts),
+                    "rbf_h": float(sg_rb_bw/NET_RB_BW_UNIT),
+                    "sinr_max": float(lowest_cqi),
+                    "rem_bits": float(sg_total_bits),
+                    "mem_num": float(group_size),
+                })
+            # if this qos has no group to allocate, remove it.
+            if(len(QoS_GP_CONF[-1]) == 0):
+                QoS_GP_CONF.pop()
+        # if there's no qos to allocate, return.
+        if(len(QoS_GP_CONF) == 0):
+            return
+
+        gid_req_rb, exitflag = MATLAB_ENG.NomaPlannerV1(
+            SIM_CONF, QoS_GP_CONF, nargout=2
+        )
+        print(gid_req_rb, exitflag)
 
     # Function called by VehicleRecorder to deliver package to this base station
+
     def ReceivePackage(self, package):
         self.pkg_in_proc[LinkType.UPLINK].append(package)
 
