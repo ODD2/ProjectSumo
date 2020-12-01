@@ -357,7 +357,7 @@ class BaseStationController:
 
         # Collect group configs
         for qos in range(NET_QOS_CHNLS):
-            # a group config type in pyton
+            # a group config type in python
             QoS_GP_CONF.append([])
             for social_group in self.sg_brdcst_datas[qos].keys():
                 # if this base station has no subscribers in this social group
@@ -378,10 +378,10 @@ class BaseStationController:
                 netstatus = NET_STATUS_CACHE.GetMultiNetStatus([
                     (veh, self, social_group) for veh in self.sg_sub_vehs[social_group]
                 ])
-                lowest_cqi = netstatus[0].cqi
+                lowest_sinr = netstatus[0].sinr
                 for status in netstatus:
-                    if(status.cqi < lowest_cqi):
-                        lowest_cqi = status.cqi
+                    if(status.sinr < lowest_sinr):
+                        lowest_sinr = status.sinr
                 # required resource block bandwidth for this social group msg
                 sg_rb_bw = self.RequiredBandwidth(social_group)
                 # required timeslots for using this bandwidth
@@ -391,24 +391,97 @@ class BaseStationController:
                     "gid": float(social_group.gid),
                     "rbf_w": float(sg_rb_ts),
                     "rbf_h": float(sg_rb_bw/NET_RB_BW_UNIT),
-                    "sinr_max": float(lowest_cqi),
+                    "sinr_max": float(lowest_sinr),
                     "rem_bits": float(sg_total_bits),
                     "mem_num": float(group_size),
                 })
-            # if this qos has no group to allocate, remove it.
+            # if this qos has nothing to allocate, remove it.
             if(len(QoS_GP_CONF[-1]) == 0):
                 QoS_GP_CONF.pop()
-        # if there's no qos to allocate, return.
+
+        # if none of the qos needs resource, end allocation  process.
         if(len(QoS_GP_CONF) == 0):
             return
 
-        gid_req_rb, exitflag = MATLAB_ENG.NomaPlannerV1(
+        # optimize allocation request
+        gid_req_res, exitflag = MATLAB_ENG.NomaPlannerV1(
             SIM_CONF, QoS_GP_CONF, nargout=2
         )
-        print(gid_req_rb, exitflag)
+
+        # deliver package according to optimized allocate resource
+        # TODO: improve approach(only iterate through gid_req_res rather than the whole qos).
+        for qos in range(NET_QOS_CHNLS):
+            for social_group in self.sg_brdcst_datas[qos].keys():
+                gname = "g"+str(social_group.gid)
+                if (gname in gid_req_res):
+                    for t_name, val_cqi in gid_req_res[gname].items():
+                        for cqi_name, rb_num in val_cqi.items():
+                            # required resource block bandwidth for this social group msg
+                            sg_rb_bw = self.RequiredBandwidth(social_group)
+                            # required timeslots for using this bandwidth
+                            sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
+                            # social group resource block cqi
+                            sg_rb_cqi = int(cqi_name[1:])
+                            # social group rosource block size for the specified cqi
+                            sg_rb_bits = MATLAB_ENG.GetThroughputPerRB(
+                                sg_rb_cqi, NET_RB_SLOT_SYMBOLS
+                            )
+                            # the offset timeslot of the package
+                            offset_ts = int(t_name[1:])
+
+                            # start collect appdata for remaining resource
+                            for _ in range(rb_num):
+                                # total bits allocated for this social group
+                                remain_bits = sg_rb_bits
+                                # currently delivering appdata index in group
+                                deliver_index = 0
+                                # the total number of appdatas waiting to deliver
+                                appdata_num = len(
+                                    self.sg_brdcst_datas[qos][social_group]
+                                )
+                                # the appdatas this group cast package is going to deliver
+                                package_appdatas = []
+                                while(deliver_index < appdata_num and remain_bits > 0):
+                                    appdata = self.sg_brdcst_datas[qos][social_group][deliver_index]
+                                    trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
+                                    package_appdatas.append(
+                                        AppData(
+                                            appdata.header,
+                                            trans_bits,
+                                            appdata.offset
+                                        )
+                                    )
+                                    # consume remain bits
+                                    remain_bits -= trans_bits
+                                    # consume bits to deliver
+                                    appdata.bits -= trans_bits
+                                    # add delivered bits
+                                    appdata.offset += trans_bits
+                                    # if there's no bits to deliver move on to the next appdata
+                                    if(appdata.bits == 0):
+                                        deliver_index += 1
+                                # collection done, remove appdatas that have been delivered
+                                self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][deliver_index:]
+                                # create package
+                                package = NetworkPackage(
+                                    self,
+                                    BROADCAST_OBJECT,
+                                    social_group,
+                                    sg_rb_bits-remain_bits,
+                                    package_appdatas,
+                                    sg_rb_ts,
+                                    offset_ts
+                                )
+                                # send package
+                                for veh in self.sg_sub_vehs[social_group]:
+                                    veh.ReceivePackage(package)
+                                # put package in process list
+                                self.pkg_in_proc[LinkType.DOWNLINK].append(
+                                    package)
+                else:
+                    continue
 
     # Function called by VehicleRecorder to deliver package to this base station
-
     def ReceivePackage(self, package):
         self.pkg_in_proc[LinkType.UPLINK].append(package)
 

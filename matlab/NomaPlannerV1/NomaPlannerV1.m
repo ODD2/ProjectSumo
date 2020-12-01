@@ -1,4 +1,4 @@
-function [GID_REQ_BITS,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
+function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
 
     for qos = 1:length(QoS_GP_CONF)
         QoS_GP_CONF{qos} = [QoS_GP_CONF{qos}{:}];
@@ -83,8 +83,10 @@ function [GID_REQ_BITS,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
 
 %   initialization
     SIM_CONF.rbfs = SIM_CONF.rbf_w* SIM_CONF.rbf_h;
-
     OPT_GP_CONF = [];    
+    SOL_GP_CONF = [];
+    x = [];
+    exitflag = -2;
     
 %   optimization
     for qos = 1:length(QoS_GP_CONF)
@@ -149,7 +151,7 @@ function [GID_REQ_BITS,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
         OPT_GP_CONF = CalcOptGpConfPosOfs(OPT_GP_CONF);
         
 %       optimize allocation in OMA layer
-        [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,true);
+        [x,~,exitflag,~] = Optimize(SIM_CONF,OPT_GP_CONF,true);
         
 %       update information from the last optimize allocation.
         OPT_GP_CONF = UpdateOptimizeResult(alloc_grp_index,OPT_GP_CONF,x,exitflag,true);
@@ -204,68 +206,43 @@ function [GID_REQ_BITS,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
         OPT_GP_CONF = UpdateOptimizeResult(alloc_grp_index,OPT_GP_CONF,x,exitflag,false);
     end
     
+%   result info
+    PrintSolutionResult(SOL_GP_CONF,x);
     
-%   print the final allocation result
-    fprintf('==== OMA ====\n');
-    for gp_conf = SOL_GP_CONF([SOL_GP_CONF.oma_cqi_num] > 0)
-        fprintf('qos:%d, gid:%d, geo:(%d,%d)\n', [gp_conf.qos gp_conf.gid gp_conf.rbf_h gp_conf.rbf_w]);
-        fprintf('{\n');
-        for cqi_i = 1:gp_conf.oma_cqi_num
-            cqi = gp_conf.oma_cqi_list(cqi_i);
-            beg_sol_ofs = gp_conf.oma_sol_ofs+gp_conf.rb_num*(cqi_i-1) + 1;
-            end_sol_ofs = gp_conf.oma_sol_ofs+gp_conf.rb_num*(cqi_i);
-            sol_pos = (find(x(beg_sol_ofs:end_sol_ofs))-1)';
-            
-            if(isempty(sol_pos))
-                continue
-            end
-            
-            fprintf(' cqi:%d(x%d), pwr:%d , rbs:[',cqi,length(sol_pos),gp_conf.oma_cqi_pwr_list(cqi_i));
-            for pos = sol_pos
-                fprintf('(%d,%d)', [(mod(pos,gp_conf.y_max)+1) (floor(pos/gp_conf.y_max)+1)]);
-            end
-            fprintf(']\n');
-        end
-         fprintf('}\n');
-    end
-    
-    fprintf('==== NOMA ====\n');
-    for gp_conf = SOL_GP_CONF([SOL_GP_CONF.noma_cqi_num] > 0)
-        fprintf('qos:%d, gid:%d, geo:(%d,%d)\n', [gp_conf.qos gp_conf.gid gp_conf.rbf_h gp_conf.rbf_w]);
-        fprintf('{\n');
-        for cqi_i = 1:gp_conf.noma_cqi_num
-            cqi = gp_conf.noma_cqi_list(cqi_i);
-            beg_sol_ofs = gp_conf.noma_sol_ofs+gp_conf.rb_num*(cqi_i-1) + 1;
-            end_sol_ofs = gp_conf.noma_sol_ofs+gp_conf.rb_num*(cqi_i);
-            sol_pos = (find(x(beg_sol_ofs:end_sol_ofs))-1)';
-            
-            if(isempty(sol_pos))
-                continue
-            end
-            
-            fprintf(' cqi:%d(x%d), pwr:%d , rbs:[',cqi,length(sol_pos),gp_conf.noma_cqi_pwr_list(cqi_i));
-            for pos = sol_pos
-                fprintf('(%d,%d)', [(mod(pos,gp_conf.y_max)+1) (floor(pos/gp_conf.y_max)+1)]);
-            end
-            fprintf(']\n');
-        end
-         fprintf('}\n');
-    end
-    
-    
-%   return values...
-    GID_REQ_BITS = struct();
+%   return values
+    GID_REQ_RES = struct();
     ExitFlag = exitflag;
-%   create result vector
-    for qos = 1:length(QoS_GP_CONF)
-        gid_list = [QoS_GP_CONF{qos}.gid];
-        for gid = gid_list
-            GID_REQ_BITS.("g"+gid) = 0;
+    
+%   fillin optimization result
+    for gp_conf = SOL_GP_CONF
+        gname = "g"+gp_conf.gid;
+        GID_REQ_RES.(gname) = struct();
+%       collect oma layer resource blocks
+        for ts = 0: (gp_conf.x_max-1)
+            ts_name  = "t"+ts;
+            GID_REQ_RES.(gname).(ts_name) = struct();
+            for layer = ["oma" "noma"]
+                for cqi_i = 1:gp_conf.(layer + "_cqi_num")
+                    cqi = gp_conf.(layer+"_cqi_list")(cqi_i);
+                    sol_beg = gp_conf.(layer+"_sol_ofs") + (cqi_i - 1) * gp_conf.y_max+ 1;
+                    sol_end = gp_conf.(layer+"_sol_ofs") +  cqi_i * gp_conf.y_max;
+%                   collect resource blocks allocated at this timeslot
+                    ts_rb_num = int16(sum(x(sol_beg:sol_end)));
+                    cqi_name = "c" + cqi;
+%                   skip if no resource block was allocated
+                    if ts_rb_num == 0
+                        continue
+                    end
+%                   check if this group has the same cqi resource block
+%                   allocation during this timeslot.
+                    if ~isfield(GID_REQ_RES.(gname).(ts_name),cqi_name)
+                        GID_REQ_RES.(gname).(ts_name).(cqi_name) = ts_rb_num;
+                    else
+                        GID_REQ_RES.(gname).(ts_name).(cqi_name) = ts_rb_num + GID_REQ_RES.(gname).(ts_name).(cqi_name);
+                    end
+                end
+            end
         end
-    end
-%   fillin optimal allocation result
-    for gp_conf = OPT_GP_CONF
-        GID_REQ_BITS.("g"+gp_conf.gid) = gp_conf.req_bits;
     end
     
     
@@ -320,6 +297,35 @@ function [GID_REQ_BITS,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
         end
         
         NEW_GP_CONF = GP_CONF;
+    end
+
+    function [] = PrintSolutionResult(SOL_GP_CONF,x)
+%       print the final allocation result        
+        for gpc = SOL_GP_CONF
+            fprintf('===== QoS:%d, Gid:%d, Geo:(%d,%d) =====\n',...
+            		[gpc.qos gpc.gid gpc.rbf_h gpc.rbf_w]);
+            fprintf('{\n');
+            for layer_ = ["oma" "noma"]
+            	fprintf(" --- %s Layer ---\n", [ upper(layer_) ] );
+	            for cqi_i_ = 1:gpc.(layer_+"_cqi_num")
+	                g_cqi = gpc.(layer_+"_cqi_list")(cqi_i_);
+	                beg_sol_ofs = gpc.(layer_+"_sol_ofs")+gpc.rb_num*(cqi_i_-1) + 1;
+	                end_sol_ofs = gpc.(layer_+"_sol_ofs")+gpc.rb_num*(cqi_i_);
+	                sol_pos = (find(x(beg_sol_ofs:end_sol_ofs))-1)';
+
+	                if(isempty(sol_pos))
+	                    continue
+	                end
+
+	                fprintf(' cqi:%d(x%d), pwr:%d , rbs:[',g_cqi,length(sol_pos),gpc.(layer_+"_cqi_pwr_list")(cqi_i_));
+	                for pos = sol_pos
+	                    fprintf('(%d,%d)', [(mod(pos,gpc.y_max)+1) (floor(pos/gpc.y_max)+1)]);
+	                end
+	                fprintf(']\n');
+	            end
+	         end
+             fprintf('}\n');
+        end
     end
 end
 
