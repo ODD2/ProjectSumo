@@ -614,8 +614,8 @@ def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group):
         matlab.double(Intf_h_MS),
         matlab.double(Intf_dist),
         matlab.double(Intf_pwr_dBm),
-        float(DS_Desired),
-        float(CP),
+        float(DS_Desired),  # ns
+        float(CP)*1000,  # ns
         True if bs_ctrlr.type == BaseStationType.UMA else False,
         nargout=2)
     return cqi, sinr

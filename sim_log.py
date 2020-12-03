@@ -1,10 +1,14 @@
+import os
 from datetime import datetime
 from globs import SUMO_SIM_INFO
 
 
 class Logger:
     def __init__(self, file):
-        self.file = open("log/"+file, "w")
+        dirpath = "log/"
+        if not os.path.isdir(dirpath):
+            os.mkdir(dirpath)
+        self.file = open(dirpath+file, "w")
 
     def Log(self, msg: str):
         log = "[{}s][{}n/{}t]{}".format(

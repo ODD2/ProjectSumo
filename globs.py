@@ -150,14 +150,14 @@ BS_RADIUS_COLOR = {
     BaseStationType.UMA: (255, 0, 0, 64),
     BaseStationType.UMI: (0, 255, 0, 64)
 }
-# . base station's radius
+# . base station's radius (m)
 BS_RADIUS = {
     BaseStationType.UMA: 500,
     BaseStationType.UMI: 50,
 }
-# . uma base station's cyclic prefix
+# . uma base station's cyclic prefix(us)
 BS_UMA_CP = 4.69
-# . umi base station's cyclic prefix
+# . umi base station's cyclic prefix(us)
 BS_UMI_CP_SOCIAL = {
     SocialGroup.CRITICAL: 2.34,
     SocialGroup.GENERAL: 4.69
