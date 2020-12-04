@@ -18,7 +18,7 @@ class Logger:
             msg
         )
         self.file.write(log+'\n')
-        print(log)
+        # print(log)
 
 
 class Printer(Logger):
