@@ -113,54 +113,54 @@ def main():
 
     # Vehicle Recorders
     vehicle_recorders = {}
-    try:
-        # Start Simulation
-        step = 0
-        while step < SUMO_TOTAL_STEPS:
-            traci.simulationStep()
-            # Fetch the newest sumo simulation informations
-            SUMO_SIM_INFO.UpdateSS()
+    # try:
+    # Start Simulation
+    step = 0
+    while step < SUMO_TOTAL_STEPS:
+        traci.simulationStep()
+        # Fetch the newest sumo simulation informations
+        SUMO_SIM_INFO.UpdateSS()
 
-            # Remove ghost(non-exist) vehicles
-            for ghost in SUMO_SIM_INFO.ghost_veh_ids:
-                DEBUG.Log("[{}]: left the map.".format(ghost))
-                vehicle_recorders.pop(ghost)
-            # Add new vehicles
-            for v_id in SUMO_SIM_INFO.new_veh_ids:
-                DEBUG.Log("[{}]: joined the map.".format(v_id))
-                vehicle_recorders[v_id] = VehicleRecorder(v_id)
+        # Remove ghost(non-exist) vehicles
+        for ghost in SUMO_SIM_INFO.ghost_veh_ids:
+            DEBUG.Log("[{}]: left the map.".format(ghost))
+            vehicle_recorders.pop(ghost)
+        # Add new vehicles
+        for v_id in SUMO_SIM_INFO.new_veh_ids:
+            DEBUG.Log("[{}]: joined the map.".format(v_id))
+            vehicle_recorders[v_id] = VehicleRecorder(v_id)
 
-            # Reset network status cache because vehicle positions have updated,
-            # which means the cqi/sinr should be re-estimated.
-            NET_STATUS_CACHE.Flush()
+        # Reset network status cache because vehicle positions have updated,
+        # which means the cqi/sinr should be re-estimated.
+        NET_STATUS_CACHE.Flush()
 
-            # Create vehicle_recorder list
-            vehicles = list(vehicle_recorders.values())
+        # Create vehicle_recorder list
+        vehicles = list(vehicle_recorders.values())
 
-            # Update vehicle recorders for sumo simulation
-            ParallelUpdateSS(vehicles)
-            # Network simulations per sumo simulation step
-            for ns in range(NET_STEPS_PER_SUMO_STEP):
-                SUMO_SIM_INFO.UpdateNS(ns)
-                # Update vehicle recorders for network simulation step
-                ParallelUpdateNS(vehicles, ns)
-                # Update base stations for network simulation step
-                ParallelUpdateNS(BASE_STATION_CONTROLLER, ns)
+        # Update vehicle recorders for sumo simulation
+        ParallelUpdateSS(vehicles)
+        # Network simulations per sumo simulation step
+        for ns in range(NET_STEPS_PER_SUMO_STEP):
+            SUMO_SIM_INFO.UpdateNS(ns)
+            # Update vehicle recorders for network simulation step
+            ParallelUpdateNS(vehicles, ns)
+            # Update base stations for network simulation step
+            ParallelUpdateNS(BASE_STATION_CONTROLLER, ns)
 
-                # Time slots per network simulation step
-                for ts in range(0, NET_TS_PER_NET_STEP+1):
-                    SUMO_SIM_INFO.UpdateTS(ts)
-                    ParallelUpdateT(vehicles + BASE_STATION_CONTROLLER, ts)
+            # Time slots per network simulation step
+            for ts in range(0, NET_TS_PER_NET_STEP+1):
+                SUMO_SIM_INFO.UpdateTS(ts)
+                ParallelUpdateT(vehicles + BASE_STATION_CONTROLLER, ts)
 
-            step += 1
-    except:
-        print("Exception Caught During Simulation")
+        step += 1
+    # except:
+        # print("Exception Caught During Simulation")
 
     # End Simulation
     traci.close()
 
     # report
-    STATISTIC_RECORDER.VehicleRecevedIntactAppdataReport()
+    STATISTIC_RECORDER.VehicleReceivedIntactAppdataReport()
 
 
 if __name__ == "__main__":

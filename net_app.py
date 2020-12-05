@@ -11,14 +11,14 @@ class AppDataHeader:
         self.total_bits = total_bits
         self.serial = serial
         self.at = at
+        self.id = "{}-{}".format(self.owner.name, self.serial)
 
     # def __hash__(self):
     #     return "{}-{}".format(self.owner.name, self.serial)
 
     def __str__(self):
-        return "AppDataHeader({}-{},{}b,{}s)".format(
-            self.owner.name,
-            self.serial,
+        return "AppDataHeader({},{}b,{}s)".format(
+            self.id,
             self.total_bits,
             self.at
         )
@@ -43,30 +43,34 @@ class Application:
     def __init__(self):
         self.data_inbox = {}
 
-    # function called by it's owner
-    # returns true if this appdata became "intact" after receive
-    # any other cases, e.g. appdata is already intact , will return false
+    # function called by application owner
+    # executes DataIntact() if the whole data became "intact"
+    # after receiving this appdata segment.
     def RecvData(self, social_group: SocialGroup, appdata: AppData):
-        # receive the first data from the data's owner
+        # received the first data from the data's owner
         if (appdata.header.owner.name not in self.data_inbox):
             self.data_inbox[appdata.header.owner.name] = {}
-        # data, of the same owner as the received on, that've been received by this application.
+        # datas, of the same owner as the received one, that have been received by this application.
         owner_datas = self.data_inbox[appdata.header.owner.name]
-        # the receive data is a new one, create record
+        # the delivered data is a new one, create record
         if(appdata.header.serial not in owner_datas):
             if(appdata.offset != 0):
+                # TODO: receive partial data and initiate missing segment reconstruction after a fix period of time
                 ERROR.Log("Error! first arrived appdata offset should be 0")
-                sys.exit()
+                # sys.exit()
+
+                # current implementation: ignore the whole appdata as if it never arrived to this vehicle.
+                return
             owner_datas[appdata.header.serial] = AppData(
                 appdata.header,
                 appdata.bits,
                 0
             )
-            return False
-        # the receive data is already intact
+            return
+        # the depivered data is already intact
         elif(owner_datas[appdata.header.serial].bits ==
              owner_datas[appdata.header.serial].header.total_bits):
-            return False
+            return
         # for deform data, process receive data
         deform_data = owner_datas[appdata.header.serial]
         # if receive data offset start before the deform data size
@@ -82,6 +86,8 @@ class Application:
         else:
             # TODO: receive the data and save it
             ERROR.Log("ERROR!Received Advanced Appdata!!!")
+            # sys.exit()
+            return
         # if the appdata has became intact
         if(deform_data.bits >= deform_data.header.total_bits):
             self.DataIntact(social_group, appdata)
@@ -131,7 +137,7 @@ class VehicleApplication(Application):
             self.prev_gen_time = SUMO_SIM_INFO.time
             for group in SocialGroup:
                 # TODO: Make the random poisson be social group dependent
-                for _ in range(random.poisson(10)):
+                for _ in range(random.poisson(1)):
                     # get the range of random generated data size (byte)
                     data_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
                     # size of data (bit)
