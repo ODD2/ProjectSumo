@@ -161,6 +161,8 @@ def main():
 
     # report
     STATISTIC_RECORDER.VehicleReceivedIntactAppdataReport()
+    STATISTIC_RECORDER.BaseStationAppdataTXQReport()
+    STATISTIC_RECORDER.BaseStationAppdataTXReport()
 
 
 if __name__ == "__main__":

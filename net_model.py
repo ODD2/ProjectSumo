@@ -2,6 +2,7 @@ import traci
 import os
 import sys
 import math
+import sim_stat as ss
 from globs import *
 from numpy import random
 from net_app import AppDataHeader, AppData, NetworkCoreApplication
@@ -104,6 +105,9 @@ class BaseStationController:
 
         # TODO: resend requests
         # self.sg_resend_req = ([[] for x in SocialGroup])
+
+    def __index__(self):
+        return self.serial
 
     # Called every network step
     def UpdateNS(self, ns):
@@ -443,7 +447,18 @@ class BaseStationController:
                                 package_appdatas = []
                                 while(deliver_index < appdata_num and remain_bits > 0):
                                     appdata = self.sg_brdcst_datas[qos][social_group][deliver_index]
+                                    # ===STATISTIC===
+                                    if(appdata.offset == 0):
+                                        ss.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
+                                            self, appdata.header
+                                        )
+                                        ss.STATISTIC_RECORDER.BaseStationAppdataStartTX(
+                                            self, appdata.header
+                                        )
+
+                                    # calculate the total bits that could actually transmit
                                     trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
+                                    # add data into package
                                     package_appdatas.append(
                                         AppData(
                                             appdata.header,
@@ -460,6 +475,11 @@ class BaseStationController:
                                     # if there's no bits to deliver move on to the next appdata
                                     if(appdata.bits == 0):
                                         deliver_index += 1
+                                        #  ===STATISTIC===
+                                        ss.STATISTIC_RECORDER.BaseStationAppdataEndTX(
+                                            self, appdata.header
+                                        )
+
                                 # collection done, remove appdatas that have been delivered
                                 self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][deliver_index:]
                                 # create package
@@ -498,7 +518,11 @@ class BaseStationController:
             )
         )
 
+        # STATISTIC
+        ss.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(self, header)
+
     # Function called by VehicleRecorder to subscribe to a specific social group on this base station
+
     def VehicleSubscribe(self, vehicle, social_group):
         if (vehicle not in self.sg_sub_vehs[social_group]):
             self.sg_sub_vehs[social_group].append(vehicle)
