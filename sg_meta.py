@@ -32,7 +32,10 @@ class SocialGroupAttr:
         self.gid = gid
 
     def __repr__(self):
-        return "<{}.{}, Qos:{}, Gid:{}>".format(self.lname, self.fname, self.qos, self.gid)
+        return "<{}(QoS:{}, Gid:{}>".format(self.fname, self.qos, self.gid)
+
+    def __str__(self):
+        return self.fname
 
     def __index__(self):
         return self.gid

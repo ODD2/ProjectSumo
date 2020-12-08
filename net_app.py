@@ -127,14 +127,15 @@ class VehicleApplication(Application):
             )
         )
         STATISTIC_RECORDER.VehicleReceivedIntactAppdata(
+            social_group,
             appdata.header,
             self.vehicle
         )
 
     # Send application data
     def SendData(self):
-        if (SUMO_SIM_INFO.time - self.prev_gen_time > 1):
-            self.prev_gen_time = SUMO_SIM_INFO.time
+        if (SUMO_SIM_INFO.getTime() - self.prev_gen_time > 1):
+            self.prev_gen_time = SUMO_SIM_INFO.getTime()
             for group in SocialGroup:
                 # TODO: Make the random poisson be social group dependent
                 for _ in range(random.poisson(1)):
@@ -153,7 +154,7 @@ class VehicleApplication(Application):
                                 self.vehicle,
                                 data_size,
                                 self.data_counter,
-                                SUMO_SIM_INFO.time
+                                SUMO_SIM_INFO.getTime()
                             ),
                             data_size,
                             0

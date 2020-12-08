@@ -450,10 +450,10 @@ class BaseStationController:
                                     # ===STATISTIC===
                                     if(appdata.offset == 0):
                                         ss.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
-                                            self, appdata.header
+                                            social_group, self, appdata.header
                                         )
                                         ss.STATISTIC_RECORDER.BaseStationAppdataStartTX(
-                                            self, appdata.header
+                                            social_group, self, appdata.header, offset_ts
                                         )
 
                                     # calculate the total bits that could actually transmit
@@ -477,7 +477,7 @@ class BaseStationController:
                                         deliver_index += 1
                                         #  ===STATISTIC===
                                         ss.STATISTIC_RECORDER.BaseStationAppdataEndTX(
-                                            self, appdata.header
+                                            social_group, self, appdata.header, offset_ts + sg_rb_ts
                                         )
 
                                 # collection done, remove appdatas that have been delivered
@@ -497,7 +497,8 @@ class BaseStationController:
                                     veh.ReceivePackage(package)
                                 # put package in process list
                                 self.pkg_in_proc[LinkType.DOWNLINK].append(
-                                    package)
+                                    package
+                                )
                 else:
                     continue
 
@@ -517,9 +518,10 @@ class BaseStationController:
                 0
             )
         )
-
         # STATISTIC
-        ss.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(self, header)
+        ss.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
+            social_group, self, header
+        )
 
     # Function called by VehicleRecorder to subscribe to a specific social group on this base station
 

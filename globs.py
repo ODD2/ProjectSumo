@@ -42,10 +42,10 @@ class SumoSimInfo:
         self.new_veh_ids = []
         self.veh_ids = []
         self.ghost_veh_ids = []
-        self.time = 0
+        self.ss = 0
 
     def UpdateSS(self):
-        self.time = traci.simulation.getTime()
+        self.ss = traci.simulation.getTime()/SUMO_SECONDS_PER_STEP
         # net step
         self.ns = 0
         # time step
@@ -68,6 +68,11 @@ class SumoSimInfo:
 
     def UpdateTS(self, ts):
         self.ts = ts
+
+    def getTime(self):
+        return (self.ss * SUMO_SECONDS_PER_STEP +
+                self.ns * NET_SECONDS_PER_STEP +
+                self.ts * NET_SECONDS_PER_TS)
 
 
 # Threading -Traci

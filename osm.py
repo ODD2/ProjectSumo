@@ -141,15 +141,16 @@ def main():
         ParallelUpdateSS(vehicles)
         # Network simulations per sumo simulation step
         for ns in range(NET_STEPS_PER_SUMO_STEP):
+            # Update sumo simulation info for network simulation step
             SUMO_SIM_INFO.UpdateNS(ns)
-            # Update vehicle recorders for network simulation step
-            ParallelUpdateNS(vehicles, ns)
-            # Update base stations for network simulation step
-            ParallelUpdateNS(BASE_STATION_CONTROLLER, ns)
+            # Update vehicle recorders & base stations for each network simulation step
+            ParallelUpdateNS(vehicles + BASE_STATION_CONTROLLER, ns)
 
             # Time slots per network simulation step
             for ts in range(0, NET_TS_PER_NET_STEP+1):
+                # Update sumo simulation info for each network timeslot step
                 SUMO_SIM_INFO.UpdateTS(ts)
+                # Update vehicle recorders & base stations for each network timeslot step
                 ParallelUpdateT(vehicles + BASE_STATION_CONTROLLER, ts)
 
         step += 1

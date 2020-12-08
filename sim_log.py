@@ -12,13 +12,13 @@ class Logger:
 
     def Log(self, msg: str):
         log = "[{}s][{}n/{}t]{}".format(
-            SUMO_SIM_INFO.time,
+            SUMO_SIM_INFO.getTime(),
             SUMO_SIM_INFO.ns,
             SUMO_SIM_INFO.ts,
             msg
         )
         self.file.write(log+'\n')
-        # print(log)
+        return log
 
 
 class Printer(Logger):
@@ -26,7 +26,9 @@ class Printer(Logger):
         super().__init__(file)
 
     def Log(self, msg: str):
-        Logger.Log(self, msg)
+        msg = Logger.Log(self, msg)
+        print(msg)
+        return msg
 
 
 DEBUG = Logger(
@@ -37,6 +39,12 @@ DEBUG = Logger(
 
 ERROR = Printer(
     "Error ({}).txt".format(
+        datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+    )
+)
+
+STATISTIC = Logger(
+    "Statistic ({}).txt".format(
         datetime.now().strftime("%Y-%m-%d %H-%M-%S")
     )
 )
