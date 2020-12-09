@@ -11,7 +11,7 @@ class Logger:
         self.file = open(dirpath+file, "w")
 
     def Log(self, msg: str):
-        log = "[{}s][{}n/{}t]{}".format(
+        log = "[{:.2f}s][{:.0f}n/{:.0f}t]{}".format(
             SUMO_SIM_INFO.getTime(),
             SUMO_SIM_INFO.ns,
             SUMO_SIM_INFO.ts,

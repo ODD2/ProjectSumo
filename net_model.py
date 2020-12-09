@@ -3,6 +3,7 @@ import os
 import sys
 import math
 import sim_stat as ss
+import io
 from globs import *
 from numpy import random
 from net_app import AppDataHeader, AppData, NetworkCoreApplication
@@ -354,7 +355,7 @@ class BaseStationController:
         SIM_CONF = {
             "rbf_h": float(100),
             "rbf_w": float(2),
-            "max_pwr": float(10),
+            "max_pwr": float(BS_TRANS_PWR[self.type]),
         }
         # Qos group config for optimizer
         QoS_GP_CONF = []
@@ -407,9 +408,18 @@ class BaseStationController:
         if(len(QoS_GP_CONF) == 0):
             return
 
+        # create stdout receiver, save output for debug
+        out = io.StringIO()
         # optimize allocation request
         gid_req_res, exitflag = MATLAB_ENG.NomaPlannerV1(
-            SIM_CONF, QoS_GP_CONF, nargout=2
+            SIM_CONF, QoS_GP_CONF, nargout=2, stdout=out
+        )
+        #  save output for debug
+        DEBUG.Log(
+            "[{}][alloc]:report.\n{}".format(
+                self.name,
+                out.getvalue()
+            )
         )
 
         # deliver package according to optimized allocate resource

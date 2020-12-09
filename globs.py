@@ -42,10 +42,16 @@ class SumoSimInfo:
         self.new_veh_ids = []
         self.veh_ids = []
         self.ghost_veh_ids = []
+        self.st = 0
         self.ss = 0
+        self.ns = 0
+        self.ts = 0
 
     def UpdateSS(self):
-        self.ss = traci.simulation.getTime()/SUMO_SECONDS_PER_STEP
+        # sumo simulation time
+        self.st = traci.simulation.getTime()
+        # simulation step
+        self.ss = round(self.st/SUMO_SECONDS_PER_STEP)
         # net step
         self.ns = 0
         # time step
@@ -68,6 +74,10 @@ class SumoSimInfo:
 
     def UpdateTS(self, ts):
         self.ts = ts
+
+    def getTimeNS(self):
+        return (self.ss * SUMO_SECONDS_PER_STEP +
+                self.ns * NET_SECONDS_PER_STEP)
 
     def getTime(self):
         return (self.ss * SUMO_SECONDS_PER_STEP +
@@ -93,7 +103,7 @@ SUMO_SIM_INFO = SumoSimInfo()
 # . simulation scaler
 SUMO_SIM_TIME_SCALER = 100
 # . seconds per sumo simulation step
-SUMO_SECONDS_PER_STEP = 0.001*SUMO_SIM_TIME_SCALER
+SUMO_SECONDS_PER_STEP = SUMO_SIM_TIME_SCALER*0.001
 # . total sumo simulation steps
 SUMO_TOTAL_STEPS = (1 / SUMO_SECONDS_PER_STEP) * 100
 
@@ -103,11 +113,11 @@ NET_QOS_CHNLS = (max(SocialGroup, key=lambda x: x.qos).qos) + 1
 # . resource block symbols
 NET_RB_SLOT_SYMBOLS = 14
 # . seconds per network simulation step
-NET_SECONDS_PER_STEP = 0.001*SUMO_SIM_TIME_SCALER
+NET_SECONDS_PER_STEP = SUMO_SIM_TIME_SCALER * 0.001
 # . network simulation steps per sumo simulation step
 NET_STEPS_PER_SUMO_STEP = int(SUMO_SECONDS_PER_STEP / NET_SECONDS_PER_STEP)
 # . seconds per network timeslot
-NET_SECONDS_PER_TS = 0.0005*SUMO_SIM_TIME_SCALER
+NET_SECONDS_PER_TS = SUMO_SIM_TIME_SCALER * 0.0005
 # . network timeslots per network simulation step
 NET_TS_PER_NET_STEP = int(NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS)
 # . resource block bandwidth units

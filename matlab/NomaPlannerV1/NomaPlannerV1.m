@@ -224,8 +224,8 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
             for layer = ["oma" "noma"]
                 for cqi_i = 1:gp_conf.(layer + "_cqi_num")
                     cqi = gp_conf.(layer+"_cqi_list")(cqi_i);
-                    sol_beg = gp_conf.(layer+"_sol_ofs") + (cqi_i - 1) * gp_conf.y_max+ 1;
-                    sol_end = gp_conf.(layer+"_sol_ofs") +  cqi_i * gp_conf.y_max;
+                    sol_beg = gp_conf.(layer+"_sol_ofs") + (cqi_i - 1) * gp_conf.rb_num + (ts  ) * gp_conf.y_max + 1;
+                    sol_end = gp_conf.(layer+"_sol_ofs") + (cqi_i - 1) * gp_conf.rb_num + (ts+1) * gp_conf.y_max;
 %                   collect resource blocks allocated at this timeslot
                     ts_rb_num = int16(sum(x(sol_beg:sol_end)));
                     cqi_name = "c" + cqi;

@@ -145,9 +145,8 @@ def main():
             SUMO_SIM_INFO.UpdateNS(ns)
             # Update vehicle recorders & base stations for each network simulation step
             ParallelUpdateNS(vehicles + BASE_STATION_CONTROLLER, ns)
-
             # Time slots per network simulation step
-            for ts in range(0, NET_TS_PER_NET_STEP+1):
+            for ts in range(NET_TS_PER_NET_STEP+1):
                 # Update sumo simulation info for each network timeslot step
                 SUMO_SIM_INFO.UpdateTS(ts)
                 # Update vehicle recorders & base stations for each network timeslot step
