@@ -144,20 +144,22 @@ def main():
             # Update sumo simulation info for network simulation step
             SUMO_SIM_INFO.UpdateNS(ns)
             # Update vehicle recorders & base stations for each network simulation step
-            ParallelUpdateNS(vehicles + BASE_STATION_CONTROLLER, ns)
+            ParallelUpdateNS(vehicles, ns)
+            ParallelUpdateNS(BASE_STATION_CONTROLLER, ns)
             # Time slots per network simulation step
             for ts in range(NET_TS_PER_NET_STEP+1):
                 # Update sumo simulation info for each network timeslot step
                 SUMO_SIM_INFO.UpdateTS(ts)
                 # Update vehicle recorders & base stations for each network timeslot step
-                ParallelUpdateT(vehicles + BASE_STATION_CONTROLLER, ts)
+                ParallelUpdateT(vehicles, ts)
+                ParallelUpdateT(BASE_STATION_CONTROLLER, ts)
 
         step += 1
     # except:
         # print("Exception Caught During Simulation")
 
     # End Simulation
-    traci.close()
+    traci.close(wait=False)
 
     # report
     STATISTIC_RECORDER.VehicleReceivedIntactAppdataReport()

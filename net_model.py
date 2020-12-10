@@ -47,7 +47,6 @@ class NetStatusCache:
 
     # clean
     def Flush(self):
-        globals()
         # remove ghosts
         for veh_id in SUMO_SIM_INFO.ghost_veh_ids:
             self._map.pop(veh_id)
@@ -158,7 +157,6 @@ class BaseStationController:
 
     # process delivered packages
     def PackageDelivered(self, package):
-        globals()
         NET_CORE_CONTROLLER.PackageDelivered(package)
 
     # Function called by VehicleRecorder to submit upload requests to this base station
@@ -171,7 +169,6 @@ class BaseStationController:
 
     # arrange uplink resource
     def ArrangeUplinkResource(self):
-        globals()
         # OMA resource allocator
         ra_oma = ResourceAllocatorOMA(
             BS_TOTAL_BANDWIDTH[self.type]*0.9
@@ -251,7 +248,6 @@ class BaseStationController:
 
     # arrange downlink resource in OMA
     def ArrangeDownlinkResourceOMA(self):
-        globals()
         # OMA resource allocator
         ra_oma = ResourceAllocatorOMA(
             BS_TOTAL_BANDWIDTH[self.type]*0.9
@@ -348,7 +344,6 @@ class BaseStationController:
 
     # arrange downlink resource in NOMA
     def ArrangeDownlinkResourceNOMA(self):
-        globals()
         # TODO: Serve Resend Requests
 
         # Simulation config for matlab optimizer
@@ -577,7 +572,6 @@ class NetworkCoreController:
             self.app.RecvData(package.social_group, appdata)
 
     def StartPropagation(self, social_group: SocialGroup, header: AppDataHeader):
-        globals()
         for bs_ctrlr in BASE_STATION_CONTROLLER:
             bs_ctrlr.ReceivePropagation(social_group, header)
 
