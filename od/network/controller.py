@@ -1,87 +1,23 @@
-import traci
-import os
-import sys
+from od.social import SocialGroup
+from od.network.types import LinkType
+from od.network.application import AppData, AppDataHeader, NetworkCoreApplication
+from od.network.package import NetworkPackage
+from od.network.types import BroadcastObject, BaseStationType
+from od.vehicle.request import UploadRequest, ResendRequest
+from od.network.allocator import ResourceAllocatorOMA
+from od.config import (NET_TS_PER_NET_STEP, NET_QOS_CHNLS, NET_RB_BW_REQ_TS,
+                       NET_RB_SLOT_SYMBOLS, NET_RB_BW_UNIT,
+                       BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
+                       BS_TOTAL_BANDWIDTH, BS_RADIUS,
+                       BS_TRANS_PWR)
+from od.engine import MATLAB_ENG
+import od.vars as GV
 import math
-import sim_stat as ss
 import io
-from globs import *
-from numpy import random
-from net_app import AppDataHeader, AppData, NetworkCoreApplication
-from net_alloc import ResourceAllocatorOMA
-from net_pack import NetworkPackage
-from sim_log import DEBUG, ERROR
-
-
-class NetStatus:
-    def __init__(self):
-        self.cached = False
-        self.cqi = 0
-        self.sinr = 0
-
-
-class NetStatusCache:
-    def __init__(self):
-        self._map = {}
-
-    # param [(vehicle,bs_ctrlr,social_group)]
-    def GetMultiNetStatus(self, query_tuples):
-        result = []
-        for query_tuple in query_tuples:
-            result.append(self.GetNetStatus(query_tuple))
-        return result
-
-    # param [(vehicle,bs_ctrlr,social_group)]
-    def GetNetStatus(self, query_tuple):
-        if query_tuple[0].name not in self._map:
-            raise Exception("Error! vehicle should be in the map!!")
-
-        net_stat = self._map[query_tuple[0].name][query_tuple[1].serial][query_tuple[2]]
-        if (not net_stat.cached):
-            (net_stat.cqi, net_stat.sinr) = GET_BS_CQI_SINR_5G(
-                query_tuple[0],
-                query_tuple[1],
-                query_tuple[2]
-            )
-            net_stat.cached = True
-        return net_stat
-
-    # clean
-    def Flush(self):
-        # remove ghosts
-        for veh_id in SUMO_SIM_INFO.ghost_veh_ids:
-            self._map.pop(veh_id)
-        # add new vehicles
-        for veh_id in SUMO_SIM_INFO.new_veh_ids:
-            self._map[veh_id] = [[NetStatus() for sg in SocialGroup]
-                                 for i in range(len(BASE_STATION_CONTROLLER))]
-        # initialize
-        for veh_status_list in self._map.values():
-            for bs_idx in range(len(BASE_STATION_CONTROLLER)):
-                for sg in SocialGroup:
-                    veh_status_list[bs_idx][sg].cached = False
-
-
-class UploadRequest:
-    def __init__(self, sender, total_bits):
-        self.sender = sender
-        self.total_bits = total_bits
-
-
-class ResendRequest:
-    def __init__(self, sender, header: AppDataHeader, offset: int, bits: int):
-        self.sender = sender
-        self.header = header
-        self.offset = offset
-        self.bits = bits
-
-
-# Broadcast Object
-class BroadcastObject():
-    def __init__(self):
-        self.name = "broadcast"
-
 
 # Base station controller: allocate resource for upload/download requests
+
+
 class BaseStationController:
     def __init__(self, name, pos, bs_type, serial):
         # Base station paremeters
@@ -124,7 +60,7 @@ class BaseStationController:
         for pkg in self.pkg_in_proc[LinkType.UPLINK]:
             if timeslot == (pkg.offset_ts + pkg.trans_ts):
                 # log
-                DEBUG.Log(
+                GV.DEBUG.Log(
                     "[{}][package][{}]:receive.({})".format(
                         self.name,
                         pkg.social_group.fname.lower(),
@@ -141,7 +77,7 @@ class BaseStationController:
         # Download
         for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
             if(pkg.offset_ts == timeslot):
-                DEBUG.Log(
+                GV.DEBUG.Log(
                     "[{}][package][{}]:deliver.({})".format(
                         self.name,
                         pkg.social_group.fname.lower(),
@@ -156,13 +92,14 @@ class BaseStationController:
         ]
 
     # process delivered packages
-    def PackageDelivered(self, package):
-        NET_CORE_CONTROLLER.PackageDelivered(package)
+    def PackageDelivered(self, package: NetworkPackage):
+        GV.NET_CORE_CONTROLLER.PackageDelivered(package)
 
     # Function called by VehicleRecorder to submit upload requests to this base station
     def ReceiveUploadRequest(self, sender, social_group: SocialGroup, total_bits: int):
         if social_group not in self.sg_upload_req[social_group.qos]:
             self.sg_upload_req[social_group.qos][social_group] = []
+
         self.sg_upload_req[social_group.qos][social_group].append(
             UploadRequest(sender, total_bits)
         )
@@ -171,7 +108,8 @@ class BaseStationController:
     def ArrangeUplinkResource(self):
         # OMA resource allocator
         ra_oma = ResourceAllocatorOMA(
-            BS_TOTAL_BANDWIDTH[self.type]*0.9
+            BS_TOTAL_BANDWIDTH[self.type]*0.9,
+            NET_TS_PER_NET_STEP
         )
         # Serve requests
         for qos in range(NET_QOS_CHNLS):
@@ -183,7 +121,7 @@ class BaseStationController:
                     for req in self.sg_upload_req[qos][social_group]:
                         rbsize = MATLAB_ENG.GetThroughputPerRB(
                             float(
-                                NET_STATUS_CACHE.GetNetStatus(
+                                GV.NET_STATUS_CACHE.GetNetStatus(
                                     (
                                         req.sender,
                                         self,
@@ -250,7 +188,8 @@ class BaseStationController:
     def ArrangeDownlinkResourceOMA(self):
         # OMA resource allocator
         ra_oma = ResourceAllocatorOMA(
-            BS_TOTAL_BANDWIDTH[self.type]*0.9
+            BS_TOTAL_BANDWIDTH[self.type]*0.9,
+            NET_TS_PER_NET_STEP
         )
         # TODO: Serve Resend Requests
 
@@ -271,7 +210,7 @@ class BaseStationController:
                 if(sg_total_bits == 0):
                     continue
                 # find the lowest cqi in the social group subscribers
-                netstatus = NET_STATUS_CACHE.GetMultiNetStatus([
+                netstatus = GV.NET_STATUS_CACHE.GetMultiNetStatus([
                     (veh, self, social_group) for veh in self.sg_sub_vehs[social_group]
                 ])
                 lowest_cqi = netstatus[0].cqi
@@ -329,7 +268,7 @@ class BaseStationController:
                     # create package
                     package = NetworkPackage(
                         self,
-                        BROADCAST_OBJECT,
+                        BroadcastObject,
                         social_group,
                         sg_rb_bits-remain_bits,
                         package_appdatas,
@@ -375,7 +314,7 @@ class BaseStationController:
                 if(sg_total_bits == 0):
                     continue
                 # find the lowest cqi in the social group subscribers
-                netstatus = NET_STATUS_CACHE.GetMultiNetStatus([
+                netstatus = GV.NET_STATUS_CACHE.GetMultiNetStatus([
                     (veh, self, social_group) for veh in self.sg_sub_vehs[social_group]
                 ])
                 lowest_sinr = netstatus[0].sinr
@@ -410,7 +349,7 @@ class BaseStationController:
             SIM_CONF, QoS_GP_CONF, nargout=2, stdout=out
         )
         #  save output for debug
-        DEBUG.Log(
+        GV.DEBUG.Log(
             "[{}][alloc]:report.\n{}".format(
                 self.name,
                 out.getvalue()
@@ -454,10 +393,10 @@ class BaseStationController:
                                     appdata = self.sg_brdcst_datas[qos][social_group][deliver_index]
                                     # ===STATISTIC===
                                     if(appdata.offset == 0):
-                                        ss.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
+                                        GV.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
                                             social_group, self, appdata.header
                                         )
-                                        ss.STATISTIC_RECORDER.BaseStationAppdataStartTX(
+                                        GV.STATISTIC_RECORDER.BaseStationAppdataStartTX(
                                             social_group, self, appdata.header, offset_ts
                                         )
 
@@ -481,7 +420,7 @@ class BaseStationController:
                                     if(appdata.bits == 0):
                                         deliver_index += 1
                                         #  ===STATISTIC===
-                                        ss.STATISTIC_RECORDER.BaseStationAppdataEndTX(
+                                        GV.STATISTIC_RECORDER.BaseStationAppdataEndTX(
                                             social_group, self, appdata.header, offset_ts + sg_rb_ts
                                         )
 
@@ -490,7 +429,7 @@ class BaseStationController:
                                 # create package
                                 package = NetworkPackage(
                                     self,
-                                    BROADCAST_OBJECT,
+                                    BroadcastObject,
                                     social_group,
                                     sg_rb_bits-remain_bits,
                                     package_appdatas,
@@ -508,7 +447,7 @@ class BaseStationController:
                     continue
 
     # Function called by VehicleRecorder to deliver package to this base station
-    def ReceivePackage(self, package):
+    def ReceivePackage(self, package: NetworkPackage):
         self.pkg_in_proc[LinkType.UPLINK].append(package)
 
     # Function called by NetworkCoreController to propagate appdata
@@ -524,17 +463,16 @@ class BaseStationController:
             )
         )
         # STATISTIC
-        ss.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
+        GV.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
             social_group, self, header
         )
 
     # Function called by VehicleRecorder to subscribe to a specific social group on this base station
-
-    def VehicleSubscribe(self, vehicle, social_group):
+    def VehicleSubscribe(self, vehicle, social_group: SocialGroup):
         if (vehicle not in self.sg_sub_vehs[social_group]):
             self.sg_sub_vehs[social_group].append(vehicle)
         else:
-            ERROR.Log(
+            GV.ERROR.Log(
                 "veh:{} subscription to bs:{} duplicated.".format(
                     vehicle.name,
                     self.name
@@ -542,18 +480,18 @@ class BaseStationController:
             )
 
     # Function called by VehicleRecorder to unsubscribe to a specific social group on this base station
-    def VehicleUnsubscribe(self, vehicle, social_group):
+    def VehicleUnsubscribe(self, vehicle, social_group: SocialGroup):
         if (vehicle in self.sg_sub_vehs[social_group]):
             self.sg_sub_vehs[social_group].remove(vehicle)
         else:
-            ERROR.Log(
+            GV.ERROR.Log(
                 "veh:{} try to unsubscribe from bs:{}, but not yet subscribed.".format(
                     vehicle.name, self.name
                 )
             )
 
     # Helper functions
-    def RequiredBandwidth(self, social_group):
+    def RequiredBandwidth(self, social_group: SocialGroup):
         if (self.type == BaseStationType.UMA):
             return BS_UMA_RB_BW
         elif (self.type == BaseStationType.UMI):
@@ -567,91 +505,10 @@ class NetworkCoreController:
         self.data_owners = {}
         self.app = NetworkCoreApplication(self)
 
-    def PackageDelivered(self, package):
+    def PackageDelivered(self, package: NetworkPackage):
         for appdata in package.appdatas:
             self.app.RecvData(package.social_group, appdata)
 
     def StartPropagation(self, social_group: SocialGroup, header: AppDataHeader):
-        for bs_ctrlr in BASE_STATION_CONTROLLER:
+        for bs_ctrlr in GV.NET_STATION_CONTROLLER:
             bs_ctrlr.ReceivePropagation(social_group, header)
-
-
-# (matlab.engine, [CandidateBaseStationInfo], (double,double))
-def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group):
-    # Vehicle's position
-    Intf_dist = []
-    Intf_pwr_dBm = []
-    Intf_h_BS = []
-    Intf_h_MS = []
-    cqi = 0
-    sinr = 0
-
-    # Confirm settings with 3GPP specs
-    if (bs_ctrlr.type == BaseStationType.UMA):
-        # resource block bandwidth
-        bandwidth = BS_UMA_RB_BW
-        # cyclic prefix
-        CP = BS_UMA_CP
-    elif(bs_ctrlr.type == BaseStationType.UMI):
-        # resource block bandwidth
-        bandwidth = BS_UMI_RB_BW_SG[social_group]
-        # cyclic prefix
-        CP = BS_UMI_CP_SOCIAL[social_group]
-
-    # Height of antenna
-    h_BS = BS_HEIGHT[bs_ctrlr.type]
-    # Transmission power
-    tx_p_dBm = BS_TRANS_PWR[bs_ctrlr.type]
-    # Transmission frequency.(Ghz)
-    fc = BS_FREQ[bs_ctrlr.type]
-    # height of vehicle
-    h_MS = 0.8
-    # delay spread. (up to 4 us)
-    # DS_Desired = random.normal(0, 4)
-    DS_Desired = 0.5
-    # distance between vehicle and station
-    UE_dist = pow((bs_ctrlr.pos[0] - vehicle.pos[0])**2 +
-                  (bs_ctrlr.pos[1] - vehicle.pos[1])**2, 0.5)
-
-    for intf_BS_obj in BASE_STATION_CONTROLLER:
-        if (intf_BS_obj == bs_ctrlr):
-            continue
-
-        # intf-station antenna height
-        Intf_h_BS.append(BS_HEIGHT[intf_BS_obj.type])
-        # intf-station transmission power
-        Intf_pwr_dBm.append(BS_TRANS_PWR[intf_BS_obj.type])
-        # intf-vehicle height
-        Intf_h_MS.append(0.8)
-        # distance between vehicle and intf-station
-        Intf_dist.append(
-            pow(
-                (intf_BS_obj.pos[0] - vehicle.pos[0])**2 +
-                (intf_BS_obj.pos[1] - vehicle.pos[1])**2,
-                0.5
-            )
-        )
-
-    # result
-    cqi, sinr = MATLAB_ENG.SINR_Channel_Model_5G(
-        float(UE_dist),
-        float(h_BS),
-        float(h_MS),
-        float(fc),
-        float(tx_p_dBm),
-        float(bandwidth),
-        matlab.double(Intf_h_BS),
-        matlab.double(Intf_h_MS),
-        matlab.double(Intf_dist),
-        matlab.double(Intf_pwr_dBm),
-        float(DS_Desired),  # ns
-        float(CP)*1000,  # ns
-        True if bs_ctrlr.type == BaseStationType.UMA else False,
-        nargout=2)
-    return cqi, sinr
-
-
-NET_CORE_CONTROLLER = NetworkCoreController()
-BASE_STATION_CONTROLLER = []
-NET_STATUS_CACHE = NetStatusCache()
-BROADCAST_OBJECT = BroadcastObject()

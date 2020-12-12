@@ -1,6 +1,9 @@
+# Custom
+from od.config import NET_TS_PER_NET_STEP, NET_RB_BW_UNIT
+import od.vars as GV
+# STD
 import sys
-from sim_log import DEBUG
-from globs import NET_TS_PER_NET_STEP, NET_RB_BW_UNIT
+
 
 
 # Resource Allocator for OMA
@@ -8,15 +11,15 @@ class ResourceAllocatorOMA:
     # like a 2d rectangle:
     # height - the total bandwidth available
     # width - the total timeslots
-    def __init__(self, max_bandwidth):
+    def __init__(self, max_bandwidth,max_timeslots):
         if(NET_TS_PER_NET_STEP != 2):
-            DEBUG.Log(
+            GV.DEBUG.Log(
                 "Error!! This allocator only works on 2 timeslots per network step condition."
             )
             sys.exit()
 
         self.max_bandwidth = max_bandwidth
-        self.max_timeslots = NET_TS_PER_NET_STEP
+        self.max_timeslots = max_timeslots
         self.alloc_resources = [
             max_bandwidth for i in range(self.max_timeslots)
         ]
@@ -38,7 +41,7 @@ class ResourceAllocatorOMA:
                     offset_timeslot = ts
                     break
         else:
-            DEBUG.Log(
+            GV.DEBUG.Log(
                 "Error!! This allocator only works on 2x1 or 1x2 resource block allocation"
             )
             sys.exit()

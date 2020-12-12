@@ -1,75 +1,15 @@
+from .connection import ConnectionState, ConnectionRecorder, SharedConnection
+from .monitor import NetworkStatusMonitor
+from od.network.types import BaseStationType, LinkType
+from od.network.package import NetworkPackage
+from od.network.application import AppData, VehicleApplication
+from od.social import SocialGroup
+import od.vars as GV
 import traci
-from enum import IntEnum
-from numpy import random
-from globs import SocialGroup, NetObjLayer, BaseStationType, NET_SG_RND_REQ_SIZE, LinkType
-from globs import TRACI_LOCK, MATLAB_ENG, SUMO_SIM_INFO
-from net_model import NET_STATUS_CACHE, BASE_STATION_CONTROLLER, BaseStationController
-from net_app import AppDataHeader, AppData, VehicleApplication
-from net_pack import NetworkPackage
-from sim_log import DEBUG, ERROR
-
-
-class ConnectionState(IntEnum):
-    Unknown = 0
-    Connect = 1,
-    Deny = 2,
-    Transmit = 3,
-    Success = 4
-
-
-class SharedConnection:
-    def __init__(self, rec):
-        self.share = 0
-        self.rec = rec
-
-
-class ConnectionRecorder:
-    def __init__(self, s1, s2):
-        self.s1 = s1
-        self.s2 = s2
-        self.state = ConnectionState.Connect
-        self.name = "con_{}_{}".format(s1.name, s2.name)
-        TRACI_LOCK.acquire()
-        # Create line
-        traci.polygon.add(self.name, [(0, 0), (0, 0)], (0, 0, 0, 255), False,
-                          "Line", NetObjLayer.CON_LINE, 0.1)
-        TRACI_LOCK.release()
-
-    def Update(self):
-        TRACI_LOCK.acquire()
-        traci.polygon.setShape(self.name, [self.s1.pos, self.s2.pos])
-        TRACI_LOCK.release()
-
-    def ChangeState(self, state: ConnectionState, force=False):
-        if (not force and self.state > state):
-            return
-
-        self.state = state
-
-        TRACI_LOCK.acquire()
-        if (state == ConnectionState.Transmit):
-            traci.polygon.setColor(self.name, (255, 165, 0, 255))
-        elif (state == ConnectionState.Success):
-            traci.polygon.setColor(self.name, (0, 255, 0, 255))
-        else:
-            traci.polygon.setColor(self.name, (0, 0, 0, 255))
-        TRACI_LOCK.release()
-
-    def Clean(self):
-        TRACI_LOCK.acquire()
-        traci.polygon.remove(self.name)
-        TRACI_LOCK.release()
-
-
-class NetworkStatusMonitor:
-    def __init__(self):
-        self.total_recv_package = 0
-        self.total_send_package = 0
-        self.step_recv_package = 0
-        self.step_send_package = 0
 
 
 class VehicleRecorder():
+    # Constructor
     def __init__(self, name):
         # Vehicle ID
         self.name = name
@@ -93,6 +33,7 @@ class VehicleRecorder():
         # The connetion lines currently drawn in SUMO
         self.con_state = {}
 
+    # Destructor
     def __del__(self):
         self.Clear()
 
@@ -114,9 +55,9 @@ class VehicleRecorder():
 
     # Update vehicle info from sumo
     def UpdateVehicleInfo(self):
-        TRACI_LOCK.acquire()
+        GV.TRACI_LOCK.acquire()
         self.pos = traci.vehicle.getPosition(self.name)
-        TRACI_LOCK.release()
+        GV.TRACI_LOCK.release()
 
     # Check if the latest subscription base stations still provide services
     def CheckSubscribeBSValidity(self):
@@ -142,7 +83,7 @@ class VehicleRecorder():
         bs_in_range = [[] for i in BaseStationType]
 
         # Find In-Range BaseStations
-        for bs_ctrlr in BASE_STATION_CONTROLLER:
+        for bs_ctrlr in GV.NET_STATION_CONTROLLER:
             distance = pow((self.pos[0] - bs_ctrlr.pos[0])**2 +
                            (self.pos[1] - bs_ctrlr.pos[1])**2, 0.5)
             if distance < bs_ctrlr.radius:
@@ -154,7 +95,7 @@ class VehicleRecorder():
                 continue
             for social_type in SocialGroup:
                 # Get cqi & sinr for social type
-                multi_net_status = NET_STATUS_CACHE.GetMultiNetStatus([
+                multi_net_status = GV.NET_STATUS_CACHE.GetMultiNetStatus([
                     (self, bs_ctrlr, social_type)
                     for bs_ctrlr in bs_in_range[bs_type]
                 ])
@@ -169,7 +110,7 @@ class VehicleRecorder():
                                  bs_in_range[bs_type][best_idx])
 
     # Subscribe base station
-    def SubscribeBS(self, bs_type, social_group, bs_ctrlr):
+    def SubscribeBS(self, bs_type, social_group: SocialGroup, bs_ctrlr):
         # Unsubscribe the previous base station
         if (self.sub_sg_bs[bs_type][social_group] != None):
             self.UnsubscribeBS(bs_type, social_group)
@@ -182,7 +123,7 @@ class VehicleRecorder():
         self.ConnectionChange(True, bs_ctrlr)
 
     # Unsubscribe base station
-    def UnsubscribeBS(self, bs_type, social_group):
+    def UnsubscribeBS(self, bs_type, social_group: SocialGroup):
         # Unsubscribe the base station
         bs_ctrlr = self.sub_sg_bs[bs_type][social_group]
         self.sub_sg_bs[bs_type][social_group] = None
@@ -206,10 +147,10 @@ class VehicleRecorder():
                         sg_total_bits,
                     )
                 else:
-                    ERROR.Log("Error: No BS to serve request.")
+                    GV.ERROR.Log("Error: No BS to serve request.")
 
     # Function called by BaseStationController to give resource block to upload requests
-    def UploadResourceGranted(self, bs_ctrlr, social_group, total_bits, trans_ts, offset_ts):
+    def UploadResourceGranted(self, bs_ctrlr, social_group: SocialGroup, total_bits, trans_ts, offset_ts):
         self.SendPackage(
             self.CreatePackage(
                 bs_ctrlr,
@@ -221,7 +162,7 @@ class VehicleRecorder():
         )
 
     # Create package
-    def CreatePackage(self, dest, social_group, total_bits, trans_ts, offset_ts):
+    def CreatePackage(self, dest, social_group: SocialGroup, total_bits, trans_ts, offset_ts):
         # the number of appdata waiting for services
         datas_count = len(self.app.datas[social_group])
         # the serving appdata index
@@ -252,6 +193,7 @@ class VehicleRecorder():
 
         # Remove appdata from list if it has no remaining bits to transmit
         self.app.datas[social_group] = self.app.datas[social_group][data_delivering:]
+
         package = NetworkPackage(
             self,
             dest,
@@ -263,7 +205,7 @@ class VehicleRecorder():
         )
 
         # log
-        DEBUG.Log(
+        GV.DEBUG.Log(
             "[{}][package][{}]:create.({})".format(
                 self.name,
                 social_group.fname.lower(),
@@ -275,7 +217,7 @@ class VehicleRecorder():
         return package
 
     # Send package
-    def SendPackage(self, package):
+    def SendPackage(self, package: NetworkPackage):
         self.pkg_in_proc[LinkType.UPLINK].append(
             package
         )
@@ -287,7 +229,7 @@ class VehicleRecorder():
         for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
             if timeslot == (pkg.offset_ts + pkg.trans_ts):
                 # log
-                DEBUG.Log(
+                GV.DEBUG.Log(
                     "[{}][package][{}]:receive.({})".format(
                         self.name,
                         pkg.social_group.fname.lower(),
@@ -311,7 +253,7 @@ class VehicleRecorder():
         # Upload
         for pkg in self.pkg_in_proc[LinkType.UPLINK]:
             if(pkg.offset_ts == timeslot):
-                DEBUG.Log(
+                GV.DEBUG.Log(
                     "[{}][package][{}]:deliver.({})".format(
                         self.name,
                         pkg.social_group.fname.lower(),
@@ -333,31 +275,31 @@ class VehicleRecorder():
         ]
 
     # Process package that're delivered
-    def PackageDelivered(self, package):
+    def PackageDelivered(self, package: NetworkPackage):
         for appdata in package.appdatas:
             self.app.RecvData(package.social_group, appdata)
 
     # Select the service base station according to the social type provided.
-    def SelectSocialBS(self, social_type):
-        if (social_type == SocialGroup.CRITICAL):
+    def SelectSocialBS(self, social_group: SocialGroup):
+        if (social_group == SocialGroup.CRITICAL):
             return (
-                self.sub_sg_bs[BaseStationType.UMI][social_type] if
-                self.sub_sg_bs[BaseStationType.UMI][social_type] != None
-                else self.sub_sg_bs[BaseStationType.UMA][social_type])
-        elif (social_type == SocialGroup.GENERAL):
+                self.sub_sg_bs[BaseStationType.UMI][social_group] if
+                self.sub_sg_bs[BaseStationType.UMI][social_group] != None
+                else self.sub_sg_bs[BaseStationType.UMA][social_group])
+        elif (social_group == SocialGroup.GENERAL):
             return (
-                self.sub_sg_bs[BaseStationType.UMI][social_type] if
-                (self.sub_sg_bs[BaseStationType.UMI][social_type] !=
+                self.sub_sg_bs[BaseStationType.UMI][social_group] if
+                (self.sub_sg_bs[BaseStationType.UMI][social_group] !=
                  None and len(self.app.datas[SocialGroup.CRITICAL]) == 0)
-                else self.sub_sg_bs[BaseStationType.UMA][social_type])
+                else self.sub_sg_bs[BaseStationType.UMA][social_group])
         else:
             return (
-                self.sub_sg_bs[BaseStationType.UMA][social_type] if
-                self.sub_sg_bs[BaseStationType.UMA][social_type] != None
-                else self.sub_sg_bs[BaseStationType.UMI][social_type])
+                self.sub_sg_bs[BaseStationType.UMA][social_group] if
+                self.sub_sg_bs[BaseStationType.UMA][social_group] != None
+                else self.sub_sg_bs[BaseStationType.UMI][social_group])
 
     # Function called by BaseStationControllers to send packages
-    def ReceivePackage(self, package,):
+    def ReceivePackage(self, package: NetworkPackage):
         self.pkg_in_proc[LinkType.DOWNLINK].append(package)
 
     # Update & Clean up the connection
@@ -383,7 +325,8 @@ class VehicleRecorder():
             # Create connection recorder for this base station if not exists
             if (opponent.name not in self.con_state):
                 self.con_state[opponent.name] = SharedConnection(
-                    ConnectionRecorder(self, opponent))
+                    ConnectionRecorder(self, opponent)
+                )
             self.con_state[opponent.name].share += 1
         else:
             # Break connection

@@ -1,6 +1,5 @@
 import os
-from datetime import datetime
-from globs import SUMO_SIM_INFO
+import od.vars as GV
 
 
 class Logger:
@@ -12,9 +11,9 @@ class Logger:
 
     def Log(self, msg: str):
         log = "[{:.2f}s][{:.0f}n/{:.0f}t]{}".format(
-            SUMO_SIM_INFO.getTime(),
-            SUMO_SIM_INFO.ns,
-            SUMO_SIM_INFO.ts,
+            GV.SUMO_SIM_INFO.getTime(),
+            GV.SUMO_SIM_INFO.ns,
+            GV.SUMO_SIM_INFO.ts,
             msg
         )
         self.file.write(log+'\n')
@@ -29,22 +28,3 @@ class Printer(Logger):
         msg = Logger.Log(self, msg)
         print(msg)
         return msg
-
-
-DEBUG = Logger(
-    "Debug ({}).txt".format(
-        datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-    )
-)
-
-ERROR = Printer(
-    "Error ({}).txt".format(
-        datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-    )
-)
-
-STATISTIC = Logger(
-    "Statistic ({}).txt".format(
-        datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-    )
-)

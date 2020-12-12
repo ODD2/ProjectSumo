@@ -1,17 +1,18 @@
-from globs import SocialGroup
-from globs import SUMO_SIM_INFO, SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP, NET_SECONDS_PER_TS
-from sim_log import STATISTIC
-import net_model as nm
+# Custom
+from od.social import SocialGroup
+from od.config import  SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP, NET_SECONDS_PER_TS
+import od.vars as GV
+# STD
 import math
 
 
 class AppdataStatistic:
     def __init__(self):
         self.time_veh_recv = {}
-        self.time_bs_txq_enter = [0 for _ in nm.BASE_STATION_CONTROLLER]
-        self.time_bs_txq_exit = [0 for _ in nm.BASE_STATION_CONTROLLER]
-        self.time_bs_tx_beg = [0 for _ in nm.BASE_STATION_CONTROLLER]
-        self.time_bs_tx_end = [0 for _ in nm.BASE_STATION_CONTROLLER]
+        self.time_bs_txq_enter = [0 for _ in GV.NET_STATION_CONTROLLER]
+        self.time_bs_txq_exit = [0 for _ in GV.NET_STATION_CONTROLLER]
+        self.time_bs_tx_beg = [0 for _ in GV.NET_STATION_CONTROLLER]
+        self.time_bs_tx_end = [0 for _ in GV.NET_STATION_CONTROLLER]
 
 
 class StatisticRecorder:
@@ -28,7 +29,7 @@ class StatisticRecorder:
 
     def VehicleReceivedIntactAppdata(self, sg, header, vehicle):
         record = self.GetAppdataRecord(sg, header)
-        record.time_veh_recv[vehicle] = SUMO_SIM_INFO.getTime()
+        record.time_veh_recv[vehicle] = GV.SUMO_SIM_INFO.getTime()
 
     def BaseStationAppdataEnterTXQ(self, sg, bs, header):
         record = self.GetAppdataRecord(sg, header)
@@ -36,29 +37,29 @@ class StatisticRecorder:
             # if  the appdata entered the txq at current time slot
             # then the appdata should account the waiting time in txq
             # start from the beginning of the next subframe(net step)
-            SUMO_SIM_INFO.getTimeNS() + NET_SECONDS_PER_STEP
+            GV.SUMO_SIM_INFO.getTimeNS() + NET_SECONDS_PER_STEP
         )
 
     def BaseStationAppdataExitTXQ(self, sg, bs, header):
         record = self.GetAppdataRecord(sg, header)
         record.time_bs_txq_exit[bs] = (
-            SUMO_SIM_INFO.getTimeNS()
+            GV.SUMO_SIM_INFO.getTimeNS()
         )
 
     def BaseStationAppdataStartTX(self, sg, bs, header, start_ts):
         record = self.GetAppdataRecord(sg, header)
         record.time_bs_tx_beg[bs] = (
-            SUMO_SIM_INFO.getTime() + start_ts * NET_SECONDS_PER_TS
+            GV.SUMO_SIM_INFO.getTime() + start_ts * NET_SECONDS_PER_TS
         )
 
     def BaseStationAppdataEndTX(self, sg, bs, header, end_ts):
         record = self.GetAppdataRecord(sg, header)
         record.time_bs_tx_end[bs] = (
-            SUMO_SIM_INFO.getTime() + end_ts * NET_SECONDS_PER_TS
+            GV.SUMO_SIM_INFO.getTime() + end_ts * NET_SECONDS_PER_TS
         )
 
     def VehicleReceivedIntactAppdataReport(self):
-        STATISTIC.Log("=====VehicleReceivedIntactAppdataReport=====")
+        GV.STATISTIC.Log("=====VehicleReceivedIntactAppdataReport=====")
         for sg in SocialGroup:
             sg_total_trip_time = 0
             sg_total_trip_count = 0
@@ -80,7 +81,7 @@ class StatisticRecorder:
                     0 if record_total_trip_count == 0
                     else record_total_trip_time / record_total_trip_count
                 )
-                STATISTIC.Log(
+                GV.STATISTIC.Log(
                     '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
                         str(sg),
                         header.id,
@@ -106,7 +107,7 @@ class StatisticRecorder:
             print("Minimum Trip Time: {}s".format(sg_min_trip_time))
 
     def BaseStationAppdataTXQReport(self):
-        STATISTIC.Log("=====BaseStationAppdataTXQReport=====")
+        GV.STATISTIC.Log("=====BaseStationAppdataTXQReport=====")
         # time waited of appdata in transmit queue
         for sg in SocialGroup:
             sg_max_txq_wait_time = float('-inf')
@@ -121,7 +122,7 @@ class StatisticRecorder:
                 record_total_txq_wait_time = 0
                 record_total_txq_wait_count = 0
                 # evaluate record
-                for bs in nm.BASE_STATION_CONTROLLER:
+                for bs in GV.NET_STATION_CONTROLLER:
                     serial = bs.serial
                     time_enter = record.time_bs_txq_enter[serial]
                     time_exit = record.time_bs_txq_exit[serial]
@@ -139,7 +140,7 @@ class StatisticRecorder:
                     0 if record_total_txq_wait_count == 0
                     else record_total_txq_wait_time/record_total_txq_wait_count
                 )
-                STATISTIC.Log(
+                GV.STATISTIC.Log(
                     '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
                         str(sg),
                         header.id,
@@ -166,7 +167,7 @@ class StatisticRecorder:
             print("Minimum TXQ Time:{}s".format(sg_min_txq_wait_time))
 
     def BaseStationAppdataTXReport(self):
-        STATISTIC.Log("=====BaseStationAppdataTXReport=====")
+        GV.STATISTIC.Log("=====BaseStationAppdataTXReport=====")
         for sg in SocialGroup:
             sg_max_tx_time = float('-inf')
             sg_min_tx_time = float('inf')
@@ -180,7 +181,7 @@ class StatisticRecorder:
                 record_total_tx_time = 0
                 record_total_tx_count = 0
                 # evaluate record
-                for bs in nm.BASE_STATION_CONTROLLER:
+                for bs in GV.NET_STATION_CONTROLLER:
                     serial = bs.serial
                     time_begin = record.time_bs_tx_beg[serial]
                     time_end = record.time_bs_tx_end[serial]
@@ -195,7 +196,7 @@ class StatisticRecorder:
                     0 if record_total_tx_count == 0
                     else record_total_tx_time / record_total_tx_count
                 )
-                STATISTIC.Log(
+                GV.STATISTIC.Log(
                     '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
                         str(sg),
                         header.id,
@@ -220,6 +221,3 @@ class StatisticRecorder:
             print("Average TX Time:{}s".format(sg_avg_tx_time))
             print("Maximum TX Time:{}s".format(sg_max_tx_time))
             print("Minimum TX Time:{}s".format(sg_min_tx_time))
-
-
-STATISTIC_RECORDER = StatisticRecorder()

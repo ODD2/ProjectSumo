@@ -1,105 +1,9 @@
+from od.network.types import BaseStationType
+from od.social import SocialGroup
 import os
-import math
-import threading
-import os
-import traci
-import sys
-import matlab.engine
-from sg_meta import SocialGroupMeta
-from numpy import random
-from enum import IntEnum, Enum
 
 
-# Link type
-class LinkType(IntEnum):
-    UPLINK = 0
-    DOWNLINK = 1
-
-
-# Base station type
-class BaseStationType(IntEnum):
-    UMI = 0
-    UMA = 1
-
-
-# SocialGroup and QOS priority(Lower value has higher priority, 0 is the lowest value.)
-class SocialGroup(metaclass=SocialGroupMeta):
-    CRITICAL = 0
-    GENERAL = 1
-
-
-# Network object layer
-class NetObjLayer(IntEnum):
-    BS_POI = 2
-    BS_RAD_UMA = BS_POI - 2
-    BS_RAD_UMI = BS_POI - 1
-    CON_LINE = BS_POI + 1
-
-
-# Simulation Infos
-class SumoSimInfo:
-    def __init__(self):
-        self.new_veh_ids = []
-        self.veh_ids = []
-        self.ghost_veh_ids = []
-        self.st = 0
-        self.ss = 0
-        self.ns = 0
-        self.ts = 0
-
-    def UpdateSS(self):
-        # sumo simulation time
-        self.st = traci.simulation.getTime()
-        # simulation step
-        self.ss = round(self.st/SUMO_SECONDS_PER_STEP)
-        # net step
-        self.ns = 0
-        # time step
-        self.ts = 0
-        # vehicles currently on the map
-        cur_veh_ids = traci.vehicle.getIDList()
-        # Find the vehicles that've left the map
-        self.ghost_veh_ids = [
-            veh_id for veh_id in self.veh_ids if veh_id not in cur_veh_ids
-        ]
-        # Find the vehicles that've joined the map
-        self.new_veh_ids = [
-            veh_id for veh_id in cur_veh_ids if veh_id not in self.veh_ids
-        ]
-        # Update current vehicle ids
-        self.veh_ids = cur_veh_ids
-
-    def UpdateNS(self, ns):
-        self.ns = ns
-
-    def UpdateTS(self, ts):
-        self.ts = ts
-
-    def getTimeNS(self):
-        return (self.ss * SUMO_SECONDS_PER_STEP +
-                self.ns * NET_SECONDS_PER_STEP)
-
-    def getTime(self):
-        return (self.ss * SUMO_SECONDS_PER_STEP +
-                self.ns * NET_SECONDS_PER_STEP +
-                self.ts * NET_SECONDS_PER_TS)
-
-
-# Threading -Traci
-TRACI_LOCK = threading.Lock()
-
-# Matlab
-MATLAB_ENG = matlab.engine.start_matlab()
-MATLAB_ENG.addpath(os.getcwd() + "/matlab/")
-MATLAB_ENG.addpath(os.getcwd() + "/matlab/SelectCQI_bySNR/")
-MATLAB_ENG.addpath(os.getcwd() + "/matlab/NomaPlannerV1/")
-
-# Random Number Generator
-# . initialize the rng
-random.seed(132342421)
 # Sumo Simulation Settings
-# . simulation info
-SUMO_SIM_INFO = SumoSimInfo()
 # . simulation scaler
 SUMO_SIM_TIME_SCALER = 100
 # . seconds per sumo simulation step
@@ -133,7 +37,6 @@ NET_SG_RND_REQ_SIZE = {
     # SocialGroup.GENERAL: [20, 100],
 }
 
-
 # Base Station Settings
 # . base station's total bandwidth
 BS_TOTAL_BANDWIDTH = {
@@ -142,6 +45,7 @@ BS_TOTAL_BANDWIDTH = {
     # BaseStationType.UMA: 200000,
     # BaseStationType.UMI: 100000,
 }
+
 # . base station's frequency
 BS_FREQ = {
     # Ghz
@@ -185,6 +89,8 @@ BS_UMI_RB_BW_SG = {
     SocialGroup.GENERAL: 1 * NET_RB_BW_UNIT
 }
 
+
+# Base Station Presets
 BS_SETTINGS = {
     "bs1": {
         "color": (0, 0, 0, 255),
@@ -211,9 +117,6 @@ BS_SETTINGS = {
         "type": BaseStationType.UMI,
     },
 }
-
-# Frequently used constants
-TS_PER_NET_STEP = int(NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS)
 
 
 # Basic Requirement Check

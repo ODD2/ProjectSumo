@@ -1,6 +1,4 @@
 import inspect
-
-
 class SocialGroupIterator:
     ''' Iterator class '''
 

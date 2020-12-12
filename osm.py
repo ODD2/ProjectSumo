@@ -1,22 +1,23 @@
+# Custom
+from od.network.controller import BaseStationController
+from od.network.types import BaseStationType
+from od.vehicle import VehicleRecorder
+from od.config import (SUMO_SECONDS_PER_STEP,
+                       BS_SETTINGS,
+                       SUMO_TOTAL_STEPS,
+                       NET_STEPS_PER_SUMO_STEP, NET_TS_PER_NET_STEP,
+                       BS_RADIUS_COLOR, BS_RADIUS)
+from od.layer import NetObjLayer
+import od.vars as GV
+# STD
+from threading import Thread
+import numpy as np
 import os
 import sys
 import traci
-import matlab.engine
-import math
-import numpy as np
-from enum import IntEnum
-from datetime import datetime
-from globs import *
-from threading import Thread
-from net_model import BaseStationController, BASE_STATION_CONTROLLER, NET_STATUS_CACHE
-from sim_stat import STATISTIC_RECORDER
-from veh_rec import VehicleRecorder
-from sim_log import DEBUG
 
 
 # Base Station Indicator Creator
-
-
 def CreateBaseStationIndicator(name, setting):
     # Bs Info
     bs_type = setting["type"]
@@ -96,18 +97,21 @@ def main():
         #  "--begin", "30"
     ])
 
+    # Initialize
+    GV.InitializeSimulationVariables()
+
     # Create Base Station Icon and Radius in SUMO
     for name, setting in BS_SETTINGS.items():
         CreateBaseStationIndicator(name, setting)
 
     # Submit all base stations to the Network Model
     for name, setting in BS_SETTINGS.items():
-        BASE_STATION_CONTROLLER.append(
+        GV.NET_STATION_CONTROLLER.append(
             BaseStationController(
                 name,
                 setting["pos"],
                 setting["type"],
-                len(BASE_STATION_CONTROLLER)
+                len(GV.NET_STATION_CONTROLLER)
             )
         )
 
@@ -119,20 +123,20 @@ def main():
     while step < SUMO_TOTAL_STEPS:
         traci.simulationStep()
         # Fetch the newest sumo simulation informations
-        SUMO_SIM_INFO.UpdateSS()
+        GV.SUMO_SIM_INFO.UpdateSS()
 
         # Remove ghost(non-exist) vehicles
-        for ghost in SUMO_SIM_INFO.ghost_veh_ids:
-            DEBUG.Log("[{}]: left the map.".format(ghost))
+        for ghost in GV.SUMO_SIM_INFO.ghost_veh_ids:
+            GV.DEBUG.Log("[{}]: left the map.".format(ghost))
             vehicle_recorders.pop(ghost)
         # Add new vehicles
-        for v_id in SUMO_SIM_INFO.new_veh_ids:
-            DEBUG.Log("[{}]: joined the map.".format(v_id))
+        for v_id in GV.SUMO_SIM_INFO.new_veh_ids:
+            GV.DEBUG.Log("[{}]: joined the map.".format(v_id))
             vehicle_recorders[v_id] = VehicleRecorder(v_id)
 
         # Reset network status cache because vehicle positions have updated,
         # which means the cqi/sinr should be re-estimated.
-        NET_STATUS_CACHE.Flush()
+        GV.NET_STATUS_CACHE.Flush()
 
         # Create vehicle_recorder list
         vehicles = list(vehicle_recorders.values())
@@ -142,17 +146,17 @@ def main():
         # Network simulations per sumo simulation step
         for ns in range(NET_STEPS_PER_SUMO_STEP):
             # Update sumo simulation info for network simulation step
-            SUMO_SIM_INFO.UpdateNS(ns)
+            GV.SUMO_SIM_INFO.UpdateNS(ns)
             # Update vehicle recorders & base stations for each network simulation step
             ParallelUpdateNS(vehicles, ns)
-            ParallelUpdateNS(BASE_STATION_CONTROLLER, ns)
+            ParallelUpdateNS(GV.NET_STATION_CONTROLLER, ns)
             # Time slots per network simulation step
             for ts in range(NET_TS_PER_NET_STEP+1):
                 # Update sumo simulation info for each network timeslot step
-                SUMO_SIM_INFO.UpdateTS(ts)
+                GV.SUMO_SIM_INFO.UpdateTS(ts)
                 # Update vehicle recorders & base stations for each network timeslot step
                 ParallelUpdateT(vehicles, ts)
-                ParallelUpdateT(BASE_STATION_CONTROLLER, ts)
+                ParallelUpdateT(GV.NET_STATION_CONTROLLER, ts)
 
         step += 1
     # except:
@@ -162,9 +166,9 @@ def main():
     traci.close(wait=False)
 
     # report
-    STATISTIC_RECORDER.VehicleReceivedIntactAppdataReport()
-    STATISTIC_RECORDER.BaseStationAppdataTXQReport()
-    STATISTIC_RECORDER.BaseStationAppdataTXReport()
+    GV.STATISTIC_RECORDER.VehicleReceivedIntactAppdataReport()
+    GV.STATISTIC_RECORDER.BaseStationAppdataTXQReport()
+    GV.STATISTIC_RECORDER.BaseStationAppdataTXReport()
 
 
 if __name__ == "__main__":

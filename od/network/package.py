@@ -1,5 +1,5 @@
-from globs import SocialGroup
-from net_app import AppData
+from od.social import SocialGroup
+from od.network.application import AppData
 
 
 class NetworkPackage:

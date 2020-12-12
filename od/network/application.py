@@ -1,8 +1,7 @@
-import sys
-from globs import SUMO_SIM_INFO, SocialGroup, NET_SG_RND_REQ_SIZE
-from sim_log import DEBUG, ERROR
-from sim_stat import STATISTIC_RECORDER
+from od.social import SocialGroup
+from od.config import NET_SG_RND_REQ_SIZE
 from numpy import random
+import od.vars as GV
 
 
 class AppDataHeader:
@@ -12,9 +11,6 @@ class AppDataHeader:
         self.serial = serial
         self.at = at
         self.id = "{}-{}".format(self.owner.name, self.serial)
-
-    # def __hash__(self):
-    #     return "{}-{}".format(self.owner.name, self.serial)
 
     def __str__(self):
         return "AppDataHeader({},{}b,{}s)".format(
@@ -56,11 +52,11 @@ class Application:
         if(appdata.header.serial not in owner_datas):
             if(appdata.offset != 0):
                 # TODO: receive partial data and initiate missing segment reconstruction after a fix period of time
-                ERROR.Log("Error! first arrived appdata offset should be 0")
+                GV.ERROR.Log("Error! first arrived appdata offset should be 0")
                 # sys.exit()
-
                 # current implementation: ignore the whole appdata as if it never arrived to this vehicle.
                 return
+
             owner_datas[appdata.header.serial] = AppData(
                 appdata.header,
                 appdata.bits,
@@ -85,7 +81,7 @@ class Application:
         # then this receive data provides advanced/non-continuous bits to the deform data
         else:
             # TODO: receive the data and save it
-            ERROR.Log("ERROR!Received Advanced Appdata!!!")
+            GV.ERROR.Log("ERROR!Received Advanced Appdata!!!")
             # sys.exit()
             return
         # if the appdata has became intact
@@ -119,14 +115,14 @@ class VehicleApplication(Application):
         Application.RecvData(self, social_group, appdata)
 
     def DataIntact(self, social_group: SocialGroup, appdata: AppData):
-        DEBUG.Log(
+        GV.DEBUG.Log(
             "[{}][app][{}]:data intact.({})".format(
                 self.vehicle.name,
                 social_group.fname.lower(),
                 appdata.header
             )
         )
-        STATISTIC_RECORDER.VehicleReceivedIntactAppdata(
+        GV.STATISTIC_RECORDER.VehicleReceivedIntactAppdata(
             social_group,
             appdata.header,
             self.vehicle
@@ -134,8 +130,8 @@ class VehicleApplication(Application):
 
     # Send application data
     def SendData(self):
-        if (SUMO_SIM_INFO.getTime() - self.prev_gen_time > 1):
-            self.prev_gen_time = SUMO_SIM_INFO.getTime()
+        if (GV.SUMO_SIM_INFO.getTime() - self.prev_gen_time > 1):
+            self.prev_gen_time = GV.SUMO_SIM_INFO.getTime()
             for group in SocialGroup:
                 # TODO: Make the random poisson be social group dependent
                 for _ in range(random.poisson(1)):
@@ -154,7 +150,7 @@ class VehicleApplication(Application):
                                 self.vehicle,
                                 data_size,
                                 self.data_counter,
-                                SUMO_SIM_INFO.getTime()
+                                GV.SUMO_SIM_INFO.getTime()
                             ),
                             data_size,
                             0
@@ -169,7 +165,7 @@ class NetworkCoreApplication(Application):
         self.core_ctrlr = core_ctrlr
 
     def DataIntact(self, social_group: SocialGroup, appdata: AppData):
-        DEBUG.Log(
+        GV.DEBUG.Log(
             "[{}][app][{}]:data intact.({})".format(
                 self.core_ctrlr.name,
                 social_group.fname.lower(),
