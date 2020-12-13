@@ -3,16 +3,19 @@ from od.network.controller import BaseStationController
 from od.network.types import BaseStationType
 from od.vehicle import VehicleRecorder
 from od.config import (SUMO_SECONDS_PER_STEP,
-                       BS_SETTINGS,
+                       BS_PRESET,
                        SUMO_TOTAL_STEPS,
                        NET_STEPS_PER_SUMO_STEP, NET_TS_PER_NET_STEP,
                        BS_RADIUS_COLOR, BS_RADIUS)
 from od.layer import NetObjLayer
+from od.misc.interest import InterestConfig
+import od.engine  as GE
 import od.vars as GV
 # STD
 from threading import Thread
 import numpy as np
 import os
+import gc
 import sys
 import traci
 
@@ -85,8 +88,9 @@ def ParallelUpdateT(objs, ts):
         t.join()
 
 
-def main():
-    # Start Traci
+def main(interest_config):
+    # Prepare Simulation
+    # - start traci
     traci.start([
         "sumo-gui",
         "-c",
@@ -94,18 +98,18 @@ def main():
         "--start",
         "--step-length",
         str(SUMO_SECONDS_PER_STEP),
-        #  "--begin", "30"
     ])
+    # - initialize matlab context for simulation
+    GE.MATLAB_ENG.InitializeSimulationContext(nargout=0)
+    # - initialize simulation dependent global variables
+    GV.InitializeSimulationVariables(interest_config)
 
-    # Initialize
-    GV.InitializeSimulationVariables()
-
-    # Create Base Station Icon and Radius in SUMO
-    for name, setting in BS_SETTINGS.items():
+    # - create base station icon and radius in SUMO
+    for name, setting in GV.BS_SETTING.items():
         CreateBaseStationIndicator(name, setting)
 
-    # Submit all base stations to the Network Model
-    for name, setting in BS_SETTINGS.items():
+    # - submit all base stations to the Network Model
+    for name, setting in GV.BS_SETTING.items():
         GV.NET_STATION_CONTROLLER.append(
             BaseStationController(
                 name,
@@ -115,61 +119,71 @@ def main():
             )
         )
 
-    # Vehicle Recorders
-    vehicle_recorders = {}
-    # try:
     # Start Simulation
+    # - record vehicles
+    vehicle_recorders = {}
+    # - simulation step indicator
     step = 0
+    # - run
     while step < SUMO_TOTAL_STEPS:
+        # forward sumo simulation step
         traci.simulationStep()
-        # Fetch the newest sumo simulation informations
+
+        # fetch the newest sumo simulation informations
         GV.SUMO_SIM_INFO.UpdateSS()
 
-        # Remove ghost(non-exist) vehicles
+        # remove ghost(non-exist) vehicles
         for ghost in GV.SUMO_SIM_INFO.ghost_veh_ids:
             GV.DEBUG.Log("[{}]: left the map.".format(ghost))
             vehicle_recorders.pop(ghost)
-        # Add new vehicles
+
+        # add new vehicles
         for v_id in GV.SUMO_SIM_INFO.new_veh_ids:
             GV.DEBUG.Log("[{}]: joined the map.".format(v_id))
             vehicle_recorders[v_id] = VehicleRecorder(v_id)
 
-        # Reset network status cache because vehicle positions have updated,
+        # reset network status cache because vehicle positions have updated,
         # which means the cqi/sinr should be re-estimated.
         GV.NET_STATUS_CACHE.Flush()
 
-        # Create vehicle_recorder list
-        vehicles = list(vehicle_recorders.values())
+        # Update vehicle recorders & base stations for sumo simulation step
+        ParallelUpdateSS(vehicle_recorders.values())
+        ParallelUpdateSS(GV.NET_STATION_CONTROLLER)
 
-        # Update vehicle recorders for sumo simulation
-        ParallelUpdateSS(vehicles)
         # Network simulations per sumo simulation step
         for ns in range(NET_STEPS_PER_SUMO_STEP):
             # Update sumo simulation info for network simulation step
             GV.SUMO_SIM_INFO.UpdateNS(ns)
+
             # Update vehicle recorders & base stations for each network simulation step
-            ParallelUpdateNS(vehicles, ns)
+            ParallelUpdateNS(vehicle_recorders.values(), ns)
             ParallelUpdateNS(GV.NET_STATION_CONTROLLER, ns)
+
             # Time slots per network simulation step
             for ts in range(NET_TS_PER_NET_STEP+1):
                 # Update sumo simulation info for each network timeslot step
                 GV.SUMO_SIM_INFO.UpdateTS(ts)
-                # Update vehicle recorders & base stations for each network timeslot step
-                ParallelUpdateT(vehicles, ts)
-                ParallelUpdateT(GV.NET_STATION_CONTROLLER, ts)
 
+                # Update vehicle recorders & base stations for each network timeslot step
+                ParallelUpdateT(vehicle_recorders.values(), ts)
+                ParallelUpdateT(GV.NET_STATION_CONTROLLER, ts)
+        # add simulation step indicator
         step += 1
-    # except:
-        # print("Exception Caught During Simulation")
 
     # End Simulation
+    # - manually destruct vehicle recorder in order to close traci.
+    for veh_rec in vehicle_recorders.values():
+        veh_rec.Clear()
+    # - close traci
     traci.close(wait=False)
 
-    # report
-    GV.STATISTIC_RECORDER.VehicleReceivedIntactAppdataReport()
-    GV.STATISTIC_RECORDER.BaseStationAppdataTXQReport()
-    GV.STATISTIC_RECORDER.BaseStationAppdataTXReport()
+    # - report
+    # GV.STATISTIC_RECORDER.VehicleReceivedIntactAppdataReport()
+    # GV.STATISTIC_RECORDER.BaseStationAppdataTXQReport()
+    # GV.STATISTIC_RECORDER.BaseStationAppdataTXReport()
+    # - save statistic object
+    GV.STATISTIC_RECORDER.SaveReport(interest_config)
 
 
 if __name__ == "__main__":
-    main()
+    main(InterestConfig(False, True, 1))

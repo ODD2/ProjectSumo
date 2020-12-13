@@ -1,9 +1,12 @@
 # Custom
 from od.social import SocialGroup
-from od.config import  SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP, NET_SECONDS_PER_TS
+from od.config import SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP, NET_SECONDS_PER_TS
+from od.misc.interest import InterestConfig
 import od.vars as GV
 # STD
 import math
+import pickle
+import os
 
 
 class AppdataStatistic:
@@ -59,6 +62,7 @@ class StatisticRecorder:
         )
 
     def VehicleReceivedIntactAppdataReport(self):
+        sg_stats = {}
         GV.STATISTIC.Log("=====VehicleReceivedIntactAppdataReport=====")
         for sg in SocialGroup:
             sg_total_trip_time = 0
@@ -105,8 +109,15 @@ class StatisticRecorder:
             print("Average Trip Time: {}s".format(sg_avg_trip_time))
             print("Maximum Trip Time: {}s".format(sg_max_trip_time))
             print("Minimum Trip Time: {}s".format(sg_min_trip_time))
+            sg_stats[sg] = {
+                "avg": sg_avg_trip_time,
+                "max": sg_max_trip_time,
+                "min": sg_min_trip_time,
+            }
+        return sg_stats
 
     def BaseStationAppdataTXQReport(self):
+        sg_stats = {}
         GV.STATISTIC.Log("=====BaseStationAppdataTXQReport=====")
         # time waited of appdata in transmit queue
         for sg in SocialGroup:
@@ -165,8 +176,15 @@ class StatisticRecorder:
             print("Average TXQ Time:{}s".format(sg_avg_txq_wait_time))
             print("Maximum TXQ Time:{}s".format(sg_max_txq_wait_time))
             print("Minimum TXQ Time:{}s".format(sg_min_txq_wait_time))
+            sg_stats[sg] = {
+                "avg": sg_avg_txq_wait_time,
+                "max": sg_max_txq_wait_time,
+                "min": sg_min_txq_wait_time,
+            }
+        return sg_stats
 
     def BaseStationAppdataTXReport(self):
+        sg_stats = {}
         GV.STATISTIC.Log("=====BaseStationAppdataTXReport=====")
         for sg in SocialGroup:
             sg_max_tx_time = float('-inf')
@@ -221,3 +239,21 @@ class StatisticRecorder:
             print("Average TX Time:{}s".format(sg_avg_tx_time))
             print("Maximum TX Time:{}s".format(sg_max_tx_time))
             print("Minimum TX Time:{}s".format(sg_min_tx_time))
+            sg_stats[sg] = {
+                "avg": sg_avg_tx_time,
+                "max": sg_max_tx_time,
+                "min": sg_min_tx_time,
+            }
+        return sg_stats
+
+    def SaveReport(self, interest_config: InterestConfig):
+        dirpath = "stats/"
+        if not os.path.isdir(dirpath):
+            os.mkdir(dirpath)
+        filename = '{}.dict'.format(str(interest_config))
+        with open(dirpath + filename, 'wb') as interest_statistic_file:
+            pickle.dump({
+                "veh_recv_intact_appdata_trip": self.VehicleReceivedIntactAppdataReport(),
+                "bs_appdata_txq_wait": self.BaseStationAppdataTXQReport(),
+                "bs_appdat_tx": self.BaseStationAppdataTXReport()
+            }, interest_statistic_file)

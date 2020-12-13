@@ -10,7 +10,7 @@ from od.config import (NET_TS_PER_NET_STEP, NET_QOS_CHNLS, NET_RB_BW_REQ_TS,
                        BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
                        BS_TOTAL_BANDWIDTH, BS_RADIUS,
                        BS_TRANS_PWR)
-from od.engine import MATLAB_ENG
+import od.engine as GE
 import od.vars as GV
 import math
 import io
@@ -44,6 +44,10 @@ class BaseStationController:
 
     def __index__(self):
         return self.serial
+
+    # Called every sumo step
+    def UpdateSS(self):
+        pass
 
     # Called every network step
     def UpdateNS(self, ns):
@@ -119,7 +123,7 @@ class BaseStationController:
                     # fetch resource block trans size for every request
                     req_rbsize_pairs = []
                     for req in self.sg_upload_req[qos][social_group]:
-                        rbsize = MATLAB_ENG.GetThroughputPerRB(
+                        rbsize = GE.MATLAB_ENG.GetThroughputPerRB(
                             float(
                                 GV.NET_STATUS_CACHE.GetNetStatus(
                                     (
@@ -181,8 +185,10 @@ class BaseStationController:
 
     # arrange downlink resource
     def ArrangeDownlinkResource(self):
-        # self.ArrangeDownlinkResourceOMA()
-        self.ArrangeDownlinkResourceNOMA()
+        if (GV.NET_RES_OMA_ONLY):
+            self.ArrangeDownlinkResourceOMA()
+        else:
+            self.ArrangeDownlinkResourceNOMA()
 
     # arrange downlink resource in OMA
     def ArrangeDownlinkResourceOMA(self):
@@ -218,7 +224,7 @@ class BaseStationController:
                     if(status.cqi < lowest_cqi):
                         lowest_cqi = status.cqi
                 # calculate the resource block size for the cqi
-                sg_rb_bits = MATLAB_ENG.GetThroughputPerRB(
+                sg_rb_bits = GE.MATLAB_ENG.GetThroughputPerRB(
                     float(lowest_cqi),
                     int(NET_RB_SLOT_SYMBOLS)
                 )
@@ -246,6 +252,15 @@ class BaseStationController:
                     # start appdata collection
                     while(data_delivering < datas_count and remain_bits > 0):
                         appdata = self.sg_brdcst_datas[qos][social_group][data_delivering]
+                        # ===STATISTIC===
+                        if(appdata.offset == 0):
+                            GV.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
+                                social_group, self, appdata.header
+                            )
+                            GV.STATISTIC_RECORDER.BaseStationAppdataStartTX(
+                                social_group, self, appdata.header, offset_ts
+                            )
+                        # actual transmit bit
                         trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
                         package_appdatas.append(
                             AppData(
@@ -263,6 +278,10 @@ class BaseStationController:
                         # if there's no bits to deliver move on to the next appdata
                         if(appdata.bits == 0):
                             data_delivering += 1
+                            #  ===STATISTIC===
+                            GV.STATISTIC_RECORDER.BaseStationAppdataEndTX(
+                                social_group, self, appdata.header, offset_ts + sg_rb_ts
+                            )
                     # collection done, remove appdatas that have been delivered
                     self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][data_delivering:]
                     # create package
@@ -345,7 +364,7 @@ class BaseStationController:
         # create stdout receiver, save output for debug
         out = io.StringIO()
         # optimize allocation request
-        gid_req_res, exitflag = MATLAB_ENG.NomaPlannerV1(
+        gid_req_res, exitflag = GE.MATLAB_ENG.NomaPlannerV1(
             SIM_CONF, QoS_GP_CONF, nargout=2, stdout=out
         )
         #  save output for debug
@@ -371,7 +390,7 @@ class BaseStationController:
                             # social group resource block cqi
                             sg_rb_cqi = int(cqi_name[1:])
                             # social group rosource block size for the specified cqi
-                            sg_rb_bits = MATLAB_ENG.GetThroughputPerRB(
+                            sg_rb_bits = GE.MATLAB_ENG.GetThroughputPerRB(
                                 sg_rb_cqi, NET_RB_SLOT_SYMBOLS
                             )
                             # the offset timeslot of the package
@@ -454,7 +473,6 @@ class BaseStationController:
     def ReceivePropagation(self, social_group: SocialGroup, header: AppDataHeader):
         if(social_group not in self.sg_brdcst_datas[social_group.qos]):
             self.sg_brdcst_datas[social_group.qos][social_group] = []
-
         self.sg_brdcst_datas[social_group.qos][social_group].append(
             AppData(
                 header,
@@ -462,6 +480,7 @@ class BaseStationController:
                 0
             )
         )
+
         # STATISTIC
         GV.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
             social_group, self, header

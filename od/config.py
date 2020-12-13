@@ -1,7 +1,7 @@
 from od.network.types import BaseStationType
 from od.social import SocialGroup
 import os
-
+import sys
 
 # Sumo Simulation Settings
 # . simulation scaler
@@ -91,7 +91,7 @@ BS_UMI_RB_BW_SG = {
 
 
 # Base Station Presets
-BS_SETTINGS = {
+BS_PRESET = {
     "bs1": {
         "color": (0, 0, 0, 255),
         "pos": (285, 245),

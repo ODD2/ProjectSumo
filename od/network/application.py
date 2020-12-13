@@ -134,7 +134,7 @@ class VehicleApplication(Application):
             self.prev_gen_time = GV.SUMO_SIM_INFO.getTime()
             for group in SocialGroup:
                 # TODO: Make the random poisson be social group dependent
-                for _ in range(random.poisson(1)):
+                for _ in range(random.poisson(GV.APP_DATA_POISSON)):
                     # get the range of random generated data size (byte)
                     data_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
                     # size of data (bit)

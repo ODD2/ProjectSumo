@@ -3,7 +3,7 @@ from od.config import (BS_HEIGHT, BS_TRANS_PWR, BS_FREQ,
                        BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
                        BS_UMI_CP_SOCIAL, BS_UMA_CP)
 from od.social import SocialGroup
-from od.engine import MATLAB_ENG
+import od.engine as GE
 import od.vars as GV
 import matlab
 
@@ -119,7 +119,7 @@ def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group: SocialGroup):
         )
 
     # result
-    cqi, sinr = MATLAB_ENG.SINR_Channel_Model_5G(
+    cqi, sinr = GE.MATLAB_ENG.SINR_Channel_Model_5G(
         float(UE_dist),
         float(h_BS),
         float(h_MS),
