@@ -5,10 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Module",
+            "name": "Python: control",
             "type": "python",
             "request": "launch",
             "module": "control"
+        },
+        {
+            "name": "Python: osm",
+            "type": "python",
+            "request": "launch",
+            "module": "osm"
         }
+
     ]
 }

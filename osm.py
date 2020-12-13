@@ -9,7 +9,7 @@ from od.config import (SUMO_SECONDS_PER_STEP,
                        BS_RADIUS_COLOR, BS_RADIUS)
 from od.layer import NetObjLayer
 from od.misc.interest import InterestConfig
-import od.engine  as GE
+import od.engine as GE
 import od.vars as GV
 # STD
 from threading import Thread
@@ -177,12 +177,8 @@ def main(interest_config):
     # - close traci
     traci.close(wait=False)
 
-    # - report
-    # GV.STATISTIC_RECORDER.VehicleReceivedIntactAppdataReport()
-    # GV.STATISTIC_RECORDER.BaseStationAppdataTXQReport()
-    # GV.STATISTIC_RECORDER.BaseStationAppdataTXReport()
-    # - save statistic object
-    GV.STATISTIC_RECORDER.SaveReport(interest_config)
+    # - statistic report
+    return GV.STATISTIC_RECORDER.SaveReport(interest_config)
 
 
 if __name__ == "__main__":

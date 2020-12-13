@@ -246,14 +246,20 @@ class StatisticRecorder:
             }
         return sg_stats
 
-    def SaveReport(self, interest_config: InterestConfig):
-        dirpath = "stats/"
-        if not os.path.isdir(dirpath):
-            os.mkdir(dirpath)
-        filename = '{}.dict'.format(str(interest_config))
-        with open(dirpath + filename, 'wb') as interest_statistic_file:
-            pickle.dump({
-                "veh_recv_intact_appdata_trip": self.VehicleReceivedIntactAppdataReport(),
-                "bs_appdata_txq_wait": self.BaseStationAppdataTXQReport(),
-                "bs_appdat_tx": self.BaseStationAppdataTXReport()
-            }, interest_statistic_file)
+    def Report(self, interest_config: InterestConfig, save=True):
+        statistic_object = {
+            "interest_config": interest_config,
+            "veh_recv_intact_appdata_trip": self.VehicleReceivedIntactAppdataReport(),
+            "bs_appdata_txq_wait": self.BaseStationAppdataTXQReport(),
+            "bs_appdat_tx": self.BaseStationAppdataTXReport()
+        }
+        # save the statistic to file for further estimation
+        if save:
+            dirpath = "stats/"
+            if not os.path.isdir(dirpath):
+                os.mkdir(dirpath)
+            filename = '{}.dict'.format(str(interest_config))
+            with open(dirpath + filename, 'wb') as interest_statistic_file:
+                pickle.dump(statistic_object, interest_statistic_file)
+        # return statistic object
+        return statistic_object
