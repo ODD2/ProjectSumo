@@ -251,7 +251,7 @@ class StatisticRecorder:
             "interest_config": interest_config,
             "veh_recv_intact_appdata_trip": self.VehicleReceivedIntactAppdataReport(),
             "bs_appdata_txq_wait": self.BaseStationAppdataTXQReport(),
-            "bs_appdat_tx": self.BaseStationAppdataTXReport()
+            "bs_appdata_tx": self.BaseStationAppdataTXReport()
         }
         # save the statistic to file for further estimation
         if save:

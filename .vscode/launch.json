@@ -15,6 +15,12 @@
             "type": "python",
             "request": "launch",
             "module": "osm"
+        },
+        {
+            "name": "Python: graph",
+            "type": "python",
+            "request": "launch",
+            "module": "graph"
         }
 
     ]

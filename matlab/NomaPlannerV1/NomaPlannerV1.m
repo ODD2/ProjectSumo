@@ -101,9 +101,7 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
             x_max = SIM_CONF.rbf_w - (qos_gp_conf.rbf_w - 1);  
 %           calculate the max cqi's required minimum power(dbm)
             cqi_max = SelectCQI(qos_gp_conf.sinr_max,0.1);
-%           problem: higher cqi given even when the sinr_max doesn't reach the
-%           minimum sinr requirement.
-            sinr_max = max(qos_gp_conf.sinr_max,CqiMinSINR(cqi_max,0.1));
+            sinr_max = CqiMinSINR(cqi_max,0.1);
             sinr_max_sdn = 10 ^(sinr_max/10); 
             
 %           create a new solution group config
@@ -139,9 +137,13 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
         
 %       configure oma layer allocation prerequisites.
         for index = alloc_grp_index
+            sinr_max_noise = 1/(OPT_GP_CONF(index).sinr_max_sdn / SIM_CONF.max_pwr);
             oma_cqi = OPT_GP_CONF(index).cqi_max;
-            oma_cqi_pwr = (10 ^ (CqiMinSINR(oma_cqi,0.1)/10)) /...
-                          (OPT_GP_CONF(index).sinr_max_sdn / SIM_CONF.max_pwr);
+            oma_cqi_req_sdn = 10 ^ (CqiMinSINR(oma_cqi,0.1)/10);
+            oma_cqi_pwr =(oma_cqi_req_sdn)*(sinr_max_noise + SIM_CONF.max_pwr)/(1+oma_cqi_req_sdn);
+%           if the power required for noma will decrease the cqi, then
+%           don't provide noma.
+            oma_cqi_pwr = min(oma_cqi_pwr,SIM_CONF.max_pwr);
             OPT_GP_CONF(index).oma_cqi_list = [ oma_cqi ];
             OPT_GP_CONF(index).oma_cqi_pwr_list = [ oma_cqi_pwr ];
             OPT_GP_CONF(index).oma_cqi_num = 1;
