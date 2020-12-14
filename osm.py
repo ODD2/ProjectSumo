@@ -178,7 +178,7 @@ def main(interest_config):
     traci.close(wait=False)
 
     # - statistic report
-    return GV.STATISTIC_RECORDER.SaveReport(interest_config)
+    return GV.STATISTIC_RECORDER.Report(interest_config)
 
 
 if __name__ == "__main__":
