@@ -8,7 +8,7 @@ if __name__ == "__main__":
     statistics = []
     for res_alloc_type in ResourceAllocatorType:
         for rsu in [False, True]:
-            for poisson in [1, 10, 25, 50]:
+            for poisson in [1]:
                 statistics.append(
                     osm.main(
                         InterestConfig(

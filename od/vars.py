@@ -57,20 +57,19 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     NET_STATUS_CACHE = onm.NetStatusCache()
     NET_STATION_CONTROLLER = []
     # Logger
+    logdir = "log/{}/".format(interest_config)
+    time_text = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
     DEBUG = oml.Logger(
-        "Debug ({}).txt".format(
-            datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-        )
+        logdir,
+        "Debug ({}).txt".format(time_text)
     )
     ERROR = oml.Printer(
-        "Error ({}).txt".format(
-            datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-        )
+        logdir,
+        "Error ({}).txt".format(time_text)
     )
     STATISTIC = oml.Logger(
-        "Statistic ({}).txt".format(
-            datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-        )
+        logdir,
+        "Statistic ({}).txt".format(time_text)
     )
     # Sumo Simulation Info
     SUMO_SIM_INFO = oms.SumoSimInfo()
