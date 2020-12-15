@@ -19,7 +19,8 @@ class AppdataStatistic:
 
 
 class StatisticRecorder:
-    def __init__(self):
+    def __init__(self, interest_config: InterestConfig):
+        self.interest_config = interest_config
         self.sg_header = [{} for _ in SocialGroup]
 
     def GetAppdataRecord(self, sg, header):
@@ -246,9 +247,9 @@ class StatisticRecorder:
             }
         return sg_stats
 
-    def Report(self, interest_config: InterestConfig, save=True):
+    def Report(self, save=True):
         statistic_object = {
-            "interest_config": interest_config,
+            "interest_config": self.interest_config,
             "veh_recv_intact_appdata_trip": self.VehicleReceivedIntactAppdataReport(),
             "bs_appdata_txq_wait": self.BaseStationAppdataTXQReport(),
             "bs_appdata_tx": self.BaseStationAppdataTXReport()
@@ -258,7 +259,7 @@ class StatisticRecorder:
             dirpath = "stats/"
             if not os.path.isdir(dirpath):
                 os.mkdir(dirpath)
-            filename = '{}.dict'.format(str(interest_config))
+            filename = '{}.dict'.format(str(self.interest_config))
             with open(dirpath + filename, 'wb') as interest_statistic_file:
                 pickle.dump(statistic_object, interest_statistic_file)
         # return statistic object

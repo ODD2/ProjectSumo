@@ -2,7 +2,7 @@ from od.social import SocialGroup
 from od.network.types import LinkType
 from od.network.application import AppData, AppDataHeader, NetworkCoreApplication
 from od.network.package import NetworkPackage
-from od.network.types import BroadcastObject, BaseStationType
+from od.network.types import BroadcastObject, BaseStationType, ResourceAllocatorType
 from od.vehicle.request import UploadRequest, ResendRequest
 from od.network.allocator import ResourceAllocatorOMA
 from od.config import (NET_TS_PER_NET_STEP, NET_QOS_CHNLS, NET_RB_BW_REQ_TS,
@@ -185,9 +185,9 @@ class BaseStationController:
 
     # arrange downlink resource
     def ArrangeDownlinkResource(self):
-        if (GV.NET_RES_OMA_ONLY):
+        if  (GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA):
             self.ArrangeDownlinkResourceOMA()
-        else:
+        elif (GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.NOMA_OPT):
             self.ArrangeDownlinkResourceNOMA()
 
     # arrange downlink resource in OMA

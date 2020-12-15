@@ -28,7 +28,8 @@ for _a, oma in enumerate(a):
         for _c, poisson in enumerate(c):
             with open("stats/oma_only({}) rsu({}) appdata_poisson({}).dict".format(oma, rsu, poisson), "rb") as file:
                 stats[_a][_b][_c] = pickle.load(file)
-
+_pinf = float("inf")
+_ninf = float("-inf")
 serial = 1
 for config in graph_configs:
     topic = config["name"]
@@ -44,16 +45,25 @@ for config in graph_configs:
                     y = []
                     x = c
                     for _c in range(len(c)):
-                        y.append(stats[_a][_b][_c][topic][sg][subject])
-                    plt.plot(x, y)
-                    plt.text(
-                        c[-1],
-                        y[-1],
-                        "{}/{}/{}".format(
-                            str(sg).lower(),
-                            "oma" if a[_a] else "noma",
-                            "rsu" if b[_b] else ""
+                        value = stats[_a][_b][_c][topic][sg][subject]
+                        if value == _pinf or value == _ninf:
+                            value = 0
+                        y.append(value)
+                    plt.plot(
+                        x,
+                        y,
+                        ".-",
+                        label="{}/{}/{}".format(
+                              str(sg).lower(),
+                              "oma" if a[_a] else "noma",
+                              "rsu" if b[_b] else ""
                         )
                     )
+
+                    #   plt.text(
+                    #     c[-1],
+                    #     y[-1],
+                    #   )
+        plt.legend(loc='upper left', bbox_to_anchor=(0, 1))
         serial += 1
 plt.show()

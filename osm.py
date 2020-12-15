@@ -1,6 +1,6 @@
 # Custom
 from od.network.controller import BaseStationController
-from od.network.types import BaseStationType
+from od.network.types import BaseStationType, ResourceAllocatorType
 from od.vehicle import VehicleRecorder
 from od.config import (SUMO_SECONDS_PER_STEP,
                        BS_PRESET,
@@ -95,6 +95,7 @@ def main(interest_config):
         "sumo-gui",
         "-c",
         os.getcwd() + "/osm.sumocfg",
+        "--quit-on-end",
         "--start",
         "--step-length",
         str(SUMO_SECONDS_PER_STEP),
@@ -182,4 +183,10 @@ def main(interest_config):
 
 
 if __name__ == "__main__":
-    main(InterestConfig(False, True, 1))
+    main(
+        InterestConfig(
+            ResourceAllocatorType.NOMA_OPT,
+            True,
+            1
+        )
+    )

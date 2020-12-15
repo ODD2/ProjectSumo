@@ -1,14 +1,17 @@
+from od.network.types import ResourceAllocatorType
+
+
 class InterestConfig:
-    def __init__(self, oma_only, rsu, appdata_poisson):
-        self.oma_only = oma_only
-        self.rsu = rsu
+    def __init__(self, res_alloc_type: ResourceAllocatorType, req_rsu: bool, appdata_poisson):
+        self.res_alloc_type = res_alloc_type
+        self.req_rsu = req_rsu
         self.appdata_poisson = appdata_poisson
 
     def __str__(self):
         return (
-            "oma_only({}) rsu({}) appdata_poisson({})".format(
-                self.oma_only,
-                self.rsu,
+            "res_alloc_type({}) req_rsu({}) appdata_poisson({})".format(
+                self.res_alloc_type.name,
+                self.req_rsu,
                 self.appdata_poisson
             )
         )
