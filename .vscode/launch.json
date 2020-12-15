@@ -21,6 +21,12 @@
             "type": "python",
             "request": "launch",
             "module": "graph"
+        },
+        {
+            "name": "Python: test",
+            "type": "python",
+            "request": "launch",
+            "module": "test"
         }
 
     ]

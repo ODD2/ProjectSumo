@@ -266,18 +266,19 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
     end
         
 %   add small difference for each rb per group subframe
-%     for gp_conf = OPT_GP_CONF(SIM_CONF.noma_grps)
-%         gap = 1/gp_conf.rb_num;
-%         diff = 0;
-%         for i = gp_conf.grp_sol_size:1
-%             if mod(i,gp_conf.rb_num) == 0
-%                 diff = 0;
-%             else
-%                 diff = diff + gap;
-%             end
-%             f(i+gp_conf.grp_sol_ofs) = f(i+gp_conf.grp_sol_ofs)+diff;
-%         end
-%     end
+    for gp_conf = OPT_GP_CONF
+        gap = 1/gp_conf.rb_num;
+        for i = 1:gp_conf.oma_cqi_num
+            sol_beg = gp_conf.oma_sol_ofs + (i-1)*gp_conf.rb_num + 1;
+            sol_end = gp_conf.oma_sol_ofs + (i )*gp_conf.rb_num;
+            f(sol_beg:sol_end) = f(sol_beg:sol_end) + ((1-gap):-gap:0);
+        end
+        for i = 1:gp_conf.noma_cqi_num
+            sol_beg = gp_conf.noma_sol_ofs + (i-1)*gp_conf.rb_num + 1;
+            sol_end = gp_conf.noma_sol_ofs + (i )*gp_conf.rb_num;
+            f(sol_beg:sol_end) = f(sol_beg:sol_end) + ((1-gap):-gap:0);
+        end
+    end
 
 %   group prioritization
 %   (group having large member has higher prior, group having the same
