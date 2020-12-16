@@ -30,32 +30,48 @@ class StatisticRecorder:
         if(header not in self.sg_header[sg]):
             self.sg_header[sg][header] = AppdataStatistic()
 
-    def VehicleReceivedIntactAppdata(self, sg, header, vehicle):
+    def VehicleReceivedIntactAppdata(self, sg, vehicle, header):
         record = self.GetAppdataRecord(sg, header)
         record.time_veh_recv[vehicle] = GV.SUMO_SIM_INFO.getTime()
 
-    def BaseStationAppdataEnterTXQ(self, sg, bs, headers):
+    # call by BaseStation while receiving new appdata from NetworkCore
+    def BaseStationAppdataPropagate(self, sg, bs, header):
+        record = self.GetAppdataRecord(sg, header)
+        # special case: the appdata received at the current subframe
+        # should start accouting its queue time from the next subframe
+        record.time_bs_txq[bs].append(
+            [GV.SUMO_SIM_INFO.getTimeNS() + NET_SECONDS_PER_STEP, 0]
+        )
+
+    # call by BaseStation while a appdata returns to TX queue
+    def BaseStationAppdataReturnTXQ(self, sg, bs, headers):
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
-            record.time_bs_txq[bs].append([0, 0])
-            record.time_bs_txq[bs][-1][0] = GV.SUMO_SIM_INFO.getTime()
+            record.time_bs_txq[bs].append(
+                [GV.SUMO_SIM_INFO.getTime(), 0]
+            )
 
+    # call by BaseStation while a appdata exits TX queue
     def BaseStationAppdataExitTXQ(self, sg, bs, headers):
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
             record.time_bs_txq[bs][-1][1] = GV.SUMO_SIM_INFO.getTime()
 
+    # call by BaseStation while a appdata start TX
     def BaseStationAppdataStartTX(self, sg, bs, headers):
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
-            record.time_bs_tx[bs].append([0, 0])
-            record.time_bs_tx[bs][-1][0] = GV.SUMO_SIM_INFO.getTime()
+            record.time_bs_tx[bs].append(
+                [GV.SUMO_SIM_INFO.getTime(), 0]
+            )
 
+    # call by BaseStation while a appdata end TX
     def BaseStationAppdataEndTX(self, sg, bs, headers):
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
             record.time_bs_tx[bs][-1][1] = GV.SUMO_SIM_INFO.getTime()
 
+    # call by BaseStation while dropping a appdata
     def BaseStationAppdataDrop(self, sg, bs, headers):
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
@@ -150,8 +166,8 @@ class StatisticRecorder:
                                 continue
                             bs_total_txq_wait_time += time_exit - time_enter
                     # ignore if there's no waiting time.
-                    # if bs_total_txq_wait_time == 0:
-                    #     continue
+                    if bs_total_txq_wait_time == 0:
+                        continue
                     # add txq wait time to record.
                     record_total_txq_wait_count += 1
                     record_total_txq_wait_time += bs_total_txq_wait_time

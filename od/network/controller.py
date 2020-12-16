@@ -127,7 +127,7 @@ class BaseStationController:
                 GV.STATISTIC_RECORDER.BaseStationAppdataEndTX(
                     sg, self, stats_appdata_trans_end[sg]
                 )
-                GV.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
+                GV.STATISTIC_RECORDER.BaseStationAppdataReturnTXQ(
                     sg, self, stats_appdata_trans_end[sg]
                 )
 
@@ -184,38 +184,37 @@ class BaseStationController:
                     # required timeslots for using this bandwidth
                     req_ts_per_rb = NET_RB_BW_REQ_TS[req_bw_per_rb]
                     # serve requests
+                    rb_res_lack = False
                     for req_rbsize_pair in req_rbsize_pairs:
                         req = req_rbsize_pair[0]
                         rbsize = req_rbsize_pair[1]
-                        total_req_rb = math.ceil(req.total_bits / rbsize)
-
-                        for _ in range(total_req_rb):
+                        max_rb_req = math.ceil(req.total_bits / rbsize)
+                        ts_rb_req = [0 for _ in range(NET_TS_PER_NET_STEP)]
+                        for _ in range(max_rb_req):
                             # allocate
                             offset_ts = ra_oma.Allocate(
                                 req_bw_per_rb, req_ts_per_rb
                             )
-
                             # unable to allocate
                             if(offset_ts < 0):
+                                rb_res_lack = True
                                 break
-
-                            # notify request owner for granting resource
-                            req.sender.UploadResourceGranted(
-                                self,
-                                social_group,
-                                rbsize,
-                                req_ts_per_rb,
-                                offset_ts
-                            )
-                        else:
-                            # if the allocation process above wasn't interrupted
-                            # continue allocation for the same resource block settings
-                            continue
-
-                        # if the allocation process above was interrupted(break)
-                        # then allocation for the same resource block settings(bandwidth,timeslots)
-                        # will result in failure, too.
-                        break
+                            ts_rb_req[offset_ts] += 1
+                        # notify request owner for granted resources
+                        for ts in range(NET_TS_PER_NET_STEP):
+                            while(ts_rb_req[ts] > 0):
+                                req.sender.UploadResourceGranted(
+                                    self,
+                                    social_group,
+                                    rbsize,
+                                    req_ts_per_rb,
+                                    ts
+                                )
+                                ts_rb_req[ts] -= 1
+                        # break if no further resource valid
+                        # for the resource blocks of this social group
+                        if rb_res_lack:
+                            break
         # Clean requests
         self.sg_upload_req = ([{} for x in range(NET_QOS_CHNLS)])
 
@@ -279,6 +278,7 @@ class BaseStationController:
                 # total required resource blocks for this social group
                 sg_total_req_rb = math.ceil(sg_total_bits/sg_rb_bits)
                 # allocate resource blocks
+                sg_ts_req_rb = [0 for _ in NET_TS_PER_NET_STEP]
                 for _ in range(sg_total_req_rb):
                     offset_ts = ra_oma.Allocate(
                         sg_rb_bw, sg_rb_ts
@@ -286,51 +286,60 @@ class BaseStationController:
                     # unable to allocate
                     if(offset_ts < 0):
                         break
-                    # collect appdatas this package is delivering
-                    package_appdatas = []
-                    remain_bits = sg_rb_bits
-                    # the appdata index that is currently collecting
-                    data_delivering = 0
-                    # the total amount of appdatas
-                    datas_count = len(self.sg_brdcst_datas[qos][social_group])
-                    # start appdata collection
-                    while(data_delivering < datas_count and remain_bits > 0):
-                        appdata = self.sg_brdcst_datas[qos][social_group][data_delivering]
-                        # actual transmit bit
-                        trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
-                        package_appdatas.append(
-                            AppData(
-                                appdata.header,
-                                trans_bits,
-                                appdata.offset
-                            )
+                    # allocate successful
+                    sg_ts_req_rb[offset_ts] += 1
+                # create packages
+                for ts in range(NET_TS_PER_NET_STEP):
+                    while(sg_ts_req_rb[ts] > 0):
+                        # consume resource block
+                        sg_ts_req_rb[ts] -= 1
+                        # collect appdatas this package is delivering
+                        package_appdatas = []
+                        remain_bits = sg_rb_bits
+                        # the appdata index that is currently collecting
+                        data_delivering = 0
+                        # the total amount of appdatas
+                        datas_count = len(
+                            self.sg_brdcst_datas[qos][social_group]
                         )
-                        # consume remain bits
-                        remain_bits -= trans_bits
-                        # consume bits to deliver
-                        appdata.bits -= trans_bits
-                        # add delivered bits
-                        appdata.offset += trans_bits
-                        # if there's no bits to deliver move on to the next appdata
-                        if(appdata.bits == 0):
-                            data_delivering += 1
-                    # collection done, remove appdatas that have been delivered
-                    self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][data_delivering:]
-                    # create package
-                    package = NetworkPackage(
-                        self,
-                        BroadcastObject,
-                        social_group,
-                        sg_rb_bits-remain_bits,
-                        package_appdatas,
-                        sg_rb_ts,
-                        offset_ts
-                    )
-                    # send package
-                    for veh in self.sg_sub_vehs[social_group]:
-                        veh.ReceivePackage(package)
-                    # put package in process list
-                    self.pkg_in_proc[LinkType.DOWNLINK].append(package)
+                        # start appdata collection
+                        while(data_delivering < datas_count and remain_bits > 0):
+                            appdata = self.sg_brdcst_datas[qos][social_group][data_delivering]
+                            # actual transmit bit
+                            trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
+                            package_appdatas.append(
+                                AppData(
+                                    appdata.header,
+                                    trans_bits,
+                                    appdata.offset
+                                )
+                            )
+                            # consume remain bits
+                            remain_bits -= trans_bits
+                            # consume bits to deliver
+                            appdata.bits -= trans_bits
+                            # add delivered bits
+                            appdata.offset += trans_bits
+                            # if there's no bits to deliver move on to the next appdata
+                            if(appdata.bits == 0):
+                                data_delivering += 1
+                        # remove appdatas that have been delivered
+                        self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][data_delivering:]
+                        # create package
+                        package = NetworkPackage(
+                            self,
+                            BroadcastObject,
+                            social_group,
+                            sg_rb_bits-remain_bits,
+                            package_appdatas,
+                            sg_rb_ts,
+                            offset_ts
+                        )
+                        # send package
+                        for veh in self.sg_sub_vehs[social_group]:
+                            veh.ReceivePackage(package)
+                        # put package in process list
+                        self.pkg_in_proc[LinkType.DOWNLINK].append(package)
 
     # arrange downlink resource in NOMA
     def ArrangeDownlinkResourceNOMA(self):
@@ -507,10 +516,9 @@ class BaseStationController:
                 0
             )
         )
-
-        # STATISTIC
-        GV.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
-            social_group, self, [header]
+        # Statistic
+        GV.STATISTIC_RECORDER.BaseStationAppdataPropagate(
+            social_group, self, header
         )
 
     # Function called by VehicleRecorder to subscribe to a specific social group on this base station

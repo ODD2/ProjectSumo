@@ -36,8 +36,9 @@ class AppData:
 
 
 class Application:
-    def __init__(self):
+    def __init__(self, owner):
         self.data_inbox = {}
+        self.owner = owner
 
     # function called by application owner
     # executes DataIntact() if the whole data became "intact"
@@ -50,23 +51,16 @@ class Application:
         owner_datas = self.data_inbox[appdata.header.owner.name]
         # the delivered data is a new one, create record
         if(appdata.header.serial not in owner_datas):
-            if(appdata.offset != 0):
-                # TODO: receive partial data and initiate missing segment reconstruction after a fix period of time
-                GV.ERROR.Log("Error! first arrived appdata offset should be 0")
-                # sys.exit()
-                # current implementation: ignore the whole appdata as if it never arrived to this vehicle.
-                return
-
             owner_datas[appdata.header.serial] = AppData(
                 appdata.header,
-                appdata.bits,
+                0,
                 0
             )
-            return
-        # the depivered data is already intact
+        # the delivered data is already intact
         elif(owner_datas[appdata.header.serial].bits ==
              owner_datas[appdata.header.serial].header.total_bits):
             return
+
         # for deform data, process receive data
         deform_data = owner_datas[appdata.header.serial]
         # if receive data offset start before the deform data size
@@ -80,10 +74,9 @@ class Application:
         # if receive data offset start after the deform data size
         # then this receive data provides advanced/non-continuous bits to the deform data
         else:
-            # TODO: receive the data and save it
-            GV.ERROR.Log("ERROR!Received Advanced Appdata!!!")
-            # sys.exit()
+            self.RecvAdvanceData(social_group, appdata)
             return
+
         # if the appdata has became intact
         if(deform_data.bits >= deform_data.header.total_bits):
             self.DataIntact(social_group, appdata)
@@ -91,11 +84,23 @@ class Application:
     def DataIntact(self, social_group: SocialGroup, appdata: AppData):
         print("Data Intact")
 
+    def RecvAdvanceData(self, social_group: SocialGroup, appdata: AppData):
+        # TODO: receive the data and save it
+        header = appdata.header
+        GV.ERROR.Log(
+            "[{}][app][{}]receive advance appdata!(new:{}|old:{})".format(
+                self.owner.name,
+                social_group,
+                appdata,
+                self.data_inbox[header.owner.name][header.serial]
+            )
+        )
+        # sys.exit()
+
 
 class VehicleApplication(Application):
     def __init__(self, vehicle):
-        super().__init__()
-        self.vehicle = vehicle
+        super().__init__(vehicle)
         # The last time when this vehicle recorder generates upload request
         self.prev_gen_time = 0
         # The social group upload data list
@@ -109,7 +114,7 @@ class VehicleApplication(Application):
     # Receive application data
     def RecvData(self, social_group: SocialGroup, appdata: AppData):
         # if the appdata was sent by this application, don't receive it.
-        if(appdata.header.owner == self.vehicle):
+        if(appdata.header.owner == self.owner):
             return
         # if the appdata became intact
         Application.RecvData(self, social_group, appdata)
@@ -117,15 +122,15 @@ class VehicleApplication(Application):
     def DataIntact(self, social_group: SocialGroup, appdata: AppData):
         GV.DEBUG.Log(
             "[{}][app][{}]:data intact.({})".format(
-                self.vehicle.name,
+                self.owner.name,
                 social_group.fname.lower(),
                 appdata.header
             )
         )
         GV.STATISTIC_RECORDER.VehicleReceivedIntactAppdata(
             social_group,
-            appdata.header,
-            self.vehicle
+            self.owner,
+            appdata.header
         )
 
     # Send application data
@@ -147,7 +152,7 @@ class VehicleApplication(Application):
                     self.datas[group].append(
                         AppData(
                             AppDataHeader(
-                                self.vehicle,
+                                self.owner,
                                 data_size,
                                 self.data_counter,
                                 GV.SUMO_SIM_INFO.getTime()
@@ -160,20 +165,19 @@ class VehicleApplication(Application):
 
 
 class NetworkCoreApplication(Application):
-    def __init__(self, core_ctrlr):
-        super().__init__()
-        self.core_ctrlr = core_ctrlr
+    def __init__(self, owner):
+        super().__init__(owner)
 
     def DataIntact(self, social_group: SocialGroup, appdata: AppData):
         GV.DEBUG.Log(
             "[{}][app][{}]:data intact.({})".format(
-                self.core_ctrlr.name,
+                self.owner.name,
                 social_group.fname.lower(),
                 appdata.header
             )
         )
         # propagate the appdata to other base stations
-        self.core_ctrlr.StartPropagation(
+        self.owner.StartPropagation(
             social_group,
             appdata.header
         )
