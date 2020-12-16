@@ -12,10 +12,9 @@ import os
 class AppdataStatistic:
     def __init__(self):
         self.time_veh_recv = {}
-        self.time_bs_txq_enter = [0 for _ in GV.NET_STATION_CONTROLLER]
-        self.time_bs_txq_exit = [0 for _ in GV.NET_STATION_CONTROLLER]
-        self.time_bs_tx_beg = [0 for _ in GV.NET_STATION_CONTROLLER]
-        self.time_bs_tx_end = [0 for _ in GV.NET_STATION_CONTROLLER]
+        self.time_bs_txq = [[] for _ in GV.NET_STATION_CONTROLLER]
+        self.time_bs_tx = [[] for _ in GV.NET_STATION_CONTROLLER]
+        self.data_drop = [False for _ in GV.NET_STATION_CONTROLLER]
 
 
 class StatisticRecorder:
@@ -35,32 +34,32 @@ class StatisticRecorder:
         record = self.GetAppdataRecord(sg, header)
         record.time_veh_recv[vehicle] = GV.SUMO_SIM_INFO.getTime()
 
-    def BaseStationAppdataEnterTXQ(self, sg, bs, header):
-        record = self.GetAppdataRecord(sg, header)
-        record.time_bs_txq_enter[bs] = (
-            # if  the appdata entered the txq at current time slot
-            # then the appdata should account the waiting time in txq
-            # start from the beginning of the next subframe(net step)
-            GV.SUMO_SIM_INFO.getTimeNS() + NET_SECONDS_PER_STEP
-        )
+    def BaseStationAppdataEnterTXQ(self, sg, bs, headers):
+        for header in headers:
+            record = self.GetAppdataRecord(sg, header)
+            record.time_bs_txq[bs].append([0, 0])
+            record.time_bs_txq[bs][-1][0] = GV.SUMO_SIM_INFO.getTime()
 
-    def BaseStationAppdataExitTXQ(self, sg, bs, header):
-        record = self.GetAppdataRecord(sg, header)
-        record.time_bs_txq_exit[bs] = (
-            GV.SUMO_SIM_INFO.getTimeNS()
-        )
+    def BaseStationAppdataExitTXQ(self, sg, bs, headers):
+        for header in headers:
+            record = self.GetAppdataRecord(sg, header)
+            record.time_bs_txq[bs][-1][1] = GV.SUMO_SIM_INFO.getTime()
 
-    def BaseStationAppdataStartTX(self, sg, bs, header, start_ts):
-        record = self.GetAppdataRecord(sg, header)
-        record.time_bs_tx_beg[bs] = (
-            GV.SUMO_SIM_INFO.getTime() + start_ts * NET_SECONDS_PER_TS
-        )
+    def BaseStationAppdataStartTX(self, sg, bs, headers):
+        for header in headers:
+            record = self.GetAppdataRecord(sg, header)
+            record.time_bs_tx[bs].append([0, 0])
+            record.time_bs_tx[bs][-1][0] = GV.SUMO_SIM_INFO.getTime()
 
-    def BaseStationAppdataEndTX(self, sg, bs, header, end_ts):
-        record = self.GetAppdataRecord(sg, header)
-        record.time_bs_tx_end[bs] = (
-            GV.SUMO_SIM_INFO.getTime() + end_ts * NET_SECONDS_PER_TS
-        )
+    def BaseStationAppdataEndTX(self, sg, bs, headers):
+        for header in headers:
+            record = self.GetAppdataRecord(sg, header)
+            record.time_bs_tx[bs][-1][1] = GV.SUMO_SIM_INFO.getTime()
+
+    def BaseStationAppdataDrop(self, sg, bs, headers):
+        for header in headers:
+            record = self.GetAppdataRecord(sg, header)
+            record.data_drop[bs] = True
 
     def VehicleReceivedIntactAppdataReport(self):
         sg_stats = {}
@@ -136,17 +135,36 @@ class StatisticRecorder:
                 # evaluate record
                 for bs in GV.NET_STATION_CONTROLLER:
                     serial = bs.serial
-                    time_enter = record.time_bs_txq_enter[serial]
-                    time_exit = record.time_bs_txq_exit[serial]
-                    if(time_enter * time_exit > 0):
-                        # only estimate appdata that have waited in a tx queue
-                        if(math.isclose(time_enter, time_exit)):
-                            continue
-                        txq_wait_time = time_exit - time_enter
-                        record_total_txq_wait_count += 1
-                        record_total_txq_wait_time += txq_wait_time
-                        record_max_txq_wait_time = record_max_txq_wait_time if record_max_txq_wait_time > txq_wait_time else txq_wait_time
-                        record_min_txq_wait_time = record_min_txq_wait_time if record_min_txq_wait_time < txq_wait_time else txq_wait_time
+                    bs_total_txq_wait_time = 0
+                    # ignore if this base station never receive the appdata from core
+                    # or if this base station never allocate resource to this appdata
+                    if(record.data_drop[serial]):
+                        continue
+                    # sum up total base station txq wait time.
+                    for time_pair in record.time_bs_txq[serial]:
+                        time_enter = time_pair[0]
+                        time_exit = time_pair[1]
+                        if(time_enter * time_exit > 0):
+                            # ignore trivial values
+                            if(math.isclose(time_enter, time_exit)):
+                                continue
+                            bs_total_txq_wait_time += time_exit - time_enter
+                    # ignore if there's no waiting time.
+                    # if bs_total_txq_wait_time == 0:
+                    #     continue
+                    # add txq wait time to record.
+                    record_total_txq_wait_count += 1
+                    record_total_txq_wait_time += bs_total_txq_wait_time
+                    record_max_txq_wait_time = (
+                        record_max_txq_wait_time
+                        if record_max_txq_wait_time > bs_total_txq_wait_time
+                        else bs_total_txq_wait_time
+                    )
+                    record_min_txq_wait_time = (
+                        record_min_txq_wait_time
+                        if record_min_txq_wait_time < bs_total_txq_wait_time
+                        else bs_total_txq_wait_time
+                    )
                 # record summery
                 record_avg_txq_wait_time = (
                     0 if record_total_txq_wait_count == 0
@@ -168,7 +186,7 @@ class StatisticRecorder:
                 sg_total_txq_wait_count += record_total_txq_wait_count
                 sg_max_txq_wait_time = sg_max_txq_wait_time if sg_max_txq_wait_time > record_max_txq_wait_time else record_max_txq_wait_time
                 sg_min_txq_wait_time = sg_min_txq_wait_time if sg_min_txq_wait_time < record_min_txq_wait_time else record_min_txq_wait_time
-            # simulation summery
+            # simulation summary
             sg_avg_txq_wait_time = (
                 0 if sg_total_txq_wait_count == 0
                 else sg_total_txq_wait_time / sg_total_txq_wait_count
@@ -194,7 +212,7 @@ class StatisticRecorder:
             sg_total_tx_count = 0
             sg_avg_tx_time = 0
             for header, record in self.sg_header[sg].items():
-                # the time for this appdata delivered by all base stations.
+                # the time for this appdata to deliver by all base stations.
                 record_max_tx_time = float('-inf')
                 record_min_tx_time = float('inf')
                 record_total_tx_time = 0
@@ -202,14 +220,32 @@ class StatisticRecorder:
                 # evaluate record
                 for bs in GV.NET_STATION_CONTROLLER:
                     serial = bs.serial
-                    time_begin = record.time_bs_tx_beg[serial]
-                    time_end = record.time_bs_tx_end[serial]
-                    if(time_begin * time_end > 0):
-                        tx_time = time_end - time_begin
-                        record_total_tx_count += 1
-                        record_total_tx_time += tx_time
-                        record_max_tx_time = record_max_tx_time if record_max_tx_time > tx_time else tx_time
-                        record_min_tx_time = record_min_tx_time if record_min_tx_time < tx_time else tx_time
+                    bs_total_tx_time = 0
+                    # ignore if base station never transmit this appdata.
+                    if record.data_drop[serial]:
+                        continue
+                    # sum up all the base station tx time
+                    for time_pair in record.time_bs_tx[serial]:
+                        time_begin = time_pair[0]
+                        time_end = time_pair[1]
+                        if(time_begin * time_end > 0):
+                            # ignore trivial values
+                            if(math.isclose(time_begin, time_end)):
+                                continue
+                            bs_total_tx_time += time_end - time_begin
+                    # add tx time to record
+                    record_total_tx_count += 1
+                    record_total_tx_time += bs_total_tx_time
+                    record_max_tx_time = (
+                        record_max_tx_time
+                        if record_max_tx_time > bs_total_tx_time
+                        else bs_total_tx_time
+                    )
+                    record_min_tx_time = (
+                        record_min_tx_time
+                        if record_min_tx_time < bs_total_tx_time
+                        else bs_total_tx_time
+                    )
                 # record summery
                 record_avg_tx_time = (
                     0 if record_total_tx_count == 0

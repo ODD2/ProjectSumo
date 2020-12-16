@@ -1,7 +1,7 @@
 import pickle
 from od.social import SocialGroup
 statistic = None
-with open("stats/res_alloc_type(NOMA_OPT) req_rsu(True) appdata_poisson(5).object", "rb") as file:
+with open("stats/res_alloc_type(NOMA_OPT) req_rsu(True) appdata_poisson(1).object", "rb") as file:
     statistic = pickle.load(file)
 
 maxi = float("-inf")

@@ -60,6 +60,9 @@ class BaseStationController:
 
     # process uploading/downloading packages
     def ProcessPackage(self, timeslot):
+        # Define variables
+        stats_appdata_trans_beg = [set() for _ in SocialGroup]  # statistic
+        stats_appdata_trans_end = [set() for _ in SocialGroup]  # statistic
         # Upload
         for pkg in self.pkg_in_proc[LinkType.UPLINK]:
             if timeslot == (pkg.offset_ts + pkg.trans_ts):
@@ -72,14 +75,15 @@ class BaseStationController:
                     )
                 )
                 self.PackageDelivered(pkg)
-        # .remove delivered packages
+        # .remove uploaded data
         self.pkg_in_proc[LinkType.UPLINK] = [
             pkg
             for pkg in self.pkg_in_proc[LinkType.UPLINK]
-            if (pkg.offset_ts+pkg.trans_ts) > timeslot
+            if pkg.offset_ts + pkg.trans_ts > timeslot
         ]
         # Download
         for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
+            # package start transmission
             if(pkg.offset_ts == timeslot):
                 GV.DEBUG.Log(
                     "[{}][package][{}]:deliver.({})".format(
@@ -88,12 +92,44 @@ class BaseStationController:
                         pkg
                     )
                 )
-        # . remove sent packages
+                # record the application data that ended transmission at current timeslot
+                stats_appdata_trans_beg[pkg.social_group].update(
+                    list(map(
+                        lambda x: x.header,
+                        pkg.appdatas
+                    ))
+                )
+            # package end transmission
+            elif(timeslot == pkg.offset_ts + pkg.trans_ts):
+                # record the application data that ended transmission at current timeslot
+                stats_appdata_trans_end[pkg.social_group].update(
+                    list(map(
+                        lambda x: x.header,
+                        pkg.appdatas
+                    ))
+                )
+        # .remove downloaded data
         self.pkg_in_proc[LinkType.DOWNLINK] = [
             pkg
             for pkg in self.pkg_in_proc[LinkType.DOWNLINK]
-            if(pkg.offset_ts) > timeslot
+            if pkg.offset_ts + pkg.trans_ts > timeslot
         ]
+        # Statistic
+        for sg in SocialGroup:
+            if(len(stats_appdata_trans_beg[sg]) > 0):
+                GV.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
+                    sg, self, stats_appdata_trans_beg[sg]
+                )
+                GV.STATISTIC_RECORDER.BaseStationAppdataStartTX(
+                    sg, self, stats_appdata_trans_beg[sg]
+                )
+            if(len(stats_appdata_trans_end[sg]) > 0):
+                GV.STATISTIC_RECORDER.BaseStationAppdataEndTX(
+                    sg, self, stats_appdata_trans_end[sg]
+                )
+                GV.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
+                    sg, self, stats_appdata_trans_end[sg]
+                )
 
     # process delivered packages
     def PackageDelivered(self, package: NetworkPackage):
@@ -185,7 +221,7 @@ class BaseStationController:
 
     # arrange downlink resource
     def ArrangeDownlinkResource(self):
-        if  (GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA):
+        if (GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA):
             self.ArrangeDownlinkResourceOMA()
         elif (GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.NOMA_OPT):
             self.ArrangeDownlinkResourceNOMA()
@@ -204,6 +240,14 @@ class BaseStationController:
             for social_group in self.sg_brdcst_datas[qos].keys():
                 # if this base station has no subscribers in this social group
                 if(len(self.sg_sub_vehs[social_group]) == 0):
+                    GV.STATISTIC_RECORDER.BaseStationAppdataDrop(
+                        social_group,
+                        self,
+                        list(map(
+                            lambda x: x.header,
+                            self.sg_brdcst_datas[qos][social_group]
+                        ))
+                    )
                     # clear all broadcast appdatas of this social group
                     # cause there's no receiver
                     self.sg_brdcst_datas[qos][social_group] = []
@@ -252,14 +296,6 @@ class BaseStationController:
                     # start appdata collection
                     while(data_delivering < datas_count and remain_bits > 0):
                         appdata = self.sg_brdcst_datas[qos][social_group][data_delivering]
-                        # ===STATISTIC===
-                        if(appdata.offset == 0):
-                            GV.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
-                                social_group, self, appdata.header
-                            )
-                            GV.STATISTIC_RECORDER.BaseStationAppdataStartTX(
-                                social_group, self, appdata.header, offset_ts
-                            )
                         # actual transmit bit
                         trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
                         package_appdatas.append(
@@ -278,10 +314,6 @@ class BaseStationController:
                         # if there's no bits to deliver move on to the next appdata
                         if(appdata.bits == 0):
                             data_delivering += 1
-                            #  ===STATISTIC===
-                            GV.STATISTIC_RECORDER.BaseStationAppdataEndTX(
-                                social_group, self, appdata.header, offset_ts + sg_rb_ts
-                            )
                     # collection done, remove appdatas that have been delivered
                     self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][data_delivering:]
                     # create package
@@ -321,6 +353,15 @@ class BaseStationController:
                 # if this base station has no subscribers in this social group
                 group_size = len(self.sg_sub_vehs[social_group])
                 if(group_size == 0):
+                    # Statistic
+                    GV.STATISTIC_RECORDER.BaseStationAppdataDrop(
+                        social_group,
+                        self,
+                        list(map(
+                            lambda x: x.header,
+                            self.sg_brdcst_datas[qos][social_group]
+                        ))
+                    )
                     # clear all broadcast appdatas of this social group
                     # cause there's no receiver
                     self.sg_brdcst_datas[qos][social_group] = []
@@ -410,15 +451,6 @@ class BaseStationController:
                                 package_appdatas = []
                                 while(deliver_index < appdata_num and remain_bits > 0):
                                     appdata = self.sg_brdcst_datas[qos][social_group][deliver_index]
-                                    # ===STATISTIC===
-                                    if(appdata.offset == 0):
-                                        GV.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
-                                            social_group, self, appdata.header
-                                        )
-                                        GV.STATISTIC_RECORDER.BaseStationAppdataStartTX(
-                                            social_group, self, appdata.header, offset_ts
-                                        )
-
                                     # calculate the total bits that could actually transmit
                                     trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
                                     # add data into package
@@ -438,11 +470,6 @@ class BaseStationController:
                                     # if there's no bits to deliver move on to the next appdata
                                     if(appdata.bits == 0):
                                         deliver_index += 1
-                                        #  ===STATISTIC===
-                                        GV.STATISTIC_RECORDER.BaseStationAppdataEndTX(
-                                            social_group, self, appdata.header, offset_ts + sg_rb_ts
-                                        )
-
                                 # collection done, remove appdatas that have been delivered
                                 self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][deliver_index:]
                                 # create package
@@ -483,7 +510,7 @@ class BaseStationController:
 
         # STATISTIC
         GV.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
-            social_group, self, header
+            social_group, self, [header]
         )
 
     # Function called by VehicleRecorder to subscribe to a specific social group on this base station

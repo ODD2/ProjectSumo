@@ -34,14 +34,14 @@ class ResourceAllocatorOMA:
                 self.alloc_resources[1] -= bandwidth
                 offset_timeslot = 0
         elif (bandwidth == NET_RB_BW_UNIT*2 and timeslots == 1):
-            max_res_ts = 0
+            higer_bandwidth_ts = 0
             for ts in range(self.max_timeslots):
-                if self.alloc_resources[ts] > self.alloc_resources[max_res_ts]:
-                    max_res_ts = ts
+                if self.alloc_resources[ts] > self.alloc_resources[higer_bandwidth_ts]:
+                    higer_bandwidth_ts = ts
 
-            if(self.alloc_resources[max_res_ts] >= bandwidth):
-                self.alloc_resources[max_res_ts] -= bandwidth
-                offset_timeslot = max_res_ts
+            if(self.alloc_resources[higer_bandwidth_ts] >= bandwidth):
+                self.alloc_resources[higer_bandwidth_ts] -= bandwidth
+                offset_timeslot = higer_bandwidth_ts
         else:
             GV.DEBUG.Log(
                 "Error!! This allocator only works on 2x1 or 1x2 resource block allocation"
