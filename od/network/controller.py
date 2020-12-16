@@ -116,19 +116,21 @@ class BaseStationController:
         ]
         # Statistic
         for sg in SocialGroup:
+            # record transmission begin after recording transmission end,
+            # the sequence matters!!
+            if(len(stats_appdata_trans_end[sg]) > 0):
+                GV.STATISTIC_RECORDER.BaseStationAppdataEndTX(
+                    sg, self, stats_appdata_trans_end[sg]
+                )
+                GV.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
+                    sg, self, stats_appdata_trans_end[sg]
+                )
             if(len(stats_appdata_trans_beg[sg]) > 0):
                 GV.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
                     sg, self, stats_appdata_trans_beg[sg]
                 )
                 GV.STATISTIC_RECORDER.BaseStationAppdataStartTX(
                     sg, self, stats_appdata_trans_beg[sg]
-                )
-            if(len(stats_appdata_trans_end[sg]) > 0):
-                GV.STATISTIC_RECORDER.BaseStationAppdataEndTX(
-                    sg, self, stats_appdata_trans_end[sg]
-                )
-                GV.STATISTIC_RECORDER.BaseStationAppdataReturnTXQ(
-                    sg, self, stats_appdata_trans_end[sg]
                 )
 
     # process delivered packages
@@ -190,15 +192,17 @@ class BaseStationController:
                         rbsize = req_rbsize_pair[1]
                         max_rb_req = math.ceil(req.total_bits / rbsize)
                         ts_rb_req = [0 for _ in range(NET_TS_PER_NET_STEP)]
+                        # allocate resource block
                         for _ in range(max_rb_req):
-                            # allocate
+                            # try allocate
                             offset_ts = ra_oma.Allocate(
                                 req_bw_per_rb, req_ts_per_rb
                             )
-                            # unable to allocate
+                            # allocate failed
                             if(offset_ts < 0):
                                 rb_res_lack = True
                                 break
+                            # alloca success
                             ts_rb_req[offset_ts] += 1
                         # notify request owner for granted resources
                         for ts in range(NET_TS_PER_NET_STEP):
@@ -278,7 +282,7 @@ class BaseStationController:
                 # total required resource blocks for this social group
                 sg_total_req_rb = math.ceil(sg_total_bits/sg_rb_bits)
                 # allocate resource blocks
-                sg_ts_req_rb = [0 for _ in NET_TS_PER_NET_STEP]
+                sg_ts_req_rb = [0 for _ in range(NET_TS_PER_NET_STEP)]
                 for _ in range(sg_total_req_rb):
                     offset_ts = ra_oma.Allocate(
                         sg_rb_bw, sg_rb_ts
@@ -297,14 +301,11 @@ class BaseStationController:
                         package_appdatas = []
                         remain_bits = sg_rb_bits
                         # the appdata index that is currently collecting
-                        data_delivering = 0
-                        # the total amount of appdatas
-                        datas_count = len(
-                            self.sg_brdcst_datas[qos][social_group]
-                        )
-                        # start appdata collection
-                        while(data_delivering < datas_count and remain_bits > 0):
-                            appdata = self.sg_brdcst_datas[qos][social_group][data_delivering]
+                        data_i = 0
+                        data_num = len(self.sg_brdcst_datas[qos][social_group])
+                        # collect package appdata
+                        while (data_i < data_num and remain_bits > 0):
+                            appdata = self.sg_brdcst_datas[qos][social_group][data_i]
                             # actual transmit bit
                             trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
                             package_appdatas.append(
@@ -320,11 +321,11 @@ class BaseStationController:
                             appdata.bits -= trans_bits
                             # add delivered bits
                             appdata.offset += trans_bits
-                            # if there's no bits to deliver move on to the next appdata
-                            if(appdata.bits == 0):
-                                data_delivering += 1
-                        # remove appdatas that have been delivered
-                        self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][data_delivering:]
+                            # appdata totally delivered, serve next appdata
+                            if appdata.bits == 0:
+                                data_i += 1
+                        # remove appdatas in collection
+                        self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][data_i:]
                         # create package
                         package = NetworkPackage(
                             self,
@@ -333,7 +334,7 @@ class BaseStationController:
                             sg_rb_bits-remain_bits,
                             package_appdatas,
                             sg_rb_ts,
-                            offset_ts
+                            ts,
                         )
                         # send package
                         for veh in self.sg_sub_vehs[social_group]:
@@ -517,8 +518,8 @@ class BaseStationController:
             )
         )
         # Statistic
-        GV.STATISTIC_RECORDER.BaseStationAppdataPropagate(
-            social_group, self, header
+        GV.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
+            social_group, self, [header]
         )
 
     # Function called by VehicleRecorder to subscribe to a specific social group on this base station

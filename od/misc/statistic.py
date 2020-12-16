@@ -35,16 +35,14 @@ class StatisticRecorder:
         record.time_veh_recv[vehicle] = GV.SUMO_SIM_INFO.getTime()
 
     # call by BaseStation while receiving new appdata from NetworkCore
-    def BaseStationAppdataPropagate(self, sg, bs, header):
-        record = self.GetAppdataRecord(sg, header)
-        # special case: the appdata received at the current subframe
-        # should start accouting its queue time from the next subframe
-        record.time_bs_txq[bs].append(
-            [GV.SUMO_SIM_INFO.getTimeNS() + NET_SECONDS_PER_STEP, 0]
-        )
+    # def BaseStationAppdataPropagate(self, sg, bs, header):
+    #     record = self.GetAppdataRecord(sg, header)
+    #     record.time_bs_txq[bs].append(
+    #         [GV.SUMO_SIM_INFO.getTimeNS() + NET_SECONDS_PER_STEP, 0]
+    #     )
 
     # call by BaseStation while a appdata returns to TX queue
-    def BaseStationAppdataReturnTXQ(self, sg, bs, headers):
+    def BaseStationAppdataEnterTXQ(self, sg, bs, headers):
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
             record.time_bs_txq[bs].append(
