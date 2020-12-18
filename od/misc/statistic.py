@@ -1,6 +1,7 @@
 # Custom
 from od.social import SocialGroup
-from od.config import SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP, NET_SECONDS_PER_TS
+from od.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
+                       NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS)
 from od.misc.interest import InterestConfig
 import od.vars as GV
 # STD
@@ -157,19 +158,19 @@ class StatisticRecorder:
                 for bs in GV.NET_STATION_CONTROLLER:
                     serial = bs.serial
                     bs_total_txq_wait_time = 0
-                    # ignore if this base station never receive the appdata from core
-                    # or if this base station never allocate resource to this appdata
-                    if(record.time_bs_drop[serial] > 0):
-                        continue
                     # sum up total base station txq wait time.
-                    for time_pair in record.time_bs_txq[serial]:
-                        time_enter = time_pair[0]
-                        time_exit = time_pair[1]
-                        if(time_enter * time_exit > 0):
-                            # ignore trivial values
-                            if(math.isclose(time_enter, time_exit)):
-                                continue
-                            bs_total_txq_wait_time += time_exit - time_enter
+                    for time_interval in record.time_bs_txq[serial]:
+                        time_enter = time_interval[0]
+                        time_exit = time_interval[1]
+                        # Error detection
+                        if(time_enter == 0 or time_exit == 0):
+                            print(
+                                "Error! TXQ time unexpected. {}".format(
+                                    record.time_bs_txq[serial])
+                            )
+                        # accumulate time.
+                        if(not math.isclose(time_enter, time_exit) and time_enter * time_exit > 0):
+                            bs_total_txq_wait_time += (time_exit - time_enter)
                     # ignore if there's no waiting time.
                     if bs_total_txq_wait_time == 0:
                         continue
@@ -306,7 +307,34 @@ class StatisticRecorder:
             }
         return sg_stats
 
+    def Preprocess(self):
+        for sg in SocialGroup:
+            for record in self.sg_header[sg].values():
+                for serial in GV.NET_STATION_CONTROLLER:
+                    # check if the latest enqueue time exceeds the total simulation time
+                    if(record.time_bs_txq[serial][-1][0] > SUMO_TOTAL_SECONDS):
+                        record.time_bs_drop[serial] = SUMO_TOTAL_SECONDS
+                        record.time_bs_txq[serial][-1][0] = SUMO_TOTAL_SECONDS
+
+                    # check if the latest dequeue time is unset
+                    if(record.time_bs_txq[serial][-1][1] == 0):
+                        if(record.time_bs_drop[serial] >= 0):
+                            # if it's unset because it had been dropped by base station
+                            # the dequeue time will be the time it was dropped
+                            record.time_bs_txq[serial][-1][1] = record.time_bs_drop[serial]
+                        elif(record.time_bs_serv[serial] >= 0):
+                            # if it's unset because it had been completely served
+                            # no dequeue time is not required, so is the enqueue time.
+                            record.time_bs_txq[serial].pop()
+                        else:
+                            # if it's unset because the simulation ended (not dropped also not served)
+                            # set the dequeue time to the simulation end time.
+                            record.time_bs_txq[serial][-1][1] = SUMO_TOTAL_SECONDS
+
     def Report(self, save=True):
+        # preprocess the raw statistics
+        self.Preprocess()
+        # create report
         statistic_report = {
             "interest_config": self.interest_config,
             "veh_recv_intact_appdata_trip": self.VehicleReceivedIntactAppdataReport(),

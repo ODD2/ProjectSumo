@@ -8,8 +8,10 @@ import sys
 SUMO_SIM_TIME_SCALER = 100
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = SUMO_SIM_TIME_SCALER*0.001
+# . total sumo simulation seconds
+SUMO_TOTAL_SECONDS = 100
 # . total sumo simulation steps
-SUMO_TOTAL_STEPS = (1 / SUMO_SECONDS_PER_STEP) * 100
+SUMO_TOTAL_STEPS = (1 / SUMO_SECONDS_PER_STEP) * SUMO_TOTAL_SECONDS
 
 # Network Settings
 # . total QoS network channels. qos channel starts from 0.
