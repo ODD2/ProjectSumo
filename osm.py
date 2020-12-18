@@ -185,7 +185,7 @@ def main(interest_config):
 if __name__ == "__main__":
     main(
         InterestConfig(
-            ResourceAllocatorType.OMA,
+            ResourceAllocatorType.NOMA_OPT,
             True,
             1
         )

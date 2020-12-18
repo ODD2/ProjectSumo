@@ -14,7 +14,8 @@ class AppdataStatistic:
         self.time_veh_recv = {}
         self.time_bs_txq = [[] for _ in GV.NET_STATION_CONTROLLER]
         self.time_bs_tx = [[] for _ in GV.NET_STATION_CONTROLLER]
-        self.data_drop = [False for _ in GV.NET_STATION_CONTROLLER]
+        self.time_bs_serv = [-1 for _ in GV.NET_STATION_CONTROLLER]
+        self.time_bs_drop = [-1 for _ in GV.NET_STATION_CONTROLLER]
 
 
 class StatisticRecorder:
@@ -73,7 +74,13 @@ class StatisticRecorder:
     def BaseStationAppdataDrop(self, sg, bs, headers):
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
-            record.data_drop[bs] = True
+            record.time_bs_drop[bs] = GV.SUMO_SIM_INFO.getTime()
+
+    # call by BaseStation when appdata totally served
+    def BaseStationAppdataServe(self, sg, bs, headers):
+        for header in headers:
+            record = self.GetAppdataRecord(sg, header)
+            record.time_bs_serv[bs] = GV.SUMO_SIM_INFO.getTime()
 
     def VehicleReceivedIntactAppdataReport(self):
         sg_stats = {}
@@ -152,7 +159,7 @@ class StatisticRecorder:
                     bs_total_txq_wait_time = 0
                     # ignore if this base station never receive the appdata from core
                     # or if this base station never allocate resource to this appdata
-                    if(record.data_drop[serial]):
+                    if(record.time_bs_drop[serial] > 0):
                         continue
                     # sum up total base station txq wait time.
                     for time_pair in record.time_bs_txq[serial]:
@@ -236,7 +243,9 @@ class StatisticRecorder:
                     serial = bs.serial
                     bs_total_tx_time = 0
                     # ignore if base station never transmit this appdata.
-                    if record.data_drop[serial]:
+                    # or if base station did not seccessfully transmit the appdata.
+                    if(record.time_bs_drop[serial] > 0 or
+                       record.time_bs_serv[serial] < 0):
                         continue
                     # sum up all the base station tx time
                     for time_pair in record.time_bs_tx[serial]:

@@ -1,38 +1,9 @@
-from od.social import SocialGroup
-from od.config import NET_SG_RND_REQ_SIZE
+from __future__ import annotations
 from numpy import random
+from od.network.appdata import AppData, AppDataHeader
+from od.config import NET_SG_RND_REQ_SIZE
+from od.social import SocialGroup
 import od.vars as GV
-
-
-class AppDataHeader:
-    def __init__(self, owner, total_bits, serial: int, at: float):
-        self.owner = owner
-        self.total_bits = total_bits
-        self.serial = serial
-        self.at = at
-        self.id = "{}-{}".format(self.owner.name, self.serial)
-
-    def __str__(self):
-        return "AppDataHeader({},{}b,{}s)".format(
-            self.id,
-            self.total_bits,
-            self.at
-        )
-
-
-class AppData:
-    def __init__(self, header: AppDataHeader, bits: int, offset: int):
-        self.header = header
-        self.bits = bits
-        self.offset = offset
-
-    def __str__(self):
-        return "Appdata({}-{},{}o+{}b)".format(
-            self.header.owner.name,
-            self.header.serial,
-            self.offset,
-            self.bits
-        )
 
 
 class Application:
@@ -139,7 +110,8 @@ class VehicleApplication(Application):
             self.prev_gen_time = GV.SUMO_SIM_INFO.getTime()
             for group in SocialGroup:
                 # TODO: Make the random poisson be social group dependent
-                for _ in range(random.poisson(GV.APP_DATA_POISSON)):
+                # for _ in range(random.poisson(GV.APP_DATA_POISSON)):
+                for _ in range(random.randint(0, GV.APP_DATA_POISSON+1)):
                     # get the range of random generated data size (byte)
                     data_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
                     # size of data (bit)

@@ -2,7 +2,8 @@ from .connection import ConnectionState, ConnectionRecorder, SharedConnection
 from .monitor import NetworkStatusMonitor
 from od.network.types import BaseStationType, LinkType
 from od.network.package import NetworkPackage
-from od.network.application import AppData, VehicleApplication
+from od.network.application import VehicleApplication
+from od.network.appdata import AppData
 from od.social import SocialGroup
 import od.vars as GV
 import traci

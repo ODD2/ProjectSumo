@@ -33,17 +33,13 @@ NET_RB_BW_REQ_TS = {2 * NET_RB_BW_UNIT: 1,
 NET_SG_RND_REQ_SIZE = {
     SocialGroup.CRITICAL: [300, 1100],
     SocialGroup.GENERAL: [64, 2048],
-    # SocialGroup.CRITICAL: [10, 50],
-    # SocialGroup.GENERAL: [20, 100],
 }
 
 # Base Station Settings
 # . base station's total bandwidth
-BS_TOTAL_BANDWIDTH = {
+BS_TOTAL_BAND = {
     BaseStationType.UMA: 20000000,
     BaseStationType.UMI: 10000000
-    # BaseStationType.UMA: 200000,
-    # BaseStationType.UMI: 100000,
 }
 
 # . base station's frequency

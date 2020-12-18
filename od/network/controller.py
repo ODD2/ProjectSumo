@@ -1,6 +1,7 @@
 from od.social import SocialGroup
 from od.network.types import LinkType
-from od.network.application import AppData, AppDataHeader, NetworkCoreApplication
+from od.network.application import NetworkCoreApplication
+from od.network.appdata import AppData, AppDataHeader
 from od.network.package import NetworkPackage
 from od.network.types import BroadcastObject, BaseStationType, ResourceAllocatorType
 from od.vehicle.request import UploadRequest, ResendRequest
@@ -8,7 +9,7 @@ from od.network.allocator import ResourceAllocatorOMA
 from od.config import (NET_TS_PER_NET_STEP, NET_QOS_CHNLS, NET_RB_BW_REQ_TS,
                        NET_RB_SLOT_SYMBOLS, NET_RB_BW_UNIT,
                        BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
-                       BS_TOTAL_BANDWIDTH, BS_RADIUS,
+                       BS_TOTAL_BAND, BS_RADIUS,
                        BS_TRANS_PWR)
 import od.engine as GE
 import od.vars as GV
@@ -150,7 +151,7 @@ class BaseStationController:
     def ArrangeUplinkResource(self):
         # OMA resource allocator
         ra_oma = ResourceAllocatorOMA(
-            BS_TOTAL_BANDWIDTH[self.type]*0.9,
+            BS_TOTAL_BAND[self.type]*0.9,
             NET_TS_PER_NET_STEP
         )
         # Serve requests
@@ -233,7 +234,7 @@ class BaseStationController:
     def ArrangeDownlinkResourceOMA(self):
         # OMA resource allocator
         ra_oma = ResourceAllocatorOMA(
-            BS_TOTAL_BANDWIDTH[self.type]*0.9,
+            BS_TOTAL_BAND[self.type]*0.9,
             NET_TS_PER_NET_STEP
         )
         # TODO: Serve Resend Requests
@@ -324,6 +325,12 @@ class BaseStationController:
                             # appdata totally delivered, serve next appdata
                             if appdata.bits == 0:
                                 data_i += 1
+                                # Statistic - appdata serve timestamp
+                                GV.STATISTIC_RECORDER.BaseStationAppdataServe(
+                                    social_group,
+                                    self,
+                                    [appdata.header]
+                                )
                         # remove appdatas in collection
                         self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][data_i:]
                         # create package
@@ -345,10 +352,9 @@ class BaseStationController:
     # arrange downlink resource in NOMA
     def ArrangeDownlinkResourceNOMA(self):
         # TODO: Serve Resend Requests
-
         # Simulation config for matlab optimizer
         SIM_CONF = {
-            "rbf_h": float(100),
+            "rbf_h": float(round(BS_TOTAL_BAND[self.type]/NET_RB_BW_UNIT*0.9)),
             "rbf_w": float(2),
             "max_pwr": float(BS_TRANS_PWR[self.type]),
         }
@@ -480,6 +486,12 @@ class BaseStationController:
                                     # if there's no bits to deliver move on to the next appdata
                                     if(appdata.bits == 0):
                                         deliver_index += 1
+                                        # Statistic - appdata serve timestamp
+                                        GV.STATISTIC_RECORDER.BaseStationAppdataServe(
+                                            social_group,
+                                            self,
+                                            [appdata.header]
+                                        )
                                 # collection done, remove appdatas that have been delivered
                                 self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][deliver_index:]
                                 # create package

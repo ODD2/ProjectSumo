@@ -1,5 +1,5 @@
 from od.social import SocialGroup
-from od.network.application import AppData
+from od.network.appdata import AppData
 
 
 class NetworkPackage:

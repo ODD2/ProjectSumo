@@ -1,5 +1,5 @@
 from od.vehicle import VehicleRecorder
-from od.network.application import AppDataHeader
+from od.network.appdata import AppDataHeader
 
 
 # Requests from vehicles for upload resources
