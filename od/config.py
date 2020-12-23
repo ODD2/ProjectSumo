@@ -5,11 +5,11 @@ import sys
 
 # Sumo Simulation Settings
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 100
+SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
-SUMO_SECONDS_PER_STEP = SUMO_SIM_TIME_SCALER*0.001
+SUMO_SECONDS_PER_STEP = SUMO_SIM_TIME_SCALER*0.1
 # . total sumo simulation seconds
-SUMO_TOTAL_SECONDS = 100
+SUMO_TOTAL_SECONDS = 1
 # . total sumo simulation steps
 SUMO_TOTAL_STEPS = (1 / SUMO_SECONDS_PER_STEP) * SUMO_TOTAL_SECONDS
 
@@ -100,7 +100,7 @@ BS_PRESET = {
     },
     "bs2": {
         "color": (0, 0, 0, 255),
-        "pos": (220, 200),
+        "pos": (127, 217),
         "img": os.getcwd() + "/wifi.png",
         "width": 5,
         "height": 3.9,
@@ -108,7 +108,31 @@ BS_PRESET = {
     },
     "bs3": {
         "color": (0, 0, 0, 255),
-        "pos": (363, 204),
+        "pos": (52, 145),
+        "img": os.getcwd() + "/wifi.png",
+        "width": 5,
+        "height": 3.9,
+        "type": BaseStationType.UMI,
+    },
+    "bs4": {
+        "color": (0, 0, 0, 255),
+        "pos": (315, 395),
+        "img": os.getcwd() + "/wifi.png",
+        "width": 5,
+        "height": 3.9,
+        "type": BaseStationType.UMI,
+    },
+    "bs5": {
+        "color": (0, 0, 0, 255),
+        "pos": (270, 50),
+        "img": os.getcwd() + "/wifi.png",
+        "width": 5,
+        "height": 3.9,
+        "type": BaseStationType.UMI,
+    },
+    "bs6": {
+        "color": (0, 0, 0, 255),
+        "pos": (525, 95),
         "img": os.getcwd() + "/wifi.png",
         "width": 5,
         "height": 3.9,

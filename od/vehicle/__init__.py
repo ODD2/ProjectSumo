@@ -7,6 +7,7 @@ from od.network.appdata import AppData
 from od.social import SocialGroup
 import od.vars as GV
 import traci
+import traci.constants as tc
 
 
 class VehicleRecorder():
@@ -14,6 +15,8 @@ class VehicleRecorder():
     def __init__(self, name):
         # Vehicle ID
         self.name = name
+        # Subscribe
+        traci.vehicle.subscribe(self.name, [tc.VAR_POSITION])
 
         # Vehicle Position
         self.pos = (0, 0)
@@ -43,6 +46,7 @@ class VehicleRecorder():
         self.UpdateVehicleInfo()
         self.CheckSubscribeBSValidity()
         self.SelectBestSocialBS()
+        self.LinkStateUpdate()
 
     # Update per network simulation step
     def UpdateNS(self, ns):
@@ -51,14 +55,14 @@ class VehicleRecorder():
 
     # Update per timeslot
     def UpdateT(self, ts):
-        self.LinkStateUpdate()
         self.ProcessPackage(ts)
 
     # Update vehicle info from sumo
     def UpdateVehicleInfo(self):
-        GV.TRACI_LOCK.acquire()
-        self.pos = traci.vehicle.getPosition(self.name)
-        GV.TRACI_LOCK.release()
+        # GV.TRACI_LOCK.acquire()
+        tmp = traci.vehicle.getSubscriptionResults(self.name)
+        self.pos = tmp[tc.VAR_POSITION]
+        # GV.TRACI_LOCK.release()
 
     # Check if the latest subscription base stations still provide services
     def CheckSubscribeBSValidity(self):
@@ -314,7 +318,6 @@ class VehicleRecorder():
             else:
                 # initialize connection state to connect
                 struct.rec.Update()
-                struct.rec.ChangeState(ConnectionState.Connect, True)
 
         # remove non-shared existing connections
         for name in ghost_con:

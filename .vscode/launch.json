@@ -5,16 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: control",
+            "name": "Python: multi",
             "type": "python",
             "request": "launch",
-            "module": "control"
+            "module": "multi"
         },
         {
-            "name": "Python: osm",
+            "name": "Python: single",
             "type": "python",
             "request": "launch",
-            "module": "osm"
+            "module": "single"
         },
         {
             "name": "Python: graph",

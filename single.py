@@ -18,6 +18,8 @@ import os
 import gc
 import sys
 import traci
+import cProfile
+import re
 
 
 # Base Station Indicator Creator
@@ -47,45 +49,50 @@ def CreateBaseStationIndicator(name, setting):
                       radius_color, True, "net_bs_radius", radius_layer)
 
 
-def ParallelUpdateSS(objs):
-    threads = []
-    # Update vehicles (Parellelized)
+def UpdateSS(objs):
+    # Debug
     for obj in objs:
-        threads.append(Thread(target=obj.UpdateSS))
-        threads[-1].start()
+        obj.UpdateSS()
+    return
+
+    # threads = []
+    # Update vehicles (Parellelized)
+    # for obj in objs:
+    #     threads.append(Thread(target=obj.UpdateSS))
+    #     threads[-1].start()
     # Wait until all vehicles to finished their jobs
-    for t in threads:
-        t.join()
+    # for t in threads:
+    #     t.join()
 
 
-def ParallelUpdateNS(objs, ns):
+def UpdateNS(objs, ns):
     # Debug
     for obj in objs:
         obj.UpdateNS(ns)
     return
 
-    threads = []
+    # threads = []
     # Update vehicles (Parellelized)
-    for obj in objs:
-        threads.append(Thread(target=obj.UpdateNS), args=(ns,))
-        threads[-1].start()
+    # for obj in objs:
+    #     threads.append(Thread(target=obj.UpdateNS, args=(ns,)))
+    #     threads[-1].start()
     # Wait until all vehicles to finished their jobs
-    for t in threads:
-        t.join()
+    # for t in threads:
+    #     t.join()
 
 
-def ParallelUpdateT(objs, ts):
+def UpdateT(objs, ts):
     # Debug
     for obj in objs:
         obj.UpdateT(ts)
     return
 
-    threads = []
-    for obj in objs:
-        threads.append(Thread(target=obj.UpdateT, args=(ts,)))
-        threads[-1].start()
-    for t in threads:
-        t.join()
+    # threads = []
+    # for obj in objs:
+    #     threads.append(Thread(target=obj.UpdateT, args=(ts,)))
+    #     threads[-1].start()
+    # for t in threads:
+    #     t.join()
 
 
 def main(interest_config):
@@ -94,7 +101,7 @@ def main(interest_config):
     traci.start([
         "sumo-gui",
         "-c",
-        os.getcwd() + "/osm.sumocfg",
+        os.getcwd() + "/ntust.sumocfg",
         "--quit-on-end",
         "--start",
         "--step-length",
@@ -148,8 +155,8 @@ def main(interest_config):
         GV.NET_STATUS_CACHE.Flush()
 
         # Update vehicle recorders & base stations for sumo simulation step
-        ParallelUpdateSS(vehicle_recorders.values())
-        ParallelUpdateSS(GV.NET_STATION_CONTROLLER)
+        UpdateSS(vehicle_recorders.values())
+        UpdateSS(GV.NET_STATION_CONTROLLER)
 
         # Network simulations per sumo simulation step
         for ns in range(NET_STEPS_PER_SUMO_STEP):
@@ -157,8 +164,8 @@ def main(interest_config):
             GV.SUMO_SIM_INFO.UpdateNS(ns)
 
             # Update vehicle recorders & base stations for each network simulation step
-            ParallelUpdateNS(vehicle_recorders.values(), ns)
-            ParallelUpdateNS(GV.NET_STATION_CONTROLLER, ns)
+            UpdateNS(vehicle_recorders.values(), ns)
+            UpdateNS(GV.NET_STATION_CONTROLLER, ns)
 
             # Time slots per network simulation step
             for ts in range(NET_TS_PER_NET_STEP+1):
@@ -166,8 +173,9 @@ def main(interest_config):
                 GV.SUMO_SIM_INFO.UpdateTS(ts)
 
                 # Update vehicle recorders & base stations for each network timeslot step
-                ParallelUpdateT(vehicle_recorders.values(), ts)
-                ParallelUpdateT(GV.NET_STATION_CONTROLLER, ts)
+                UpdateT(vehicle_recorders.values(), ts)
+                UpdateT(GV.NET_STATION_CONTROLLER, ts)
+
         # add simulation step indicator
         step += 1
 
@@ -183,10 +191,11 @@ def main(interest_config):
 
 
 if __name__ == "__main__":
-    main(
-        InterestConfig(
-            ResourceAllocatorType.NOMA_OPT,
-            True,
-            1
-        )
-    )
+    cProfile.run('main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,1))')
+    # main(
+    #     InterestConfig(
+    #         ResourceAllocatorType.NOMA_OPT,
+    #         True,
+    #         1
+    #     )
+    # )

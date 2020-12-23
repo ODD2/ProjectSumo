@@ -23,34 +23,36 @@ class ConnectionRecorder:
         self.s1 = s1
         self.s2 = s2
         self.state = ConnectionState.Connect
+        self.state_color = (0, 0, 0, 255)
         self.name = "con_{}_{}".format(s1.name, s2.name)
         GV.TRACI_LOCK.acquire()
-        # Create line
+        # # Create line
         traci.polygon.add(self.name, [(0, 0), (0, 0)], (0, 0, 0, 255), False,
                           "Line", NetObjLayer.CON_LINE, 0.1)
         GV.TRACI_LOCK.release()
 
     def Update(self):
+        # Update
         GV.TRACI_LOCK.acquire()
         traci.polygon.setShape(self.name, [self.s1.pos, self.s2.pos])
+        traci.polygon.setColor(self.name, self.state_color)
         GV.TRACI_LOCK.release()
+        # Reset
+        self.ChangeState(ConnectionState.Connect, True)
 
     def ChangeState(self, state: ConnectionState, force=False):
         if (not force and self.state > state):
             return
-
         self.state = state
-
-        GV.TRACI_LOCK.acquire()
         if (state == ConnectionState.Transmit):
-            traci.polygon.setColor(self.name, (255, 165, 0, 255))
+            self.state_color = (255, 165, 0, 255)
         elif (state == ConnectionState.Success):
-            traci.polygon.setColor(self.name, (0, 255, 0, 255))
+            self.state_color = (0, 255, 0, 255)
         else:
-            traci.polygon.setColor(self.name, (0, 0, 0, 255))
-        GV.TRACI_LOCK.release()
+            self.state_color = (0, 0, 0, 255)
 
     def Clean(self):
+        # pass
         GV.TRACI_LOCK.acquire()
         traci.polygon.remove(self.name)
         GV.TRACI_LOCK.release()
