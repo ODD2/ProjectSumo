@@ -15,7 +15,8 @@ class VehicleRecorder():
     def __init__(self, name):
         # Vehicle ID
         self.name = name
-        # Subscribe
+
+        # Traci Subscribe
         traci.vehicle.subscribe(self.name, [tc.VAR_POSITION])
 
         # Vehicle Position
@@ -39,7 +40,7 @@ class VehicleRecorder():
 
     # Destructor
     def __del__(self):
-        self.Clear()
+        self.Leave()
 
     # Update per sumo simulation step
     def UpdateSS(self):
@@ -129,6 +130,9 @@ class VehicleRecorder():
 
     # Unsubscribe base station
     def UnsubscribeBS(self, bs_type, social_group: SocialGroup):
+        # There is no subscription, nothing to do.
+        if (self.sub_sg_bs[bs_type][social_group] == None):
+            return
         # Unsubscribe the base station
         bs_ctrlr = self.sub_sg_bs[bs_type][social_group]
         self.sub_sg_bs[bs_type][social_group] = None
@@ -333,12 +337,17 @@ class VehicleRecorder():
                 )
             self.con_state[opponent.name].share += 1
         else:
-            # Break connection
-            self.con_state[opponent.name].share -= 1
+            if(opponent.name in self.con_state):
+                # Break connection
+                self.con_state[opponent.name].share -= 1
 
-    # Clean up
-    def Clear(self):
+    # Leave Simulation
+    def Leave(self):
         # Clear connection recorders
         for name in self.con_state:
             self.con_state[name].rec.Clean()
         self.con_state = {}
+        # UnSubscribe Any Base Station
+        for i in BaseStationType:
+            for j in SocialGroup:
+                self.UnsubscribeBS(i, j)

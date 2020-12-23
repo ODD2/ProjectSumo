@@ -9,7 +9,7 @@ SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = SUMO_SIM_TIME_SCALER*0.1
 # . total sumo simulation seconds
-SUMO_TOTAL_SECONDS = 1
+SUMO_TOTAL_SECONDS = 180
 # . total sumo simulation steps
 SUMO_TOTAL_STEPS = (1 / SUMO_SECONDS_PER_STEP) * SUMO_TOTAL_SECONDS
 

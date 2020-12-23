@@ -141,14 +141,15 @@ def main(interest_config):
         GV.SUMO_SIM_INFO.UpdateSS()
 
         # remove ghost(non-exist) vehicles
-        for ghost in GV.SUMO_SIM_INFO.ghost_veh_ids:
-            GV.DEBUG.Log("[{}]: left the map.".format(ghost))
-            vehicle_recorders.pop(ghost)
+        for ghost_vid in GV.SUMO_SIM_INFO.ghost_veh_ids:
+            GV.DEBUG.Log("[{}]: left the map.".format(ghost_vid))
+            vehicle_recorders[ghost_vid].Leave()
+            vehicle_recorders.pop(ghost_vid)
 
         # add new vehicles
-        for v_id in GV.SUMO_SIM_INFO.new_veh_ids:
-            GV.DEBUG.Log("[{}]: joined the map.".format(v_id))
-            vehicle_recorders[v_id] = VehicleRecorder(v_id)
+        for vid in GV.SUMO_SIM_INFO.new_veh_ids:
+            GV.DEBUG.Log("[{}]: joined the map.".format(vid))
+            vehicle_recorders[vid] = VehicleRecorder(vid)
 
         # reset network status cache because vehicle positions have updated,
         # which means the cqi/sinr should be re-estimated.
@@ -182,7 +183,7 @@ def main(interest_config):
     # End Simulation
     # - manually destruct vehicle recorder in order to close traci.
     for veh_rec in vehicle_recorders.values():
-        veh_rec.Clear()
+        veh_rec.Leave()
     # - close traci
     traci.close(wait=False)
 
