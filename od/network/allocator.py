@@ -50,8 +50,11 @@ class ResourceAllocatorOMA:
         return offset_timeslot
 
     # Whether there's spare space for allocation
-    def Spare(self):
-        if(self.alloc_resources[0] == 0 and self.alloc_resources[1] == 0):
-            return False
-        else:
-            return True
+    def Spare(self, bandwidth, timeslots):
+        for i in range(0, NET_TS_PER_NET_STEP, timeslots):
+            for j in range(timeslots):
+                if(self.alloc_resources[i+j] < bandwidth):
+                    break
+            else:
+                return True
+        return False

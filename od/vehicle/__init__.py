@@ -5,8 +5,9 @@ from od.network.package import NetworkPackage
 from od.network.application import VehicleApplication
 from od.network.appdata import AppData
 from od.social import SocialGroup
+from od.config import VEH_MOVE_BS_CHECK
+from traci import vehicle
 import od.vars as GV
-import traci
 import traci.constants as tc
 
 
@@ -17,10 +18,13 @@ class VehicleRecorder():
         self.name = name
 
         # Traci Subscribe
-        traci.vehicle.subscribe(self.name, [tc.VAR_POSITION])
+        vehicle.subscribe(self.name, [tc.VAR_POSITION])
 
         # Vehicle Position
         self.pos = (0, 0)
+
+        # Vehicle Position of Latest Base Station Subscribe Process
+        self.chk_pos = (0, 0)
 
         # Best connectivity base station for each social group, categorized by base station type
         self.sub_sg_bs = [[None for j in SocialGroup]
@@ -45,7 +49,6 @@ class VehicleRecorder():
     # Update per sumo simulation step
     def UpdateSS(self):
         self.UpdateVehicleInfo()
-        self.CheckSubscribeBSValidity()
         self.SelectBestSocialBS()
         self.LinkStateUpdate()
 
@@ -60,10 +63,7 @@ class VehicleRecorder():
 
     # Update vehicle info from sumo
     def UpdateVehicleInfo(self):
-        # GV.TRACI_LOCK.acquire()
-        tmp = traci.vehicle.getSubscriptionResults(self.name)
-        self.pos = tmp[tc.VAR_POSITION]
-        # GV.TRACI_LOCK.release()
+        self.pos = vehicle.getSubscriptionResults(self.name)[tc.VAR_POSITION]
 
     # Check if the latest subscription base stations still provide services
     def CheckSubscribeBSValidity(self):
@@ -82,43 +82,73 @@ class VehicleRecorder():
                             invalid_bs.append(bs_ctrlr)
                     else:
                         self.UnsubscribeBS(bs_type, social_group)
+        if(len(invalid_bs) > 0):
+            return False
+        else:
+            return True
 
     # Find and subscribe the base station that provides the best connectivity according to it's social group,
-    # also categorized by it's base station type.
+    # if the vehicle has move away for a specific amount of distance,
+    # or if the connected base station became out of service.
     def SelectBestSocialBS(self):
-        bs_in_range = [[] for i in BaseStationType]
+        # the distance between latest base station check position.
+        d = pow((self.pos[0] - self.chk_pos[0])**2 +
+                (self.pos[1] - self.chk_pos[1])**2,
+                0.5)
 
-        # Find In-Range BaseStations
+        # verify check conditions
+        if(d < VEH_MOVE_BS_CHECK and self.CheckSubscribeBSValidity()):
+            return
+
+        # update the check position
+        self.chk_pos = self.pos
+        # define container
+        bs_closest = [[None, float("inf")] for i in BaseStationType]
+        # find closest in range base station
         for bs_ctrlr in GV.NET_STATION_CONTROLLER:
-            distance = pow((self.pos[0] - bs_ctrlr.pos[0])**2 +
-                           (self.pos[1] - bs_ctrlr.pos[1])**2, 0.5)
-            if distance < bs_ctrlr.radius:
-                bs_in_range[bs_ctrlr.type].append(bs_ctrlr)
-
-        # Find best connectivity base station for social group, filter by base station type
-        for bs_type in BaseStationType:
-            if (len(bs_in_range[bs_type]) == 0):
+            x = (self.pos[0] - bs_ctrlr.pos[0])
+            if(x > bs_ctrlr.radius):
                 continue
-            for social_type in SocialGroup:
-                # Get cqi & sinr for social type
-                multi_net_status = GV.NET_STATUS_CACHE.GetMultiNetStatus([
-                    (self, bs_ctrlr, social_type)
-                    for bs_ctrlr in bs_in_range[bs_type]
-                ])
-                best_idx = 0
-                best_cqi = multi_net_status[0].cqi
-                for idx, net_status in enumerate(multi_net_status):
-                    if net_status.cqi > best_cqi:
-                        best_idx = idx
-                        best_cqi = net_status.cqi
-
-                self.SubscribeBS(bs_type, social_type,
-                                 bs_in_range[bs_type][best_idx])
+            y = (self.pos[1] - bs_ctrlr.pos[1])
+            if(y > bs_ctrlr.radius):
+                continue
+            d = pow(x**2 + y**2, 0.5)
+            if d > bs_ctrlr.radius:
+                continue
+            ctrlr_range = bs_closest[bs_ctrlr.type]
+            if d > ctrlr_range[1]:
+                continue
+            ctrlr_range[0] = bs_ctrlr
+            ctrlr_range[1] = d
+        # cache net status
+        GV.NET_STATUS_CACHE.GetMultiNetStatus([
+            (self, ctrlr_range[0], sg)
+            for sg in SocialGroup
+            for ctrlr_range in bs_closest
+            if ctrlr_range[0] != None
+        ])
+        # subscribe base station
+        for bs_type in BaseStationType:
+            bs_ctrlr = bs_closest[bs_type][0]
+            for sg in SocialGroup:
+                self.SubscribeBS(
+                    bs_type,
+                    sg,
+                    bs_ctrlr
+                )
 
     # Subscribe base station
     def SubscribeBS(self, bs_type, social_group: SocialGroup, bs_ctrlr):
-        # Unsubscribe the previous base station
-        if (self.sub_sg_bs[bs_type][social_group] != None):
+        # Unsubscribe the previous subscribed base station of each base station type
+        for type_bs in BaseStationType:
+            if type_bs == bs_type:
+                continue
+            self.UnsubscribeBS(type_bs, social_group)
+
+        # if the desire base station was already subscribed
+        if self.sub_sg_bs[bs_type][social_group] == bs_ctrlr:
+            return
+        else:
             self.UnsubscribeBS(bs_type, social_group)
 
         # Subscribe the new one
@@ -234,9 +264,18 @@ class VehicleRecorder():
 
     # Serves uploading/downloading packages
     def ProcessPackage(self, timeslot):
+        self.ProcessUplinkPackage(timeslot)
+        self.ProcessDownlinkPackage(timeslot)
+
+    def ProcessDownlinkPackage(self, timeslot):
+        # exit if no package to process
+        if(len(self.pkg_in_proc[LinkType.DOWNLINK]) == 0):
+            return
+
         # Download
+        pkg_in_proc = []
         for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
-            if timeslot == (pkg.offset_ts + pkg.trans_ts):
+            if timeslot == pkg.end_ts:
                 # log
                 GV.DEBUG.Log(
                     "[{}][package][{}]:receive.({})".format(
@@ -245,23 +284,29 @@ class VehicleRecorder():
                         pkg,
                     )
                 )
+                # process received package
                 self.PackageDelivered(pkg)
+                # change connection state
                 self.con_state[pkg.src.name].rec.ChangeState(
                     ConnectionState.Success
                 )
             else:
+                # update connection state
+                pkg_in_proc.append(pkg)
                 self.con_state[pkg.src.name].rec.ChangeState(
                     ConnectionState.Transmit
                 )
         # .remove delivered packages
-        self.pkg_in_proc[LinkType.DOWNLINK] = [
-            pkg
-            for pkg in self.pkg_in_proc[LinkType.DOWNLINK]
-            if (pkg.offset_ts+pkg.trans_ts) > timeslot
-        ]
+        self.pkg_in_proc[LinkType.DOWNLINK] = pkg_in_proc
+
+    def ProcessUplinkPackage(self, timeslot):
+        # exit if no package to process
+        if(len(self.pkg_in_proc[LinkType.UPLINK]) == 0):
+            return
         # Upload
+        pkg_in_proc = []
         for pkg in self.pkg_in_proc[LinkType.UPLINK]:
-            if(pkg.offset_ts == timeslot):
+            if(timeslot == pkg.offset_ts):
                 GV.DEBUG.Log(
                     "[{}][package][{}]:deliver.({})".format(
                         self.name,
@@ -269,19 +314,18 @@ class VehicleRecorder():
                         pkg,
                     )
                 )
+                # update connection state
                 self.con_state[pkg.dest.name].rec.ChangeState(
                     ConnectionState.Success
                 )
             else:
+                pkg_in_proc.append(pkg)
+                # update connection state
                 self.con_state[pkg.dest.name].rec.ChangeState(
                     ConnectionState.Transmit
                 )
         # . remove sent packages
-        self.pkg_in_proc[LinkType.UPLINK] = [
-            pkg
-            for pkg in self.pkg_in_proc[LinkType.UPLINK]
-            if(pkg.offset_ts) > timeslot
-        ]
+        self.pkg_in_proc[LinkType.UPLINK] = pkg_in_proc
 
     # Process package that're delivered
     def PackageDelivered(self, package: NetworkPackage):
@@ -343,11 +387,11 @@ class VehicleRecorder():
 
     # Leave Simulation
     def Leave(self):
-        # Clear connection recorders
-        for name in self.con_state:
-            self.con_state[name].rec.Clean()
-        self.con_state = {}
         # UnSubscribe Any Base Station
         for i in BaseStationType:
             for j in SocialGroup:
                 self.UnsubscribeBS(i, j)
+        # Clear connection recorders
+        for name in self.con_state:
+            self.con_state[name].rec.Clean()
+        self.con_state = {}

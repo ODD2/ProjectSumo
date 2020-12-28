@@ -118,7 +118,7 @@ SINR_rx_dB_10_new=10*log10( ...
 SINR_rx_dB_10 = SINR_rx_dB_10_new;
 
 %UE_CQI = SelectCQI(SINR_rx_dB, 0.1); %determine CQI for UE %submit r0
-CQI_out = max(SelectCQI(SINR_rx_dB_10, 0.1),1); %determine CQI for UE %9-25
+CQI_out = max(SelectCQI_fast_BLER10P(SINR_rx_dB_10),1); %determine CQI for UE %9-25
 
 end
 

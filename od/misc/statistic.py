@@ -12,7 +12,7 @@ import os
 
 class AppdataStatistic:
     def __init__(self):
-        self.time_veh_recv = {}
+        self.time_veh_trip = {}
         self.time_bs_txq = [[] for _ in GV.NET_STATION_CONTROLLER]
         self.time_bs_tx = [[] for _ in GV.NET_STATION_CONTROLLER]
         self.time_bs_serv = [-1 for _ in GV.NET_STATION_CONTROLLER]
@@ -26,15 +26,17 @@ class StatisticRecorder:
 
     def GetAppdataRecord(self, sg, header):
         self.CreateIfAbsent(sg, header)
-        return self.sg_header[sg][header]
+        return self.sg_header[sg][header.id]
 
     def CreateIfAbsent(self, sg, header):
-        if(header not in self.sg_header[sg]):
-            self.sg_header[sg][header] = AppdataStatistic()
+        if(header.id not in self.sg_header[sg]):
+            self.sg_header[sg][header.id] = AppdataStatistic()
 
     def VehicleReceivedIntactAppdata(self, sg, vehicle, header):
         record = self.GetAppdataRecord(sg, header)
-        record.time_veh_recv[vehicle] = GV.SUMO_SIM_INFO.getTime()
+        record.time_veh_trip[vehicle.name] = (
+            GV.SUMO_SIM_INFO.getTime() - header.at
+        )
 
     # call by BaseStation while receiving new appdata from NetworkCore
     # def BaseStationAppdataPropagate(self, sg, bs, header):
@@ -92,13 +94,12 @@ class StatisticRecorder:
             sg_max_trip_time = float('-inf')
             sg_min_trip_time = float('inf')
             sg_avg_trip_time = 0
-            for header, record in self.sg_header[sg].items():
+            for header_id, record in self.sg_header[sg].items():
                 record_total_trip_time = 0
                 record_total_trip_count = 0
                 record_max_trip_time = float('-inf')
                 record_min_trip_time = float('inf')
-                for recv_time in record.time_veh_recv.values():
-                    trip_time = recv_time - header.at
+                for trip_time in record.time_veh_trip.values():
                     record_total_trip_time += trip_time
                     record_total_trip_count += 1
                     record_max_trip_time = record_max_trip_time if record_max_trip_time > trip_time else trip_time
@@ -110,7 +111,7 @@ class StatisticRecorder:
                 GV.STATISTIC.Log(
                     '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
                         str(sg),
-                        header.id,
+                        header_id,
                         record_total_trip_time,
                         record_total_trip_count,
                         record_avg_trip_time,
@@ -148,7 +149,7 @@ class StatisticRecorder:
             sg_total_txq_wait_time = 0
             sg_total_txq_wait_count = 0
             sg_avg_txq_wait_time = 0
-            for header, record in self.sg_header[sg].items():
+            for header_id, record in self.sg_header[sg].items():
                 # the time for this appdata to wait in the transmit queues
                 record_max_txq_wait_time = float('-inf')
                 record_min_txq_wait_time = float('inf')
@@ -195,7 +196,7 @@ class StatisticRecorder:
                 GV.STATISTIC.Log(
                     '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
                         str(sg),
-                        header.id,
+                        header_id,
                         record_total_txq_wait_time,
                         record_total_txq_wait_count,
                         record_avg_txq_wait_time,
@@ -233,7 +234,7 @@ class StatisticRecorder:
             sg_total_tx_time = 0
             sg_total_tx_count = 0
             sg_avg_tx_time = 0
-            for header, record in self.sg_header[sg].items():
+            for header_id, record in self.sg_header[sg].items():
                 # the time for this appdata to deliver by all base stations.
                 record_max_tx_time = float('-inf')
                 record_min_tx_time = float('inf')
@@ -278,7 +279,7 @@ class StatisticRecorder:
                 GV.STATISTIC.Log(
                     '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
                         str(sg),
-                        header.id,
+                        header_id,
                         record_total_tx_time,
                         record_total_tx_count,
                         record_avg_tx_time,

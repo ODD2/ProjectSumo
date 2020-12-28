@@ -15,8 +15,9 @@ class NetworkPackage:
         self.social_group = social_group
         self.bits = bits
         self.appdatas = appdatas
-        self.trans_ts = trans_ts
         self.offset_ts = offset_ts
+        self.trans_ts = trans_ts
+        self.end_ts = offset_ts + trans_ts
 
     def __str__(self):
         return "NetworkPackage({}>{},{}-Q{},{}b,{}o+{}t,[{}])".format(

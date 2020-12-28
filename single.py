@@ -4,7 +4,7 @@ from od.network.types import BaseStationType, ResourceAllocatorType
 from od.vehicle import VehicleRecorder
 from od.config import (SUMO_SECONDS_PER_STEP,
                        BS_PRESET,
-                       SUMO_TOTAL_STEPS,
+                       SUMO_SIM_STEPS, SUMO_SKIP_STEPS,
                        NET_STEPS_PER_SUMO_STEP, NET_TS_PER_NET_STEP,
                        BS_RADIUS_COLOR, BS_RADIUS)
 from od.layer import NetObjLayer
@@ -58,8 +58,9 @@ def UpdateSS(objs):
     # threads = []
     # Update vehicles (Parellelized)
     # for obj in objs:
-    #     threads.append(Thread(target=obj.UpdateSS))
-    #     threads[-1].start()
+    #     t = Thread(target=obj.UpdateSS)
+    #     t.start()
+    #     threads.append(t)
     # Wait until all vehicles to finished their jobs
     # for t in threads:
     #     t.join()
@@ -106,7 +107,14 @@ def main(interest_config):
         "--start",
         "--step-length",
         str(SUMO_SECONDS_PER_STEP),
+        "--scale",
+        str(1)
     ])
+
+    # - skip to interest network condition
+    for _ in range(SUMO_SKIP_STEPS):
+        traci.simulationStep()
+
     # - initialize matlab context for simulation
     GE.MATLAB_ENG.InitializeSimulationContext(nargout=0)
     # - initialize simulation dependent global variables
@@ -130,13 +138,10 @@ def main(interest_config):
     # Start Simulation
     # - record vehicles
     vehicle_recorders = {}
-    # - simulation step indicator
-    step = 0
     # - run
-    while step < SUMO_TOTAL_STEPS:
+    for _ in range(SUMO_SIM_STEPS):
         # forward sumo simulation step
         traci.simulationStep()
-
         # fetch the newest sumo simulation informations
         GV.SUMO_SIM_INFO.UpdateSS()
 
@@ -177,9 +182,6 @@ def main(interest_config):
                 UpdateT(vehicle_recorders.values(), ts)
                 UpdateT(GV.NET_STATION_CONTROLLER, ts)
 
-        # add simulation step indicator
-        step += 1
-
     # End Simulation
     # - manually destruct vehicle recorder in order to close traci.
     for veh_rec in vehicle_recorders.values():
@@ -192,7 +194,7 @@ def main(interest_config):
 
 
 if __name__ == "__main__":
-    cProfile.run('main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,1))')
+    cProfile.run('main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,0))')
     # main(
     #     InterestConfig(
     #         ResourceAllocatorType.NOMA_OPT,

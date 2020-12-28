@@ -36,9 +36,13 @@ class BaseStationController:
 
         # upload requests
         self.sg_upload_req = ([{} for x in range(NET_QOS_CHNLS)])
+        for sg in SocialGroup:
+            self.sg_upload_req[sg.qos][sg] = []
 
         # broadcast reqeusts
         self.sg_brdcst_datas = ([{} for x in range(NET_QOS_CHNLS)])
+        for sg in SocialGroup:
+            self.sg_brdcst_datas[sg.qos][sg] = []
 
         # TODO: resend requests
         # self.sg_resend_req = ([[] for x in SocialGroup])
@@ -59,14 +63,20 @@ class BaseStationController:
     def UpdateT(self, ts):
         self.ProcessPackage(ts)
 
-    # process uploading/downloading packages
+    # process packages
     def ProcessPackage(self, timeslot):
-        # Define variables
-        stats_appdata_trans_beg = [set() for _ in SocialGroup]  # statistic
-        stats_appdata_trans_end = [set() for _ in SocialGroup]  # statistic
+        self.ProcessUplinkPackage(timeslot)
+        self.ProcessDownlinkPackage(timeslot)
+
+    # process uplink packages
+    def ProcessUplinkPackage(self, timeslot):
+        if(len(self.pkg_in_proc[LinkType.UPLINK]) == 0):
+            return
+        # Define
+        pkg_in_proc = []
         # Upload
         for pkg in self.pkg_in_proc[LinkType.UPLINK]:
-            if timeslot == (pkg.offset_ts + pkg.trans_ts):
+            if timeslot == pkg.end_ts:
                 # log
                 GV.DEBUG.Log(
                     "[{}][package][{}]:receive.({})".format(
@@ -76,16 +86,32 @@ class BaseStationController:
                     )
                 )
                 self.PackageDelivered(pkg)
-        # .remove uploaded data
-        self.pkg_in_proc[LinkType.UPLINK] = [
-            pkg
-            for pkg in self.pkg_in_proc[LinkType.UPLINK]
-            if pkg.offset_ts + pkg.trans_ts > timeslot
-        ]
+            else:
+                pkg_in_proc.append(pkg)
+        # Remove packages delivered
+        self.pkg_in_proc[LinkType.UPLINK] = pkg_in_proc
+
+    # process downlink packages
+    def ProcessDownlinkPackage(self, timeslot):
+        if(len(self.pkg_in_proc[LinkType.DOWNLINK]) == 0):
+            return
+        # Define variables
+        stats_appdata_trans_beg = [set() for _ in SocialGroup]  # statistic
+        stats_appdata_trans_end = [set() for _ in SocialGroup]  # statistic
+        pkg_in_proc = []
         # Download
         for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
+            # package end transmission
+            if(timeslot == pkg.end_ts):
+                # record the application data that ended transmission at current timeslot
+                stats_appdata_trans_end[pkg.social_group].update(
+                    list(map(
+                        lambda x: x.header,
+                        pkg.appdatas
+                    ))
+                )
             # package start transmission
-            if(pkg.offset_ts == timeslot):
+            elif(timeslot == pkg.offset_ts):
                 GV.DEBUG.Log(
                     "[{}][package][{}]:deliver.({})".format(
                         self.name,
@@ -100,21 +126,12 @@ class BaseStationController:
                         pkg.appdatas
                     ))
                 )
-            # package end transmission
-            elif(timeslot == pkg.offset_ts + pkg.trans_ts):
-                # record the application data that ended transmission at current timeslot
-                stats_appdata_trans_end[pkg.social_group].update(
-                    list(map(
-                        lambda x: x.header,
-                        pkg.appdatas
-                    ))
-                )
-        # .remove downloaded data
-        self.pkg_in_proc[LinkType.DOWNLINK] = [
-            pkg
-            for pkg in self.pkg_in_proc[LinkType.DOWNLINK]
-            if pkg.offset_ts + pkg.trans_ts > timeslot
-        ]
+                pkg_in_proc.append(pkg)
+            # package transmitting
+            else:
+                pkg_in_proc.append(pkg)
+        # Remove packages sent
+        self.pkg_in_proc[LinkType.DOWNLINK] = pkg_in_proc
         # Statistic
         for sg in SocialGroup:
             # record transmission begin after recording transmission end,
@@ -140,9 +157,6 @@ class BaseStationController:
 
     # Function called by VehicleRecorder to submit upload requests to this base station
     def ReceiveUploadRequest(self, sender, social_group: SocialGroup, total_bits: int):
-        if social_group not in self.sg_upload_req[social_group.qos]:
-            self.sg_upload_req[social_group.qos][social_group] = []
-
         self.sg_upload_req[social_group.qos][social_group].append(
             UploadRequest(sender, total_bits)
         )
@@ -156,19 +170,27 @@ class BaseStationController:
         )
         # Serve requests
         for qos in range(NET_QOS_CHNLS):
-            for social_group in self.sg_upload_req[qos].keys():
+            for sg in self.sg_upload_req[qos].keys():
                 # Check if there exists pending requests
-                if (len(self.sg_upload_req[qos][social_group]) > 0 and ra_oma.Spare()):
+                if(len(self.sg_upload_req[qos][sg]) == 0):
+                    continue
+                # required resource block bandwidth for social group msg
+                req_bw_per_rb = self.RequiredBandwidth(sg)
+                # required timeslots for using this bandwidth
+                req_ts_per_rb = NET_RB_BW_REQ_TS[req_bw_per_rb]
+                # check if this base station has resource left
+                if(ra_oma.Spare(req_bw_per_rb, req_ts_per_rb)):
                     # fetch resource block trans size for every request
                     req_rbsize_pairs = []
-                    for req in self.sg_upload_req[qos][social_group]:
+                    # collect the resource block size for all requests
+                    for req in self.sg_upload_req[qos][sg]:
                         rbsize = GE.MATLAB_ENG.GetThroughputPerRB(
                             float(
                                 GV.NET_STATUS_CACHE.GetNetStatus(
                                     (
                                         req.sender,
                                         self,
-                                        social_group
+                                        sg
                                     )
                                 ).cqi
                             ),
@@ -182,10 +204,6 @@ class BaseStationController:
                             lambda req_rbsize_pair: req_rbsize_pair[1]
                         )
                     )
-                    # required resource block bandwidth for social group msg
-                    req_bw_per_rb = self.RequiredBandwidth(social_group)
-                    # required timeslots for using this bandwidth
-                    req_ts_per_rb = NET_RB_BW_REQ_TS[req_bw_per_rb]
                     # serve requests
                     rb_res_lack = False
                     for req_rbsize_pair in req_rbsize_pairs:
@@ -203,14 +221,14 @@ class BaseStationController:
                             if(offset_ts < 0):
                                 rb_res_lack = True
                                 break
-                            # alloca success
+                            # allocate success
                             ts_rb_req[offset_ts] += 1
                         # notify request owner for granted resources
                         for ts in range(NET_TS_PER_NET_STEP):
                             while(ts_rb_req[ts] > 0):
                                 req.sender.UploadResourceGranted(
                                     self,
-                                    social_group,
+                                    sg,
                                     rbsize,
                                     req_ts_per_rb,
                                     ts
@@ -220,8 +238,8 @@ class BaseStationController:
                         # for the resource blocks of this social group
                         if rb_res_lack:
                             break
-        # Clean requests
-        self.sg_upload_req = ([{} for x in range(NET_QOS_CHNLS)])
+                # Clear requests
+                self.sg_upload_req[qos][sg].clear()
 
     # arrange downlink resource
     def ArrangeDownlinkResource(self):
@@ -241,50 +259,54 @@ class BaseStationController:
 
         # Serve Broadcast Appdatas
         for qos in range(NET_QOS_CHNLS):
-            for social_group in self.sg_brdcst_datas[qos].keys():
-                # if this base station has no subscribers in this social group
-                if(len(self.sg_sub_vehs[social_group]) == 0):
+            for sg in self.sg_brdcst_datas[qos].keys():
+                # if there's no appdata to broadcast for this social group
+                if(len(self.sg_brdcst_datas[qos][sg]) == 0):
+                    continue
+                # the member of the social group
+                members = len(self.sg_sub_vehs[sg])
+                # required resource block bandwidth for this social group msg
+                sg_rb_bw = self.RequiredBandwidth(sg)
+                # required timeslots for using this bandwidth
+                sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
+                # calculate the total bits for this social group to send all its broadcast appdatas
+                sg_rem_bits = sum(
+                    data.bits for data in self.sg_brdcst_datas[qos][sg]
+                )
+                # if this base station has no subscribers or unsent data in this social group
+                if(members == 0 or sg_rem_bits == 0):
                     GV.STATISTIC_RECORDER.BaseStationAppdataDrop(
-                        social_group,
+                        sg,
                         self,
                         list(map(
                             lambda x: x.header,
-                            self.sg_brdcst_datas[qos][social_group]
+                            self.sg_brdcst_datas[qos][sg]
                         ))
                     )
                     # clear all broadcast appdatas of this social group
                     # cause there's no receiver
-                    self.sg_brdcst_datas[qos][social_group] = []
+                    self.sg_brdcst_datas[qos][sg].clear()
                     continue
-                # calculate the total bits for this social group to send all its broadcast appdatas
-                sg_total_bits = 0
-                for appdata in self.sg_brdcst_datas[qos][social_group]:
-                    sg_total_bits += appdata.bits
-                # if this social group has no data to broadcast
-                if(sg_total_bits == 0):
+                # if there's no resource for this social group
+                if(not ra_oma.Spare(sg_rb_bw, sg_rb_ts)):
                     continue
-                # find the lowest cqi in the social group subscribers
-                netstatus = GV.NET_STATUS_CACHE.GetMultiNetStatus([
-                    (veh, self, social_group) for veh in self.sg_sub_vehs[social_group]
+
+                # fetch all the vehicle network status
+                net_status = GV.NET_STATUS_CACHE.GetMultiNetStatus([
+                    (veh, self, sg) for veh in self.sg_sub_vehs[sg]
                 ])
-                lowest_cqi = netstatus[0].cqi
-                for status in netstatus:
-                    if(status.cqi < lowest_cqi):
-                        lowest_cqi = status.cqi
-                # calculate the resource block size for the cqi
+                #  find the minimum cqi among all the vehicles
+                min_cqi = min(status.cqi for status in net_status)
+                # calculate resource block size for minimum cqi
                 sg_rb_bits = GE.MATLAB_ENG.GetThroughputPerRB(
-                    float(lowest_cqi),
+                    float(min_cqi),
                     int(NET_RB_SLOT_SYMBOLS)
                 )
-                # required resource block bandwidth for this social group msg
-                sg_rb_bw = self.RequiredBandwidth(social_group)
-                # required timeslots for using this bandwidth
-                sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
                 # total required resource blocks for this social group
-                sg_total_req_rb = math.ceil(sg_total_bits/sg_rb_bits)
+                sg_max_req_rb = math.ceil(sg_rem_bits/sg_rb_bits)
                 # allocate resource blocks
                 sg_ts_req_rb = [0 for _ in range(NET_TS_PER_NET_STEP)]
-                for _ in range(sg_total_req_rb):
+                for _ in range(sg_max_req_rb):
                     offset_ts = ra_oma.Allocate(
                         sg_rb_bw, sg_rb_ts
                     )
@@ -293,7 +315,7 @@ class BaseStationController:
                         break
                     # allocate successful
                     sg_ts_req_rb[offset_ts] += 1
-                # create packages
+                # deploy resource and create packages
                 for ts in range(NET_TS_PER_NET_STEP):
                     while(sg_ts_req_rb[ts] > 0):
                         # consume resource block
@@ -303,10 +325,10 @@ class BaseStationController:
                         remain_bits = sg_rb_bits
                         # the appdata index that is currently collecting
                         data_i = 0
-                        data_num = len(self.sg_brdcst_datas[qos][social_group])
+                        data_num = len(self.sg_brdcst_datas[qos][sg])
                         # collect package appdata
                         while (data_i < data_num and remain_bits > 0):
-                            appdata = self.sg_brdcst_datas[qos][social_group][data_i]
+                            appdata = self.sg_brdcst_datas[qos][sg][data_i]
                             # actual transmit bit
                             trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
                             package_appdatas.append(
@@ -327,27 +349,27 @@ class BaseStationController:
                                 data_i += 1
                                 # Statistic - appdata serve timestamp
                                 GV.STATISTIC_RECORDER.BaseStationAppdataServe(
-                                    social_group,
+                                    sg,
                                     self,
                                     [appdata.header]
                                 )
                         # remove appdatas in collection
-                        self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][data_i:]
+                        self.sg_brdcst_datas[qos][sg] = self.sg_brdcst_datas[qos][sg][data_i:]
                         # create package
                         package = NetworkPackage(
                             self,
                             BroadcastObject,
-                            social_group,
+                            sg,
                             sg_rb_bits-remain_bits,
                             package_appdatas,
                             sg_rb_ts,
                             ts,
                         )
-                        # send package
-                        for veh in self.sg_sub_vehs[social_group]:
-                            veh.ReceivePackage(package)
                         # put package in process list
                         self.pkg_in_proc[LinkType.DOWNLINK].append(package)
+                        # send package
+                        for veh in self.sg_sub_vehs[sg]:
+                            veh.ReceivePackage(package)
 
     # arrange downlink resource in NOMA
     def ArrangeDownlinkResourceNOMA(self):
@@ -360,61 +382,62 @@ class BaseStationController:
         }
         # Qos group config for optimizer
         QoS_GP_CONF = []
-
         # Collect group configs
         for qos in range(NET_QOS_CHNLS):
             # a group config type in python
-            QoS_GP_CONF.append([])
-            for social_group in self.sg_brdcst_datas[qos].keys():
-                # if this base station has no subscribers in this social group
-                group_size = len(self.sg_sub_vehs[social_group])
-                if(group_size == 0):
+            grp_config_qos = []
+            # create group config for this qos
+            for sg in self.sg_brdcst_datas[qos].keys():
+                # ignore if nothing in queue
+                if(len(self.sg_brdcst_datas[qos][sg]) == 0):
+                    continue
+                # the members of the social group
+                members = len(self.sg_sub_vehs[sg])
+                # required resource block bandwidth for this social group msg
+                sg_rb_bw = self.RequiredBandwidth(sg)
+                # required timeslots for using this bandwidth
+                sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
+                # calculate the total bits for this social group to send all its broadcast appdatas
+                sg_total_bits = sum(
+                    data.bits for data in self.sg_brdcst_datas[qos][sg]
+                )
+                # if this base station has no subscribers or data to broadcast in this social group
+                if(members == 0 or sg_total_bits == 0):
                     # Statistic
                     GV.STATISTIC_RECORDER.BaseStationAppdataDrop(
-                        social_group,
+                        sg,
                         self,
                         list(map(
                             lambda x: x.header,
-                            self.sg_brdcst_datas[qos][social_group]
+                            self.sg_brdcst_datas[qos][sg]
                         ))
                     )
                     # clear all broadcast appdatas of this social group
                     # cause there's no receiver
-                    self.sg_brdcst_datas[qos][social_group] = []
+                    self.sg_brdcst_datas[qos][sg].clear()
                     continue
-                # calculate the total bits for this social group to send all its broadcast appdatas
-                sg_total_bits = 0
-                for appdata in self.sg_brdcst_datas[qos][social_group]:
-                    sg_total_bits += appdata.bits
-                # if this social group has no data to broadcast
-                if(sg_total_bits == 0):
-                    continue
-                # find the lowest cqi in the social group subscribers
-                netstatus = GV.NET_STATUS_CACHE.GetMultiNetStatus([
-                    (veh, self, social_group) for veh in self.sg_sub_vehs[social_group]
-                ])
-                lowest_sinr = netstatus[0].sinr
-                for status in netstatus:
-                    if(status.sinr < lowest_sinr):
-                        lowest_sinr = status.sinr
-                # required resource block bandwidth for this social group msg
-                sg_rb_bw = self.RequiredBandwidth(social_group)
-                # required timeslots for using this bandwidth
-                sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
 
-                QoS_GP_CONF[-1].append({
-                    "gid": float(social_group.gid),
+                # find the lowest cqi in the social group subscribers
+                net_status = GV.NET_STATUS_CACHE.GetMultiNetStatus([
+                    (veh, self, sg) for veh in self.sg_sub_vehs[sg]
+                ])
+                # find the minimum sinr amon all members
+                min_sinr = min(status.sinr for status in net_status)
+
+                # create group config for allocator
+                grp_config_qos.append({
+                    "gid": float(sg.gid),
                     "rbf_w": float(sg_rb_ts),
                     "rbf_h": float(sg_rb_bw/NET_RB_BW_UNIT),
-                    "sinr_max": float(lowest_sinr),
+                    "sinr_max": float(min_sinr),
                     "rem_bits": float(sg_total_bits),
-                    "mem_num": float(group_size),
+                    "mem_num": float(members),
                 })
-            # if this qos has nothing to allocate, remove it.
-            if(len(QoS_GP_CONF[-1]) == 0):
-                QoS_GP_CONF.pop()
+            # if this qos has no group requires allocate, remove it.
+            if(len(grp_config_qos) > 0):
+                QoS_GP_CONF.append(grp_config_qos)
 
-        # if none of the qos needs resource, end allocation  process.
+        # if none of the groups need resource allocation, end allocation  process.
         if(len(QoS_GP_CONF) == 0):
             return
 

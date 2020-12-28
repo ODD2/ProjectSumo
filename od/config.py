@@ -5,13 +5,22 @@ import sys
 
 # Sumo Simulation Settings
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 1
+SUMO_SIM_TIME_SCALER = 100
 # . seconds per sumo simulation step
-SUMO_SECONDS_PER_STEP = SUMO_SIM_TIME_SCALER*0.1
+SUMO_SECONDS_PER_STEP = 0.1
+# . the offset of the simulation
+SUMO_SKIP_SECONDS = 252
+# . total sumo simulation steps skipped
+SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
 # . total sumo simulation seconds
-SUMO_TOTAL_SECONDS = 180
+SUMO_SIM_SECONDS = 72
 # . total sumo simulation steps
-SUMO_TOTAL_STEPS = (1 / SUMO_SECONDS_PER_STEP) * SUMO_TOTAL_SECONDS
+SUMO_SIM_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SIM_SECONDS))
+# . total sumo seconds
+SUMO_TOTAL_SECONDS = SUMO_SKIP_SECONDS + SUMO_SIM_SECONDS
+# . total sumo steps
+SUMO_TOTAL_STEPS = SUMO_SKIP_STEPS + SUMO_SIM_STEPS
+
 
 # Network Settings
 # . total QoS network channels. qos channel starts from 0.
@@ -43,7 +52,6 @@ BS_TOTAL_BAND = {
     BaseStationType.UMA: 20000000,
     BaseStationType.UMI: 10000000
 }
-
 # . base station's frequency
 BS_FREQ = {
     # Ghz
@@ -86,8 +94,6 @@ BS_UMI_RB_BW_SG = {
     SocialGroup.CRITICAL: 2 * NET_RB_BW_UNIT,
     SocialGroup.GENERAL: 1 * NET_RB_BW_UNIT
 }
-
-
 # Base Station Presets
 BS_PRESET = {
     "bs1": {
@@ -140,6 +146,9 @@ BS_PRESET = {
     },
 }
 
+# Vehicle Settings
+# . vehicle base station subscribe move distance
+VEH_MOVE_BS_CHECK = 10  # meters
 
 # Basic Requirement Check
 if SUMO_SECONDS_PER_STEP < NET_SECONDS_PER_STEP:

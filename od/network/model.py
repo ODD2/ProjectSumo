@@ -24,11 +24,38 @@ class NetStatusCache:
         self._map = {}
 
     # param [(vehicle,bs_ctrlr,social_group)]
-    def GetMultiNetStatus(self, query_tuples):
-        result = []
-        for query_tuple in query_tuples:
-            result.append(self.GetNetStatus(query_tuple))
-        return result
+    def GetMultiNetStatus(self, queries):
+        results = []
+        netstat_futures = []
+        # error detection
+        for query in queries:
+            if query[0].name not in self._map:
+                raise Exception("Error! vehicle should be in the map!!")
+        # fetch none cached result in parellel
+        for query in queries:
+            netstat = self._map[query[0].name][query[1].serial][query[2]]
+            if (not netstat.cached):
+                netstat_futures.append(
+                    (
+                        netstat,
+                        GET_BS_CQI_SINR_5G_FUTURE(
+                            query[0],
+                            query[1],
+                            query[2]
+                        )
+                    )
+                )
+                netstat.cached = True
+        # retrieve parellel calculation result
+        for pair in netstat_futures:
+            netstat = pair[0]
+            future = pair[1]
+            (netstat.cqi, netstat.sinr) = future.result()
+        # collect results
+        for query in queries:
+            results.append(self._map[query[0].name][query[1].serial][query[2]])
+        # return
+        return results
 
     # param [(vehicle,bs_ctrlr,social_group)]
     def GetNetStatus(self, query_tuple):
@@ -37,11 +64,12 @@ class NetStatusCache:
 
         net_stat = self._map[query_tuple[0].name][query_tuple[1].serial][query_tuple[2]]
         if (not net_stat.cached):
-            (net_stat.cqi, net_stat.sinr) = GET_BS_CQI_SINR_5G(
+            future = GET_BS_CQI_SINR_5G_FUTURE(
                 query_tuple[0],
                 query_tuple[1],
                 query_tuple[2]
             )
+            (net_stat.cqi, net_stat.sinr) = future.result()
             net_stat.cached = True
         return net_stat
 
@@ -55,22 +83,19 @@ class NetStatusCache:
             self._map[veh_id] = [[NetStatus() for sg in SocialGroup]
                                  for i in range(len(GV.NET_STATION_CONTROLLER))]
         # initialize
-        for veh_status_list in self._map.values():
-            for bs_idx in range(len(GV.NET_STATION_CONTROLLER)):
+        for veh_status in self._map.values():
+            for bs in GV.NET_STATION_CONTROLLER:
                 for sg in SocialGroup:
-                    veh_status_list[bs_idx][sg].cached = False
+                    veh_status[bs][sg].cached = False
+
 
 # (VehicleRecorder, BaseStationController, SocialGroup)
-
-
-def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group: SocialGroup):
+def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
     # Vehicle's position
     Intf_dist = []
     Intf_pwr_dBm = []
     Intf_h_BS = []
     Intf_h_MS = []
-    cqi = 0
-    sinr = 0
 
     # Confirm settings with 3GPP specs
     if (bs_ctrlr.type == BaseStationType.UMA):
@@ -119,7 +144,7 @@ def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group: SocialGroup):
         )
 
     # result
-    cqi, sinr = GE.MATLAB_ENG.SINR_Channel_Model_5G(
+    return GE.MATLAB_ENG.SINR_Channel_Model_5G(
         float(UE_dist),
         float(h_BS),
         float(h_MS),
@@ -131,7 +156,8 @@ def GET_BS_CQI_SINR_5G(vehicle, bs_ctrlr, social_group: SocialGroup):
         matlab.double(Intf_dist),
         matlab.double(Intf_pwr_dBm),
         float(DS_Desired),  # ns
-        float(CP)*1000,  # ns
+        float(CP)*1000,  # us
         True if bs_ctrlr.type == BaseStationType.UMA else False,
-        nargout=2)
-    return cqi, sinr
+        nargout=2,
+        background=True
+    )
