@@ -73,13 +73,13 @@ class VehicleRecorder():
                 if (self.sub_sg_bs[bs_type][social_group] == None):
                     continue
                 else:
-                    bs_ctrlr = self.sub_sg_bs[bs_type][social_group]
-                    if (bs_ctrlr not in invalid_bs):
-                        distance = pow((self.pos[0] - bs_ctrlr.pos[0])**2 +
-                                       (self.pos[1] - bs_ctrlr.pos[1])**2, 0.5)
-                        if (distance > bs_ctrlr.radius):
+                    bs_ctrl = self.sub_sg_bs[bs_type][social_group]
+                    if (bs_ctrl not in invalid_bs):
+                        distance = pow((self.pos[0] - bs_ctrl.pos[0])**2 +
+                                       (self.pos[1] - bs_ctrl.pos[1])**2, 0.5)
+                        if (distance > bs_ctrl.radius):
                             self.UnsubscribeBS(bs_type, social_group)
-                            invalid_bs.append(bs_ctrlr)
+                            invalid_bs.append(bs_ctrl)
                     else:
                         self.UnsubscribeBS(bs_type, social_group)
         if(len(invalid_bs) > 0):
@@ -103,60 +103,60 @@ class VehicleRecorder():
         # update the check position
         self.chk_pos = self.pos
         # define container
-        bs_closest = [[None, float("inf")] for i in BaseStationType]
+        bs_near = [[None, float("inf")] for i in BaseStationType]
         # find closest in range base station
-        for bs_ctrlr in GV.NET_STATION_CONTROLLER:
-            x = (self.pos[0] - bs_ctrlr.pos[0])
-            if(x > bs_ctrlr.radius):
+        for bs_ctrl in GV.NET_STATION_CONTROLLER:
+            x = (self.pos[0] - bs_ctrl.pos[0])
+            if(x > bs_ctrl.radius):
                 continue
-            y = (self.pos[1] - bs_ctrlr.pos[1])
-            if(y > bs_ctrlr.radius):
+            y = (self.pos[1] - bs_ctrl.pos[1])
+            if(y > bs_ctrl.radius):
                 continue
             d = pow(x**2 + y**2, 0.5)
-            if d > bs_ctrlr.radius:
+            if d > bs_ctrl.radius:
                 continue
-            ctrlr_range = bs_closest[bs_ctrlr.type]
-            if d > ctrlr_range[1]:
+            ctrl_range = bs_near[bs_ctrl.type]
+            if d > ctrl_range[1]:
                 continue
-            ctrlr_range[0] = bs_ctrlr
-            ctrlr_range[1] = d
+            ctrl_range[0] = bs_ctrl
+            ctrl_range[1] = d
         # cache net status
         GV.NET_STATUS_CACHE.GetMultiNetStatus([
-            (self, ctrlr_range[0], sg)
+            (self, ctrl_range[0], sg)
             for sg in SocialGroup
-            for ctrlr_range in bs_closest
-            if ctrlr_range[0] != None
+            for ctrl_range in bs_near
+            if ctrl_range[0] != None
         ])
+
         # subscribe base station
         for bs_type in BaseStationType:
-            bs_ctrlr = bs_closest[bs_type][0]
             for sg in SocialGroup:
+                # get the base station controller
+                bs_ctrl = bs_near[bs_type][0]
+                # there's no base station of this type
+                if(bs_ctrl == None):
+                    continue
+                # subscribe to base station
                 self.SubscribeBS(
                     bs_type,
                     sg,
-                    bs_ctrlr
+                    bs_ctrl
                 )
 
     # Subscribe base station
-    def SubscribeBS(self, bs_type, social_group: SocialGroup, bs_ctrlr):
-        # Unsubscribe the previous subscribed base station of each base station type
-        for type_bs in BaseStationType:
-            if type_bs == bs_type:
-                continue
-            self.UnsubscribeBS(type_bs, social_group)
-
+    def SubscribeBS(self, bs_type, social_group: SocialGroup, bs_ctrl):
         # if the desire base station was already subscribed
-        if self.sub_sg_bs[bs_type][social_group] == bs_ctrlr:
+        if self.sub_sg_bs[bs_type][social_group] == bs_ctrl:
             return
         else:
             self.UnsubscribeBS(bs_type, social_group)
 
         # Subscribe the new one
-        self.sub_sg_bs[bs_type][social_group] = bs_ctrlr
+        self.sub_sg_bs[bs_type][social_group] = bs_ctrl
         # Register to base station, too.
-        bs_ctrlr.VehicleSubscribe(self, social_group)
+        bs_ctrl.VehicleSubscribe(self, social_group)
         # Update connection state
-        self.ConnectionChange(True, bs_ctrlr)
+        self.ConnectionChange(True, bs_ctrl)
 
     # Unsubscribe base station
     def UnsubscribeBS(self, bs_type, social_group: SocialGroup):
@@ -164,23 +164,23 @@ class VehicleRecorder():
         if (self.sub_sg_bs[bs_type][social_group] == None):
             return
         # Unsubscribe the base station
-        bs_ctrlr = self.sub_sg_bs[bs_type][social_group]
+        bs_ctrl = self.sub_sg_bs[bs_type][social_group]
         self.sub_sg_bs[bs_type][social_group] = None
         # Unregister from base station
-        bs_ctrlr.VehicleUnsubscribe(self, social_group)
+        bs_ctrl.VehicleUnsubscribe(self, social_group)
         # Update connection state
-        self.ConnectionChange(False, bs_ctrlr)
+        self.ConnectionChange(False, bs_ctrl)
 
     # Submit upload requests
     def RequestUploadResource(self):
         for social_group in SocialGroup:
             if (len(self.app.datas[social_group]) > 0):
-                bs_ctrlr = self.SelectSocialBS(social_group)
-                if (bs_ctrlr != None):
+                bs_ctrl = self.SelectSocialBS(social_group)
+                if (bs_ctrl != None):
                     sg_total_bits = 0
                     for appdata in self.app.datas[social_group]:
                         sg_total_bits += appdata.bits
-                    bs_ctrlr.ReceiveUploadRequest(
+                    bs_ctrl.ReceiveUploadRequest(
                         self,
                         social_group,
                         sg_total_bits,
@@ -189,10 +189,10 @@ class VehicleRecorder():
                     GV.ERROR.Log("Error: No BS to serve request.")
 
     # Function called by BaseStationController to give resource block to upload requests
-    def UploadResourceGranted(self, bs_ctrlr, social_group: SocialGroup, total_bits, trans_ts, offset_ts):
+    def UploadResourceGranted(self, bs_ctrl, social_group: SocialGroup, total_bits, trans_ts, offset_ts):
         self.SendPackage(
             self.CreatePackage(
-                bs_ctrlr,
+                bs_ctrl,
                 social_group,
                 total_bits,
                 trans_ts,

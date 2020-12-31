@@ -1,8 +1,10 @@
 # Custom
 from od.social import SocialGroup
 from od.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
-                       NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS)
+                       NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS, SUMO_SIM_SECONDS)
+from od.network.types import BaseStationType
 from od.misc.interest import InterestConfig
+from od.network.appdata import AppDataHeader
 import od.vars as GV
 # STD
 import math
@@ -11,7 +13,9 @@ import os
 
 
 class AppdataStatistic:
-    def __init__(self):
+    def __init__(self, header: AppDataHeader):
+        self.bits = header.total_bits
+        self.at = header.at
         self.time_veh_trip = {}
         self.time_bs_txq = [[] for _ in GV.NET_STATION_CONTROLLER]
         self.time_bs_tx = [[] for _ in GV.NET_STATION_CONTROLLER]
@@ -30,20 +34,13 @@ class StatisticRecorder:
 
     def CreateIfAbsent(self, sg, header):
         if(header.id not in self.sg_header[sg]):
-            self.sg_header[sg][header.id] = AppdataStatistic()
+            self.sg_header[sg][header.id] = AppdataStatistic(header)
 
     def VehicleReceivedIntactAppdata(self, sg, vehicle, header):
         record = self.GetAppdataRecord(sg, header)
         record.time_veh_trip[vehicle.name] = (
             GV.SUMO_SIM_INFO.getTime() - header.at
         )
-
-    # call by BaseStation while receiving new appdata from NetworkCore
-    # def BaseStationAppdataPropagate(self, sg, bs, header):
-    #     record = self.GetAppdataRecord(sg, header)
-    #     record.time_bs_txq[bs].append(
-    #         [GV.SUMO_SIM_INFO.getTimeNS() + NET_SECONDS_PER_STEP, 0]
-    #     )
 
     # call by BaseStation while a appdata returns to TX queue
     def BaseStationAppdataEnterTXQ(self, sg, bs, headers):
@@ -308,6 +305,91 @@ class StatisticRecorder:
             }
         return sg_stats
 
+    def BaseStationThroughPutReport(self):
+        # pass
+        sg_stats = {}
+        bs_bits = [0 for _ in GV.NET_STATION_CONTROLLER]
+        GV.STATISTIC.Log("=====BaseStationThroughPutReport=====")
+        for sg in SocialGroup:
+            for record in self.sg_header[sg].values():
+                for bs in GV.NET_STATION_CONTROLLER:
+                    if(record.time_bs_serv[bs] > 0):
+                        bs_bits[bs] += record.bits
+        for bs_type in BaseStationType:
+            bs_type_num = 0
+            bs_type_bits = 0
+            for bs in [x for x in GV.NET_STATION_CONTROLLER if x.type == bs_type]:
+                bs_type_bits += bs_bits[bs]
+                bs_type_num += 1
+            bs_type_through_put_avg = (
+                (bs_type_bits / max(bs_type_num, 1)) /
+                SUMO_SIM_SECONDS
+            )
+            print("====={}=====".format(bs_type.name))
+            print("Through Put:{:.2f}/s".format(bs_type_through_put_avg))
+            sg_stats[bs_type] = bs_type_through_put_avg
+        return sg_stats
+
+    def BaseStationSocialGroupResourceUsageReport(self):
+        sg_stats = {}
+        sg_bs_type_data = [[0 for _ in SocialGroup]
+                           for _ in BaseStationType]
+        GV.STATISTIC.Log("=====BaseStationSocialGroupResourceUsageReport=====")
+        for sg in SocialGroup:
+            for record in self.sg_header[sg].values():
+                for bs in GV.NET_STATION_CONTROLLER:
+                    if(record.time_bs_serv[bs] > 0):
+                        sg_bs_type_data[bs.type][sg] += 1
+
+        for bs_type in BaseStationType:
+            bs_type_total_data = max(sum(sg_bs_type_data[bs_type]), 1)
+            bs_type_sg_res_rate = [0 for _ in SocialGroup]
+            print("====={}=====".format(bs_type.name))
+            for sg in SocialGroup:
+                bs_type_sg_res_rate[sg] = (
+                    sg_bs_type_data[bs_type][sg]/bs_type_total_data
+                )
+                print(
+                    "{} Resource Usage: {:.2f}%".format(
+                        sg,
+                        bs_type_sg_res_rate[sg]*100
+                    )
+                )
+            sg_stats[bs_type] = bs_type_sg_res_rate
+        return sg_stats
+
+    def BaseStationSocailGroupDataDropRateReport(self):
+        sg_stats = {}
+        sg_bs_type_recv = [[0 for _ in SocialGroup]
+                           for _ in BaseStationType]
+        sg_bs_type_drop = [[0 for _ in SocialGroup]
+                           for _ in BaseStationType]
+        GV.STATISTIC.Log("=====BaseStationSocailGroupDataDropRateReport=====")
+        for sg in SocialGroup:
+            for record in self.sg_header[sg].values():
+                for bs in GV.NET_STATION_CONTROLLER:
+                    if(len(record.time_bs_txq[bs]) > 0):
+                        sg_bs_type_recv[bs.type][sg] += 1
+                    if(record.time_bs_drop[bs] > 0):
+                        sg_bs_type_drop[bs.type][sg] += 1
+
+        for bs_type in BaseStationType:
+            print("====={}=====".format(bs_type.name))
+            bs_type_sg_drop_rate = [0 for _ in SocialGroup]
+            for sg in SocialGroup:
+                bs_type_sg_drop_rate[sg] = (
+                    sg_bs_type_drop[bs_type][sg] /
+                    max(sg_bs_type_recv[bs_type][sg], 1)
+                )
+                print(
+                    "{} Drop Rate: {:.2f}%".format(
+                        sg,
+                        bs_type_sg_drop_rate[sg]*100
+                    )
+                )
+            sg_stats[bs_type] = bs_type_sg_drop_rate
+        return sg_stats
+
     def Preprocess(self):
         for sg in SocialGroup:
             for record in self.sg_header[sg].values():
@@ -340,7 +422,10 @@ class StatisticRecorder:
             "interest_config": self.interest_config,
             "veh_recv_intact_appdata_trip": self.VehicleReceivedIntactAppdataReport(),
             "bs_appdata_txq_wait": self.BaseStationAppdataTXQReport(),
-            "bs_appdata_tx": self.BaseStationAppdataTXReport()
+            "bs_appdata_tx": self.BaseStationAppdataTXReport(),
+            "bs_through_put": self.BaseStationThroughPutReport(),
+            "bs_sg_res_use_rate": self.BaseStationSocialGroupResourceUsageReport(),
+            # "bs_sg_data_drop_rate": self.BaseStationSocailGroupDataDropRateReport(),
         }
         # save the statistic to file for further estimation
         if save:

@@ -108,7 +108,7 @@ def main(interest_config):
         "--step-length",
         str(SUMO_SECONDS_PER_STEP),
         "--scale",
-        str(1)
+        str(0.1)
     ])
 
     # - skip to interest network condition
@@ -194,7 +194,7 @@ def main(interest_config):
 
 
 if __name__ == "__main__":
-    cProfile.run('main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,0))')
+    cProfile.run('main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,1))')
     # main(
     #     InterestConfig(
     #         ResourceAllocatorType.NOMA_OPT,

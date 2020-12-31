@@ -6,11 +6,12 @@ import single
 
 
 if __name__ == "__main__":
-    process = []
     for res_alloc_type in ResourceAllocatorType:
+        # for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
         for rsu in [False, True]:
-            for poisson in [1, 5]:
-                # for poisson in [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]:
+            # for rsu in [True]:
+            process = []
+            for poisson in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
                 process.append(
                     Process(
                         target=single.main,
@@ -24,5 +25,5 @@ if __name__ == "__main__":
                     )
                 )
                 process[-1].start()
-    for p in process:
-        p.join()
+            for p in process:
+                p.join()

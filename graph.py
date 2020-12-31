@@ -8,22 +8,32 @@ from numpy import random
 
 graph_configs = [
     {
-        "name": "veh_recv_intact_appdata_trip",
-        "subject": ["avg", "max", "min"]
+        "catalog": "veh_recv_intact_appdata_trip",
+        "topic": "End-to-End Time",
+        "x": "Maximum Data Generated Per Second(Unique Distribution) ",
+        "y": "Time(Second)",
+        "subject": ["Avg", "Max", "Min"]
     },
     {
-        "name": "bs_appdata_txq_wait",
-        "subject": ["avg", "max", "min"]
+        "catalog": "bs_appdata_txq_wait",
+        "topic": "Wait Time in Downlink Queue",
+        "x": "Maximum Data Generated Per Second(Unique Distribution) ",
+        "y": "Time(Second)",
+        "subject": ["Avg", "Max", "Min"]
     },
     {
-        "name": "bs_appdata_tx",
-        "subject": ["avg", "max", "min"]
+        "catalog": "bs_appdata_tx",
+        "topic": "Transfer Time",
+        "x": "Maximum Data Generated Per Second(Unique Distribution) ",
+        "y": "Time(Second)",
+        "subject": ["Avg", "Max", "Min"]
     }
 ]
 
+
 a = [t for t in ResourceAllocatorType]
 b = [False, True]
-c = [1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+c = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 interest_config = InterestConfig(None, False, 0)
 stats = [[[None for _c in c] for _b in b] for _a in a]
 for _a, res_alloc_type in enumerate(a):
@@ -45,13 +55,14 @@ _pinf = float("inf")
 _ninf = float("-inf")
 serial = 1
 for config in graph_configs:
-    topic = config["name"]
+    catalog = config["catalog"]
+    topic = config["topic"]
     subjects = config["subject"]
     for subject in subjects:
         title = "{}({})".format(topic, subject)
         plt.figure(serial, figsize=(9, 5))
-        plt.xlabel("data poisson mean")
-        plt.ylabel("time(s)")
+        plt.xlabel(config["x"])
+        plt.ylabel(config["y"])
         plt.title(title)
         for _a in range(len(a)):
             for _b in range(len(b)):
@@ -59,7 +70,7 @@ for config in graph_configs:
                     y = []
                     x = c
                     for _c in range(len(c)):
-                        value = stats[_a][_b][_c][topic][sg][subject]
+                        value = stats[_a][_b][_c][catalog][sg][subject.lower()]
                         if value == _pinf or value == _ninf:
                             value = 0
                         y.append(value)
@@ -80,5 +91,6 @@ for config in graph_configs:
                     #   )
         plt.legend(loc='upper left', bbox_to_anchor=(0, 1))
         plt.savefig('{}/{}.png'.format(dirpath, title))
+        plt.savefig('{}/{}.pdf'.format(dirpath, title))
         serial += 1
 plt.show()
