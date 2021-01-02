@@ -101,7 +101,7 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
             x_max = SIM_CONF.rbf_w - (qos_gp_conf.rbf_w - 1);  
 %           calculate the max cqi's required minimum power(dbm)
             cqi_max = SelectCQI(qos_gp_conf.sinr_max,0.1);
-            sinr_max = CqiMinSINR(cqi_max,0.1);
+            sinr_max = qos_gp_conf.sinr_max;
             sinr_max_sdn = 10 ^(sinr_max/10); 
             
 %           create a new solution group config

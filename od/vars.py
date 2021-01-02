@@ -50,14 +50,18 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     global BS_SETTING
     global NET_RES_ALLOC_TYPE
     global APP_DATA_POISSON
-    # consistant random seed for consistant random number generator
-    random.seed(132342421)
+    # Directories
+    rngdir = "{}/".format(interest_config.rng_seed)
+    datadir = "data/" + rngdir
+    logdir = datadir + "{}/".format(interest_config)
+    statdir = datadir + "{}/".format(interest_config)
+    # Consistant random seed for consistant random number generator
+    random.seed(interest_config.rng_seed)
     # Network
     NET_CORE_CONTROLLER = onc.NetworkCoreController()
     NET_STATUS_CACHE = onm.NetStatusCache()
     NET_STATION_CONTROLLER = []
     # Logger
-    logdir = "log/{}/".format(interest_config)
     time_text = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
     DEBUG = oml.Logger(
         logdir,
@@ -74,7 +78,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     # Sumo Simulation Info
     SUMO_SIM_INFO = oms.SumoSimInfo()
     # Statistsic
-    STATISTIC_RECORDER = omss.StatisticRecorder(interest_config)
+    STATISTIC_RECORDER = omss.StatisticRecorder(statdir, interest_config)
     # Thread
     TRACI_LOCK = Lock()
     # Base Station Setting

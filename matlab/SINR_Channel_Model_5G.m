@@ -1,4 +1,35 @@
-function [ CQI_out,  SINR_rx_dB_10] = SINR_Channel_Model_5G( D2D_dist, h_BS, h_MS, fc, tx_p_dBm, bandwidth, Intf_h_BS, Intf_h_MS, Intf_dist, Intf_pwr_dBm, DS_Desired, CP, UMA_notUMI_Model)
+%5G SINR Channel Model
+% This file implements a Tapped Delay Line (TDL-C) model for both UMa and
+% UMi scenarios, per TR 38.901
+
+% Use: Main BS vars: D2D_dist, h_BS, h_MS, fc, tx_p_dBm, bandwidth, min_tx_pwr_dBm
+%      Intefrence BS: Intf_h_BS, Intf_h_MS, Intf_dist, Intf_pwr_dBm
+%      Common Params: DS_Desired, CP, 
+%      Main BS model: UMA_notUMI_Model, tx_delta_dBm, DS_Nintf_PL
+
+%      Set UMA_notUMI_Model == 1 (UMA), 0 (UMI)
+%      Set DS_Nintf_PL == 1 (DS impacts signal power)  0 (DS impacts
+%      interference)
+
+%      Notes:  DS refers to the state of all signals incoming to the RXs
+%      (This is considered worst case).
+
+% Revision history:
+%  Dec 28, 2020)  Changed SF from normrnd to lognrnd, per text, UMA to UMI
+%  for PL_intf, updated dp to make clear Hz
+%  Dec 29, 2020)  Seperated out DS interference, moved to attenuation
+%  portion of SINR, from interference
+%  Dec 30, 2020) Verified log-normal definition, lognrnd changed to
+%  normrnd.  Modified DS model to seperate Main BS from interference BS.
+%  Updated Multi-path model to reduce impact with tx power scaling.  While
+%  DS is modeled as being the same (desired) for both main and interfering
+%  BS.
+
+function [ CQI_out,  Max_SINR_rx_dB_10, min_tx_p_dBm, PL_dB, INTF_dBm, DS_intf_dBm] = SINR_Channel_Model_5G( D2D_dist, h_BS, h_MS, fc, tx_p_dBm, bandwidth, Intf_h_BS, Intf_h_MS, Intf_dist, Intf_pwr_dBm, DS_Desired, CP, UMA_notUMI_Model, tx_delta_dBm, min_tx_pwr_dBm, DS_Nintf_PL)
+if(~exist('DS_Nintf_PL', 'var'))
+    DS_Nintf_PL = 0;
+end
+    
 %UNTITLED2 Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -29,29 +60,33 @@ TDL_C = [0     , -4.4 ; ...
          8.6523, -22.8; ...
          ];
             
-TDL_C_SCALED = TDL_C .* [DS_Desired * 10^(-9), 1] ; %DS_Desired (ns) is the Delay Spread as observed by the UE
-CP = CP * 10^-9;
+     %DS_Desired is in us
+TDL_C_SCALED = TDL_C .* [DS_Desired, 1] ; %DS_Desired (ns) is the Delay Spread as observed by the UE
+%CP = CP * 1e3; %10^-9;
 
 %Path Loss model per TR 38.901
 
 %Antennas
-BS=h_BS; %Per TR 38.901, h_BS=25m
-MS=1.5;  %Per TR 38.901, h_UT=1.5m --> 22.5m
+%BS=h_BS; %Per TR 38.901, h_BS=25m
+%MS=1.5;  %Per TR 38.901, h_UT=1.5m --> 22.5m
 BS_t=h_BS;
 MS_t= h_MS;
 Intf_BS_t = Intf_h_BS;
 Intf_MS_t = Intf_h_MS;
 %model 3D distance
 
-%model selection distance
-d_bp_pl = 4*h_BS.*h_MS.*20/3; %20/3 = 2.0 Ghz / 3.0 * 10^8, footnote 2 in winner+ model, Table 4.1, see TR 38.901 table 7.4.1.-1 note 1
 %Shadow Fading
-DS_u = -0.24*log10(1 + fc) - 6.83; %NLOS, table 7.5.6 part 1 TR 38.901
-DS_sd = 0.16*log10(1+fc ) + 0.28;
-DS = normrnd(DS_u, DS_sd);
+%DS_u = -0.24*log10(1 + fc) - 6.83; %NLOS, table 7.5.6 part 1 TR 38.901
+%DS_sd = 0.16*log10(1+fc ) + 0.28;
+%DS = normrnd(DS_u, DS_sd);
 
 if(UMA_notUMI_Model)
-    D3D_dist = sqrt(D2D_dist^2 + (MS_t - BS_t)^2); %Since we are outside, always, we consider D2D_dist = D2D_dist_out
+    %model selection distance
+    %fc is in GHZ, so c = 3.0 * 10^8
+    c = 0.3; %3.0 * 10^8;
+    d_bp_pl = 4*h_BS.*h_MS.*fc/c; %20/3 = 2.0 Ghz / 3.0 * 10^8, footnote 2 in winner+ model, Table 4.1, see TR 38.901 table 7.4.1.-1 note 1
+    
+    D3D_dist = sqrt(D2D_dist.^2 + (MS_t - BS_t).^2); %Since we are outside, always, we consider D2D_dist = D2D_dist_out
     [Prob_LOS_sig] = PrLOS(D2D_dist,MS_t,UMA_notUMI_Model);
     [PL_tot_sig] = UMA_Model(fc, D3D_dist, BS_t, MS_t, d_bp_pl, Prob_LOS_sig);
     %[Prob_LOS_sig] = PrLOS(D2D_dist_out,MS_t,UMA_notUMi)
@@ -62,34 +97,58 @@ if(UMA_notUMI_Model)
     [Prob_LOS_intf] = PrLOS(Intf_dist,MS_t,UMA_notUMI_Model);
     [PL_tot_intf] = UMA_Model(fc, D3D_Intf_dist, Intf_BS_t, Intf_MS_t, d_bp_pl, Prob_LOS_intf);
 else
-    D3D_dist = sqrt(D2D_dist^2 + (MS_t - BS_t)^2); %Since we are outside, always, we consider D2D_dist = D2D_dist_out
+    %model selection distance
+    %fc is in GsHZ, so c = 3.0 * 10^8
+    c = 0.3; %3.0 * 10^8;    
+    d_bp_pl = 4*h_BS.*h_MS.*fc/c; %20/3 = 2.0 Ghz / 3.0 * 10^8, footnote 2 in winner+ model, Table 4.1, see TR 38.901 table 7.4.1.-1 note 1
+
+    D3D_dist = sqrt(D2D_dist.^2 + (MS_t - BS_t).^2); %Since we are outside, always, we consider D2D_dist = D2D_dist_out
     [Prob_LOS_sig] = PrLOS(D2D_dist,MS_t,UMA_notUMI_Model);
     [PL_tot_sig] = UMI_Model(fc, D3D_dist, BS_t, MS_t, d_bp_pl, Prob_LOS_sig);
     
     D3D_Intf_dist = sqrt(Intf_dist.^2 + (Intf_MS_t - Intf_BS_t).^2); %Since we are outside, always, we consider D2D_dist = D2D_dist_out
     %Prob_Los_Intf = min(18./Intf_dist,1).*(1-exp(-Intf_dist/36)) + exp(-Intf_dist/36); % LOS probability
     [Prob_LOS_intf] = PrLOS(Intf_dist,MS_t,UMA_notUMI_Model);
-    [PL_tot_intf] = UMA_Model(fc, D3D_Intf_dist, Intf_BS_t, Intf_MS_t, d_bp_pl, Prob_LOS_intf);
+    [PL_tot_intf] = UMI_Model(fc, D3D_Intf_dist, Intf_BS_t, Intf_MS_t, d_bp_pl, Prob_LOS_intf);
+    if(PL_tot_intf < 0) %Handle case where we are too close to the Base Station, NOMA
+        PL_tot_intf = 0;
+    end
 end
     
 
     
 %Assume frequency flat fading
-sum_intf_MP_mW = 0; 
+%sum_intf_MP_mW = 0;
+%sum_intf_self_MP_mW = 0;
 %Worst Case attenuation model
-for i = 1:length(TDL_C_SCALED)
-    DS_Cur = TDL_C_SCALED(i, 1);
-    if((DS_Cur > CP)) %Only account for elements which are not filtered out by the CP
-        intf_dB_MP = tx_p_dBm -PL_tot_sig + (TDL_C_SCALED(i,2)); %Scaled is negative, so we add
-        sum_intf_MP_mW = sum_intf_MP_mW + 10^(intf_dB_MP / 10);
-    end
-end
+%for h = 1:length(Intf_pwr_dBm)
+%    for i = 1:length(TDL_C_SCALED)
+%        DS_Cur = TDL_C_SCALED(i, 1); %Always positive DS scaled
+%        SR = abs(TDL_C_SCALED(i,2)); %Act as attenutation, negative gain
+%        if((DS_Cur > CP)) %Only account for elements which are not filtered out by the CP
+%            if(h == 1)
+%                intf_dB_MP = tx_p_dBm -PL_tot_sig - SR; %Scaled is negative, so we add
+%                sum_intf_self_MP_mW = sum_intf_self_MP_mW(h) + 10^(intf_dB_MP / 10);
+%            end
+%            intf_NOMA_dB = Intf_pwr_dBm(h) - PL_tot_intf(h) - SR; %Assume interference also undergoes delay spread interference
+%            sum_intf_MP_mW = sum_intf_MP_mW + 10^(intf_NOMA_dB / 10);
+%        end
+%    end
+%end
 %sum_intf_MP = () + sum_intf_dB_MP;
 %sum_intf_MP_mW = 10^(sum_intf_MP / 10);
 
+%Delay Spread Model
 
-if(Intf_pwr_dBm > PL_tot_intf) %Ensure external direct inerference is lower bounded
-    Intf_RX = Intf_pwr_dBm - PL_tot_intf;
+%Caclulate mulitple other BS Multi-Path loss
+[sum_intf_MP_mW_Orig] = Calc_DS_Inteference(Intf_pwr_dBm, TDL_C_SCALED, CP, PL_tot_intf);
+
+%Caclulate Main BS Multi-Path loss
+[sum_intf_self_MP_mW] = Calc_DS_Inteference(tx_p_dBm, TDL_C_SCALED, CP, PL_tot_sig);
+
+INTF_impact_mw = 10.^(Intf_pwr_dBm./10) - 10.^(PL_tot_intf./10);
+if(INTF_impact_mw > 0) %Ensure external direct inerference is lower bounded
+    Intf_RX = 10*log10(INTF_impact_mw);
 else
     Intf_RX = 0;
 end
@@ -98,13 +157,20 @@ N0_W = 10^((-174-30)/10)*bandwidth; % AWGN Noise [Thermal noise density = -174dB
 %SINR Model
 %Direct Model
 N0_dBm = (10*log10(N0_W) + 30);
-N0_mW = 10^(N0_dBm/10);
-P_RX_mW = 10^((tx_p_dBm - PL_tot_sig) / 10);%was PL_DB_free_sig
+N0_mW = 10.^(N0_dBm/10);
+if(1 == DS_Nintf_PL)
+    %Here we remove the cancelled signal power
+    P_RX_mW = 10.^((tx_p_dBm - PL_tot_sig) / 10) - sum_intf_self_MP_mW;%was PL_DB_free_sig, cancellation
+else
+    P_RX_mW = 10.^((tx_p_dBm - PL_tot_sig) / 10);
+    sum_intf_MP_mW = sum_intf_MP_mW_Orig + sum_intf_self_MP_mW;
+end
 if((Intf_RX) == 0) %lower bound interference
     INTF_P_RX_mW = sum_intf_MP_mW;
 else
     INTF_P_RX_mW = sum(10.^((Intf_RX) / 10)) + sum_intf_MP_mW; %10^(sum(Intf_pwr_dBm - PL_DB_free_intf) / 10);
 end
+
 SINR_rx_dB_10_new=10*log10( ...
                 P_RX_mW / ... %Signal (mW)
                 ( ...
@@ -115,12 +181,84 @@ SINR_rx_dB_10_new=10*log10( ...
                 );
 
 %SINR_rx_dB = 10*log10(SINR_rx)+30;
-SINR_rx_dB_10 = SINR_rx_dB_10_new;
+Max_SINR_rx_dB_10 = SINR_rx_dB_10_new;
+DS_intf_dBm = 10 * log10(sum_intf_self_MP_mW); %mW to dBm
 
 %UE_CQI = SelectCQI(SINR_rx_dB, 0.1); %determine CQI for UE %submit r0
-CQI_out = max(SelectCQI_fast_BLER10P(SINR_rx_dB_10),1); %determine CQI for UE %9-25
+CQI_out = SelectCQI(Max_SINR_rx_dB_10, 0.1); %determine CQI for UE %9-25
+%CQI_out == 0 (outage)
+
+%Determine minimum tx_power, used for NOMA
+cur_CQI = CQI_out;
+%min_tx_p_dBm = -9999; %Loop has not run
+if(nargin < 14)
+%if(~exist('tx_delta_dBm','var'))
+    tx_delta_dBm = 0.10; %0.05
+end
+if(nargin < 15)
+%if(~exist('min_tx_pwr_dBm','var'))
+    tx_pwr_min_mW = 10; %minimum tx power, 200mW ~ 23 dBm is max, 0.2 mw is min
+    min_tx_pwr_dBm = 10 * log10(tx_pwr_min_mW / 1);
+end 
+if(tx_p_dBm < min_tx_pwr_dBm)
+    min_tx_p_dBm = -140;
+else
+    min_tx_p_dBm = min_tx_pwr_dBm; %Set to default
+end
+
+for cur_tx_p_dBm = tx_p_dBm:-tx_delta_dBm:min_tx_pwr_dBm %Set minimum    
+    [sum_intf_self_MP_mW] = Calc_DS_Inteference(cur_tx_p_dBm, TDL_C_SCALED, CP, PL_tot_sig);
+    
+    if(1 == DS_Nintf_PL)
+        %Here we remove the cancelled signal power
+        P_RX_mW_cur = 10.^((cur_tx_p_dBm - PL_tot_sig) / 10) - sum_intf_self_MP_mW;%was PL_DB_free_sig, cancellation
+    else
+        P_RX_mW_cur = 10.^((cur_tx_p_dBm - PL_tot_sig) / 10);
+        sum_intf_MP_mW = sum_intf_MP_mW_Orig + sum_intf_self_MP_mW;
+    end
+    if((Intf_RX) == 0) %lower bound interference
+        INTF_P_RX_mW = sum_intf_MP_mW;
+    else
+        INTF_P_RX_mW = sum(10.^((Intf_RX) / 10)) + sum_intf_MP_mW; %10^(sum(Intf_pwr_dBm - PL_DB_free_intf) / 10);
+    end    
+
+    SINR_rx_dB_10_cur = 10*log10( P_RX_mW_cur / (N0_mW + INTF_P_RX_mW ));
+    CQI_out_cur = SelectCQI(SINR_rx_dB_10_cur, 0.1);
+    if(CQI_out_cur == cur_CQI)
+        min_tx_p_dBm = cur_tx_p_dBm;
+    else
+        break;
+    end
+    if(CQI_out_cur == 0)
+        break;
+    end
+end
+%min_tx_dB = 
+
+PL_dB = PL_tot_sig;
+INTF_dBm = 10 * log10((N0_mW + INTF_P_RX_mW)/1); %interference dBm
 
 end
+
+function [sum_DS_intf_MP_mW] = Calc_DS_Inteference(tx_p_dBm, TDL_C_SCALED, CP, PL_tot_sig)
+%This function determine the multipath loss experienced by a single.
+%This loss is modeled as interference
+%Assume frequency flat fading
+ 
+    sum_DS_intf_MP_mW = 0;
+    %Worst Case attenuation model
+    for h = 1:length(tx_p_dBm)
+        for i = 1:length(TDL_C_SCALED)
+            DS_Cur = TDL_C_SCALED(i, 1); %Always positive DS scaled
+            SR = abs(TDL_C_SCALED(i,2)); %Act as attenutation, negative gain
+            if((DS_Cur > CP)) %Only account for elements which are not filtered out by the CP
+                intf_dB_MP = tx_p_dBm -PL_tot_sig - SR; %Scaled is negative, so we add
+                sum_DS_intf_MP_mW = sum_DS_intf_MP_mW(h) + 10.^(intf_dB_MP / 10);
+            end
+        end
+    end
+end
+
 
 function [sig] = UMA_Model(fc, D3D_dist, BS_t, MS_t, d_bp_pl, pLOS)
     
@@ -132,7 +270,7 @@ function [sig] = UMA_Model(fc, D3D_dist, BS_t, MS_t, d_bp_pl, pLOS)
     %PL1
     PL_UMA_LOS_sig   = 28.0 + 22*log10(D3D_dist) + 20*log10(fc) + SF_UMA_LOS; %TR 38.901
     %PL2
-    PL_UMA_LOS_dBP_sig = 28.0 + 40.*log10(D3D_dist) + 20*log10(fc) - 9*log10((d_bp_pl)^2+(BS_t-MS_t).^2) +SF_UMA_LOS; %TR 38.901
+    PL_UMA_LOS_dBP_sig = 28.0 + 40.*log10(D3D_dist) + 20*log10(fc) - 9*log10((d_bp_pl).^2+(BS_t-MS_t).^2) +SF_UMA_LOS; %TR 38.901
     %Path Loss, free space
     SF_FS = normrnd(0,7.8);
     PL_UMA_free_sig = 32.4 + 20*log10(fc)+ 30.*log10(D3D_dist) + SF_FS; %%%%%%%%%%%%%%%%%%%%%%%%
@@ -170,7 +308,7 @@ function [sig] = UMI_Model(fc, D3D_dist, BS_t, MS_t, d_bp_pl, pLOS)
     %PL1
     PL_UMI_LOS_sig   = 32.4 + 21*log10(D3D_dist) + 20*log10(fc) + SF_UMi_LOS; %TR 38.901
     %PL2
-    PL_UMI_LOS_dBP_sig = 32.4 + 40*log10(D3D_dist) + 20*log10(fc) - 9.5*log10((d_bp_pl)^2+(BS_t-MS_t)^2) +SF_UMi_LOS; %TR 38.901
+    PL_UMI_LOS_dBP_sig = 32.4 + 40*log10(D3D_dist) + 20*log10(fc) - 9.5*log10((d_bp_pl).^2+(BS_t-MS_t).^2) +SF_UMi_LOS; %TR 38.901
     %Path Loss, free space
     SF_FS = normrnd(0,8.2);
     PL_UMI_free_sig = 32.4 + 20*log10(fc)+ 31.9*log10(D3D_dist) + SF_FS; %%%%%%%%%%%%%%%%%%%%%%%%
@@ -207,7 +345,7 @@ function [Prob_LOS_sig] = PrLOS(D2D_dist_out,MS_t,UMA_notUMi)
             if(MS_t <= 13)
                 C = 0;
             else %should not exceed 23m
-                C = ((MS_t - 13)/10)^1.5;
+                C = ((MS_t - 13)/10).^1.5;
             end
             Pr_LOS_sig = (18 ./ D2D_dist_out + exp(-D2D_dist_out ./ 63).*(1-18./D2D_dist_out)) .* ...
                          (1 + ((C*5/4*(D2D_dist_out./100).^3) .* exp(-D2D_dist_out./150) )); 

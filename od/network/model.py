@@ -1,7 +1,8 @@
 from od.network.types import BaseStationType
 from od.config import (BS_HEIGHT, BS_TRANS_PWR, BS_FREQ,
                        BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
-                       BS_UMI_CP_SOCIAL, BS_UMA_CP)
+                       BS_UMI_CP_SOCIAL, BS_UMA_CP,
+                       VEH_HEIGHT)
 from od.social import SocialGroup
 import od.engine as GE
 import od.vars as GV
@@ -50,7 +51,7 @@ class NetStatusCache:
         for pair in netstat_futures:
             netstat = pair[0]
             future = pair[1]
-            (netstat.cqi, netstat.sinr) = future.result()
+            (netstat.cqi, netstat.sinr, _, _, _, _) = future.result()
         # collect results
         for query in queries:
             results.append(self._map[query[0].name][query[1].serial][query[2]])
@@ -69,7 +70,7 @@ class NetStatusCache:
                 query_tuple[1],
                 query_tuple[2]
             )
-            (net_stat.cqi, net_stat.sinr) = future.result()
+            (net_stat.cqi, net_stat.sinr, _, _, _, _) = future.result()
             net_stat.cached = True
         return net_stat
 
@@ -92,10 +93,10 @@ class NetStatusCache:
 # (VehicleRecorder, BaseStationController, SocialGroup)
 def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
     # Vehicle's position
-    Intf_dist = []
-    Intf_pwr_dBm = []
-    Intf_h_BS = []
-    Intf_h_MS = []
+    Intf_dist = [5000]  # dummy base station for work around
+    Intf_pwr_dBm = [BS_TRANS_PWR[bs_ctrlr.type]]
+    Intf_h_BS = [BS_HEIGHT[bs_ctrlr.type]]
+    Intf_h_MS = [VEH_HEIGHT]
 
     # Confirm settings with 3GPP specs
     if (bs_ctrlr.type == BaseStationType.UMA):
@@ -116,15 +117,18 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
     # Transmission frequency.(Ghz)
     fc = BS_FREQ[bs_ctrlr.type]
     # height of vehicle
-    h_MS = 0.8
+    h_MS = VEH_HEIGHT
     # delay spread. (up to 4 us)
     # DS_Desired = random.normal(0, 4)
     DS_Desired = 0.5
     # distance between vehicle and station
-    UE_dist = pow((bs_ctrlr.pos[0] - vehicle.pos[0])**2 +
-                  (bs_ctrlr.pos[1] - vehicle.pos[1])**2, 0.5)
+    UE_dist = max(
+        pow((bs_ctrlr.pos[0] - vehicle.pos[0])**2 +
+            (bs_ctrlr.pos[1] - vehicle.pos[1])**2, 0.5),
+        10
+    )
 
-    for intf_BS_obj in GV.NET_STATION_CONTROLLER:
+    for intf_BS_obj in [x for x in GV.NET_STATION_CONTROLLER if x.type == bs_ctrlr.type]:
         if (intf_BS_obj == bs_ctrlr):
             continue
 
@@ -133,13 +137,16 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         # intf-station transmission power
         Intf_pwr_dBm.append(BS_TRANS_PWR[intf_BS_obj.type])
         # intf-vehicle height
-        Intf_h_MS.append(0.8)
+        Intf_h_MS.append(VEH_HEIGHT)
         # distance between vehicle and intf-station
         Intf_dist.append(
-            pow(
-                (intf_BS_obj.pos[0] - vehicle.pos[0])**2 +
-                (intf_BS_obj.pos[1] - vehicle.pos[1])**2,
-                0.5
+            max(
+                pow(
+                    (intf_BS_obj.pos[0] - vehicle.pos[0])**2 +
+                    (intf_BS_obj.pos[1] - vehicle.pos[1])**2,
+                    0.5
+                ),
+                10
             )
         )
 
@@ -156,8 +163,8 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         matlab.double(Intf_dist),
         matlab.double(Intf_pwr_dBm),
         float(DS_Desired),  # ns
-        float(CP)*1000,  # us
+        float(CP)*1000,  # us->ns
         True if bs_ctrlr.type == BaseStationType.UMA else False,
-        nargout=2,
+        nargout=6,
         background=True
     )

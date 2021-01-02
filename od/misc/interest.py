@@ -2,10 +2,11 @@ from od.network.types import ResourceAllocatorType
 
 
 class InterestConfig:
-    def __init__(self, res_alloc_type: ResourceAllocatorType, req_rsu: bool, appdata_poisson):
+    def __init__(self, res_alloc_type: ResourceAllocatorType, req_rsu: bool, appdata_poisson, rng_seed=132342421):
         self.res_alloc_type = res_alloc_type
         self.req_rsu = req_rsu
         self.appdata_poisson = appdata_poisson
+        self.rng_seed = rng_seed
 
     def __str__(self):
         return (

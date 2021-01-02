@@ -149,6 +149,8 @@ BS_PRESET = {
 # Vehicle Settings
 # . vehicle base station subscribe move distance
 VEH_MOVE_BS_CHECK = 10  # meters
+# . the vehicle height
+VEH_HEIGHT = 1.5  # meters
 
 # Basic Requirement Check
 if SUMO_SECONDS_PER_STEP < NET_SECONDS_PER_STEP:

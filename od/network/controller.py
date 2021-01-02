@@ -209,6 +209,9 @@ class BaseStationController:
                     for req_rbsize_pair in req_rbsize_pairs:
                         req = req_rbsize_pair[0]
                         rbsize = req_rbsize_pair[1]
+                        # further requests are unable to serve
+                        if(rbsize == 0):
+                            break
                         max_rb_req = math.ceil(req.total_bits / rbsize)
                         ts_rb_req = [0 for _ in range(NET_TS_PER_NET_STEP)]
                         # allocate resource block
@@ -297,6 +300,10 @@ class BaseStationController:
                 ])
                 #  find the minimum cqi among all the vehicles
                 min_cqi = min(status.cqi for status in net_status)
+                #  the minimum cqi is zero! this social group is unable to serve!
+                #  or else some vehicle will not receive data.
+                if(min_cqi == 0):
+                    continue
                 # calculate resource block size for minimum cqi
                 sg_rb_bits = GE.MATLAB_ENG.GetThroughputPerRB(
                     float(min_cqi),
@@ -421,9 +428,14 @@ class BaseStationController:
                 net_status = GV.NET_STATUS_CACHE.GetMultiNetStatus([
                     (veh, self, sg) for veh in self.sg_sub_vehs[sg]
                 ])
-                # find the minimum sinr amon all members
+                # find the minimum sinr among all members
                 min_sinr = min(status.sinr for status in net_status)
-
+                # find the minimum cqi among all members
+                min_cqi = min(status.cqi for status in net_status)
+                #  the minimum cqi is zero! this social group is unable to serve!
+                #  or else some vehicle will not receive data.
+                if(min_cqi == 0):
+                    continue
                 # create group config for allocator
                 grp_config_qos.append({
                     "gid": float(sg.gid),

@@ -24,7 +24,10 @@ class AppdataStatistic:
 
 
 class StatisticRecorder:
-    def __init__(self, interest_config: InterestConfig):
+    def __init__(self, dirpath, interest_config: InterestConfig):
+        if not os.path.isdir(dirpath):
+            os.makedirs(dirpath)
+        self.dirpath = dirpath
         self.interest_config = interest_config
         self.sg_header = [{} for _ in SocialGroup]
 
@@ -429,14 +432,13 @@ class StatisticRecorder:
         }
         # save the statistic to file for further estimation
         if save:
-            dirpath = "stats/"
-            if not os.path.isdir(dirpath):
-                os.mkdir(dirpath)
-            report_filename = '{}.dict'.format(self.interest_config)
-            object_filename = '{}.object'.format(self.interest_config)
-            with open(dirpath + report_filename, 'wb') as interest_statistic_report_file:
+            if not os.path.isdir(self.dirpath):
+                os.mkdir(self.dirpath)
+            report_filename = 'report.pickle'
+            object_filename = 'object.pickle'
+            with open(self.dirpath + report_filename, 'wb') as interest_statistic_report_file:
                 pickle.dump(statistic_report, interest_statistic_report_file)
-            with open(dirpath + object_filename, 'wb') as interest_statistic_object_file:
+            with open(self.dirpath + object_filename, 'wb') as interest_statistic_object_file:
                 pickle.dump(self, interest_statistic_object_file)
         # return statistic object
         return statistic_report
