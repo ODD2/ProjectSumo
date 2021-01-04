@@ -206,6 +206,14 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
         
 %       update information from the last optimize allocation.
         OPT_GP_CONF = UpdateOptimizeResult(alloc_grp_index,OPT_GP_CONF,x,exitflag,false);
+        
+%       calculate position and offset info
+        OPT_GP_CONF = CalcOptGpConfPosOfs(OPT_GP_CONF);
+    end
+    
+    if(isempty(x))
+%       find feasible solution
+        [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,false);
     end
     
 %   result info

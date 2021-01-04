@@ -6,14 +6,11 @@ import single
 
 
 if __name__ == "__main__":
-    for seed in [13232421, 102948123, 4419883]:
-        # for seed in [13232421]:
-        # for res_alloc_type in ResourceAllocatorType:
-        for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
-            for rsu in [False, True]:
-                # for rsu in [True]:
+    for res_alloc_type in ResourceAllocatorType:
+        for rsu in [False, True]:
+            for poisson in [3, 4, 5, 6, 7, 8, 9, 10]:
                 process = []
-                for poisson in [3, 4, 5, 6, 7, 8, 9, 10]:
+                for seed in [13232421, 102948123, 4419883]:
                     process.append(
                         Process(
                             target=single.main,

@@ -312,7 +312,6 @@ class StatisticRecorder:
         # pass
         sg_stats = {}
         bs_bits = [0 for _ in GV.NET_STATION_CONTROLLER]
-        GV.STATISTIC.Log("=====BaseStationThroughPutReport=====")
         for sg in SocialGroup:
             for record in self.sg_header[sg].values():
                 for bs in GV.NET_STATION_CONTROLLER:
@@ -333,11 +332,20 @@ class StatisticRecorder:
             sg_stats[bs_type] = bs_type_through_put_avg
         return sg_stats
 
+    def SystemThroughPutReport(self):
+        total_bits = 0
+        for sg in SocialGroup:
+            for record in self.sg_header[sg].values():
+                for bs in GV.NET_STATION_CONTROLLER:
+                    if(record.time_bs_serv[bs] > 0):
+                        total_bits += record.bits
+        total_bits /= len(GV.NET_STATION_CONTROLLER)
+        return total_bits
+
     def BaseStationSocialGroupResourceUsageReport(self):
         sg_stats = {}
         sg_bs_type_data = [[0 for _ in SocialGroup]
                            for _ in BaseStationType]
-        GV.STATISTIC.Log("=====BaseStationSocialGroupResourceUsageReport=====")
         for sg in SocialGroup:
             for record in self.sg_header[sg].values():
                 for bs in GV.NET_STATION_CONTROLLER:
@@ -428,6 +436,7 @@ class StatisticRecorder:
             "bs_appdata_tx": self.BaseStationAppdataTXReport(),
             "bs_through_put": self.BaseStationThroughPutReport(),
             "bs_sg_res_use_rate": self.BaseStationSocialGroupResourceUsageReport(),
+            "sys_through_put": self.SystemThroughPutReport(),
             # "bs_sg_data_drop_rate": self.BaseStationSocailGroupDataDropRateReport(),
         }
         # save the statistic to file for further estimation
