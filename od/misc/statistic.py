@@ -324,11 +324,10 @@ class StatisticRecorder:
                 bs_type_bits += bs_bits[bs]
                 bs_type_num += 1
             bs_type_through_put_avg = (
-                (bs_type_bits / max(bs_type_num, 1)) /
-                SUMO_SIM_SECONDS
+                (bs_type_bits / max(bs_type_num, 1))
             )
             print("====={}=====".format(bs_type.name))
-            print("Through Put:{:.2f}/s".format(bs_type_through_put_avg))
+            print("Throughput:{:.2f}/s".format(bs_type_through_put_avg))
             sg_stats[bs_type] = bs_type_through_put_avg
         return sg_stats
 
@@ -339,7 +338,6 @@ class StatisticRecorder:
                 for bs in GV.NET_STATION_CONTROLLER:
                     if(record.time_bs_serv[bs] > 0):
                         total_bits += record.bits
-        total_bits /= len(GV.NET_STATION_CONTROLLER)
         return total_bits
 
     def BaseStationSocialGroupResourceUsageReport(self):
@@ -405,25 +403,26 @@ class StatisticRecorder:
         for sg in SocialGroup:
             for record in self.sg_header[sg].values():
                 for serial in GV.NET_STATION_CONTROLLER:
-                    # check if the latest enqueue time exceeds the total simulation time
-                    if(record.time_bs_txq[serial][-1][0] > SUMO_TOTAL_SECONDS):
-                        record.time_bs_drop[serial] = SUMO_TOTAL_SECONDS
-                        record.time_bs_txq[serial][-1][0] = SUMO_TOTAL_SECONDS
+                    if(len(record.time_bs_txq[serial]) > 0):
+                        # check if the latest enqueue time exceeds the total simulation time
+                        if(record.time_bs_txq[serial][-1][0] > SUMO_TOTAL_SECONDS):
+                            record.time_bs_drop[serial] = SUMO_TOTAL_SECONDS
+                            record.time_bs_txq[serial][-1][0] = SUMO_TOTAL_SECONDS
 
-                    # check if the latest dequeue time is unset
-                    if(record.time_bs_txq[serial][-1][1] == 0):
-                        if(record.time_bs_drop[serial] >= 0):
-                            # if it's unset because it had been dropped by base station
-                            # the dequeue time will be the time it was dropped
-                            record.time_bs_txq[serial][-1][1] = record.time_bs_drop[serial]
-                        elif(record.time_bs_serv[serial] >= 0):
-                            # if it's unset because it had been completely served
-                            # no dequeue time is not required, so is the enqueue time.
-                            record.time_bs_txq[serial].pop()
-                        else:
-                            # if it's unset because the simulation ended (not dropped also not served)
-                            # set the dequeue time to the simulation end time.
-                            record.time_bs_txq[serial][-1][1] = SUMO_TOTAL_SECONDS
+                        # check if the latest dequeue time is unset
+                        if(record.time_bs_txq[serial][-1][1] == 0):
+                            if(record.time_bs_drop[serial] >= 0):
+                                # if it's unset because it had been dropped by base station
+                                # the dequeue time will be the time it was dropped
+                                record.time_bs_txq[serial][-1][1] = record.time_bs_drop[serial]
+                            elif(record.time_bs_serv[serial] >= 0):
+                                # if it's unset because it had been completely served
+                                # no dequeue time is not required, so is the enqueue time.
+                                record.time_bs_txq[serial].pop()
+                            else:
+                                # if it's unset because the simulation ended (not dropped also not served)
+                                # set the dequeue time to the simulation end time.
+                                record.time_bs_txq[serial][-1][1] = SUMO_TOTAL_SECONDS
 
     def Report(self, save=True):
         # preprocess the raw statistics

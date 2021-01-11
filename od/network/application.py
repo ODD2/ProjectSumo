@@ -1,5 +1,6 @@
 from __future__ import annotations
 from numpy import random
+from od.network.types import BaseStationType
 from od.network.appdata import AppData, AppDataHeader
 from od.config import NET_SG_RND_REQ_SIZE
 from od.social import SocialGroup
@@ -153,3 +154,55 @@ class NetworkCoreApplication(Application):
             social_group,
             appdata.header
         )
+
+
+class BaseStationApplicationUMA(Application):
+    def __init__(self, owner):
+        super().__init__(owner)
+
+    def DataIntact(self, social_group: SocialGroup, appdata: AppData):
+        GV.DEBUG.Log(
+            "[{}][app][{}]:data intact.({})".format(
+                self.owner.name,
+                social_group.fname.lower(),
+                appdata.header
+            )
+        )
+        # propagate the appdata to other vehicles in range
+        self.owner.ReceivePropagation(
+            social_group,
+            appdata.header
+        )
+
+
+class BaseStationApplicationUMI(Application):
+    def __init__(self, owner):
+        super().__init__(owner)
+
+    def DataIntact(self, social_group: SocialGroup, appdata: AppData):
+        GV.DEBUG.Log(
+            "[{}][app][{}]:data intact.({})".format(
+                self.owner.name,
+                social_group.fname.lower(),
+                appdata.header
+            )
+        )
+        if(social_group == SocialGroup.CRITICAL):
+            # propagate the appdata to other vehicles in range.
+            self.owner.ReceivePropagation(
+                social_group,
+                appdata.header
+            )
+        # propagate the appdata to the network core controller.
+        GV.NET_CORE_CONTROLLER.ReceivePropagation(
+            social_group,
+            appdata.header
+        )
+
+
+def BaseStationApplication(bs_ctrlr):
+    if(bs_ctrlr.type == BaseStationType.UMA):
+        return BaseStationApplicationUMA(bs_ctrlr)
+    elif(bs_ctrlr.type == BaseStationType.UMI):
+        return BaseStationApplicationUMI(bs_ctrlr)
+    return None

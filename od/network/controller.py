@@ -1,6 +1,6 @@
 from od.social import SocialGroup
 from od.network.types import LinkType
-from od.network.application import NetworkCoreApplication
+from od.network.application import NetworkCoreApplication, BaseStationApplication
 from od.network.appdata import AppData, AppDataHeader
 from od.network.package import NetworkPackage
 from od.network.types import BroadcastObject, BaseStationType, ResourceAllocatorType
@@ -28,7 +28,10 @@ class BaseStationController:
         self.radius = BS_RADIUS[bs_type]
         self.serial = serial
 
-        # vehicles that've subscribed to specific social groups
+        # Base station application
+        self.app = BaseStationApplication(self)
+
+        # Vehicles that've subscribed to specific social groups
         self.sg_sub_vehs = [[] for i in SocialGroup]
 
         # Upload/Download packages that're currently transmitting
@@ -153,7 +156,8 @@ class BaseStationController:
 
     # process delivered packages
     def PackageDelivered(self, package: NetworkPackage):
-        GV.NET_CORE_CONTROLLER.PackageDelivered(package)
+        for appdata in package.appdatas:
+            self.app.RecvData(package.social_group, appdata)
 
     # Function called by VehicleRecorder to submit upload requests to this base station
     def ReceiveUploadRequest(self, sender, social_group: SocialGroup, total_bits: int):
@@ -553,7 +557,7 @@ class BaseStationController:
     def ReceivePackage(self, package: NetworkPackage):
         self.pkg_in_proc[LinkType.UPLINK].append(package)
 
-    # Function called by NetworkCoreController to propagate appdata
+    # Function called by NetworkController/BaseStationApplication to propagate appdata.
     def ReceivePropagation(self, social_group: SocialGroup, header: AppDataHeader):
         if(social_group not in self.sg_brdcst_datas[social_group.qos]):
             self.sg_brdcst_datas[social_group.qos][social_group] = []
@@ -604,13 +608,17 @@ class BaseStationController:
 class NetworkCoreController:
     def __init__(self):
         self.name = "core"
-        self.data_owners = {}
-        self.app = NetworkCoreApplication(self)
+        # self.app = NetworkCoreApplication(self)
 
-    def PackageDelivered(self, package: NetworkPackage):
-        for appdata in package.appdatas:
-            self.app.RecvData(package.social_group, appdata)
+    # called by UMIs to propagate critical data to UMA.
+    def ReceivePropagation(self, social_group: SocialGroup, header: AppDataHeader):
+        self.StartPropagation(social_group, header)
+
+    # def PackageDelivered(self, package: NetworkPackage):
+    #     for appdata in package.appdatas:
+    #         self.app.RecvData(package.social_group, appdata)
 
     def StartPropagation(self, social_group: SocialGroup, header: AppDataHeader):
-        for bs_ctrlr in GV.NET_STATION_CONTROLLER:
-            bs_ctrlr.ReceivePropagation(social_group, header)
+        # Propagate all data to UMA as general data.
+        for bs_ctrlr in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
+            bs_ctrlr.ReceivePropagation(SocialGroup.GENERAL, header)

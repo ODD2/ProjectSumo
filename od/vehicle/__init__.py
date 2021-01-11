@@ -334,22 +334,24 @@ class VehicleRecorder():
 
     # Select the service base station according to the social type provided.
     def SelectSocialBS(self, social_group: SocialGroup):
+        # 2021/1/11 Scenario:
+        # UMIs are spcificly for critical data, only Critical datas select UMI
+        # as a type of upload destination. Any other social datas never select a UMI.
         if (social_group == SocialGroup.CRITICAL):
             return (
                 self.sub_sg_bs[BaseStationType.UMI][social_group] if
                 self.sub_sg_bs[BaseStationType.UMI][social_group] != None
-                else self.sub_sg_bs[BaseStationType.UMA][social_group])
-        elif (social_group == SocialGroup.GENERAL):
-            return (
-                self.sub_sg_bs[BaseStationType.UMI][social_group] if
-                (self.sub_sg_bs[BaseStationType.UMI][social_group] !=
-                 None and len(self.app.datas[SocialGroup.CRITICAL]) == 0)
-                else self.sub_sg_bs[BaseStationType.UMA][social_group])
+                else self.sub_sg_bs[BaseStationType.UMA][social_group]
+            )
+        # elif (social_group == SocialGroup.GENERAL):
+        #     return (
+        #         self.sub_sg_bs[BaseStationType.UMI][social_group] if
+        #         (self.sub_sg_bs[BaseStationType.UMI][social_group] !=
+        #          None and len(self.app.datas[SocialGroup.CRITICAL]) == 0)
+        #         else self.sub_sg_bs[BaseStationType.UMA][social_group]
+        #     )
         else:
-            return (
-                self.sub_sg_bs[BaseStationType.UMA][social_group] if
-                self.sub_sg_bs[BaseStationType.UMA][social_group] != None
-                else self.sub_sg_bs[BaseStationType.UMI][social_group])
+            return self.sub_sg_bs[BaseStationType.UMA][social_group]
 
     # Function called by BaseStationControllers to send packages
     def ReceivePackage(self, package: NetworkPackage):
