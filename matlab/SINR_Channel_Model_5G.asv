@@ -241,9 +241,6 @@ for cur_tx_p_dBm = tx_p_dBm:-tx_delta_dBm:min_tx_pwr_dBm %Set minimum
     else
         %Signal decrease causes interference
         cur_spare_pwr_dBm = 10*log10(10.^((tx_p_dBm) /10) - 10.^(cur_tx_p_dBm / 10));
-        %Prevent restrict the lower bound of cur_spare_pwr_dBm 
-        %to -100 to prevent -Inf dBm.
-        cur_spare_pwr_dBm = max(cur_spare_pwr_dBm,-100);
         [sum_intf_other_MP_mW] = Calc_DS_Inteference(cur_spare_pwr_dBm, TDL_C_SCALED, CP, PL_tot_sig);
         INTF_add_RX_mw_cur =  10.^((cur_spare_pwr_dBm - PL_tot_sig) / 10);
         sum_intf_MP_mW_2 = INTF_add_RX_mw_cur + sum_intf_MP_mW + sum_intf_other_MP_mW;
@@ -280,7 +277,7 @@ function [sum_DS_intf_MP_mW] = Calc_DS_Inteference(tx_p_dBm, TDL_C_SCALED, CP, P
 %This loss is modeled as interference
 %Assume frequency flat fading
  
-    list_DS_intf_MP_mW = 0;
+    sum_DS_intf_MP_mW = 0;
     %Worst Case attenuation SINR_model
     for h = 1:length(tx_p_dBm)
         for i = 1:length(TDL_C_SCALED)
@@ -288,11 +285,10 @@ function [sum_DS_intf_MP_mW] = Calc_DS_Inteference(tx_p_dBm, TDL_C_SCALED, CP, P
             SR = abs(TDL_C_SCALED(i,2)); %Act as attenutation, negative gain
             if((DS_Cur > CP)) %Only account for elements which are not filtered out by the CP
                 intf_dB_MP = tx_p_dBm -PL_tot_sig - SR; %Scaled is negative, so we add
-                list_DS_intf_MP_mW = list_DS_intf_MP_mW(h) + 10.^(intf_dB_MP / 10);
+                sum_DS_intf_MP_mW = sum_DS_intf_MP_mW(h) + 10.^(intf_dB_MP / 10);
             end
         end
     end
-    sum_DS_intf_MP_mW = sum(list_DS_intf_MP_mW);
 end
 
 

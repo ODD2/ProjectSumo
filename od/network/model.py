@@ -7,6 +7,7 @@ from od.social import SocialGroup
 import od.engine as GE
 import od.vars as GV
 import matlab
+import math
 
 # Container to save network status
 
@@ -14,26 +15,27 @@ import matlab
 class NetStatus:
     def __init__(self):
         self.cached = False
-        self.cqi = 0
-        self.sinr = 0
+        self.max_cqi = 0
+        self.max_sinr = 0
+        self.pwr_req_dBm = 0
+        self.pwr_ext_dBm = 0
+
 
 # Container to cache status results
-
-
 class NetStatusCache:
     def __init__(self):
         self._map = {}
 
     # param [(vehicle,bs_ctrlr,social_group)]
-    def GetMultiNetStatus(self, queries):
+    def GetMultiNetStatus(self, query_tuples):
         results = []
         netstat_futures = []
         # error detection
-        for query in queries:
+        for query in query_tuples:
             if query[0].name not in self._map:
                 raise Exception("Error! vehicle should be in the map!!")
         # fetch none cached result in parellel
-        for query in queries:
+        for query in query_tuples:
             netstat = self._map[query[0].name][query[1].serial][query[2]]
             if (not netstat.cached):
                 netstat_futures.append(
@@ -51,28 +53,21 @@ class NetStatusCache:
         for pair in netstat_futures:
             netstat = pair[0]
             future = pair[1]
-            (netstat.cqi, netstat.sinr, _, _, _, _) = future.result()
+            (
+                netstat.max_cqi, netstat.max_sinr,
+                netstat.pwr_req_dBm,
+                _, _, _, _, _,
+                netstat.pwr_ext_dBm
+            ) = future.result()
         # collect results
-        for query in queries:
+        for query in query_tuples:
             results.append(self._map[query[0].name][query[1].serial][query[2]])
         # return
         return results
 
     # param [(vehicle,bs_ctrlr,social_group)]
     def GetNetStatus(self, query_tuple):
-        if query_tuple[0].name not in self._map:
-            raise Exception("Error! vehicle should be in the map!!")
-
-        net_stat = self._map[query_tuple[0].name][query_tuple[1].serial][query_tuple[2]]
-        if (not net_stat.cached):
-            future = GET_BS_CQI_SINR_5G_FUTURE(
-                query_tuple[0],
-                query_tuple[1],
-                query_tuple[2]
-            )
-            (net_stat.cqi, net_stat.sinr, _, _, _, _) = future.result()
-            net_stat.cached = True
-        return net_stat
+        return self.GetMultiNetStatus([query_tuple])[0]
 
     # clean
     def Flush(self):
@@ -162,9 +157,13 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         matlab.double(Intf_h_MS),
         matlab.double(Intf_dist),
         matlab.double(Intf_pwr_dBm),
-        float(DS_Desired),  # ns
-        float(CP)*1000,  # us->ns
+        float(DS_Desired*1000),  # us->ns
+        float(CP*1000),  # us->ns
         True if bs_ctrlr.type == BaseStationType.UMA else False,
-        nargout=6,
+        float(0.001),
+        float(tx_p_dBm - 10*math.log10(2)),
+        False,
+        True,
+        nargout=9,
         background=True
     )

@@ -68,24 +68,30 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
                          ...%OMA settings
                          "oma_cqi_num",0,...
                          "oma_cqi_list",[],...
-                         "oma_cqi_pwr_list",[],...
+                         "oma_cqi_req_pwr_mw",[],...
+                         "oma_cqi_ext_pwr_mw",[],...
                          "oma_cqi_req_rb_list",[],...
                          "oma_sol_ofs",0,...
                          "oma_sol_size",0,...
                          ...%NOMA settings
                          "noma_cqi_num",0,...
                          "noma_cqi_list",[],...
-                         "noma_cqi_pwr_list",[],...
+                         "noma_cqi_req_pwr_mw",[],...
                          "noma_cqi_req_rb_list",[],...
                          "noma_sol_ofs",0,...              
                          "noma_sol_size",0 ...
     );
 
 %   initialization
-    SIM_CONF.rbfs = SIM_CONF.rbf_w* SIM_CONF.rbf_h;
+% 	- simulation configs
+    SIM_CONF.rbfs = SIM_CONF.rbf_w * SIM_CONF.rbf_h;
+    SIM_CONF.max_pwr_mw = 10^(SIM_CONF.max_pwr_dBm/10);
+% 	- group configs
     OPT_GP_CONF = [];    
     SOL_GP_CONF = [];
+% 	- solution vector
     x = [];
+% 	- solution flags
     exitflag = -2;
     
 %   optimization
@@ -99,10 +105,12 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
 %           calculate the maximum possible resource block in x/y axis
             y_max = SIM_CONF.rbf_h - (qos_gp_conf.rbf_h - 1);
             x_max = SIM_CONF.rbf_w - (qos_gp_conf.rbf_w - 1);  
-%           calculate the max cqi's required minimum power(dbm)
+%           calculate the maximum cqi and fetch required power in dBm
             cqi_max = SelectCQI(qos_gp_conf.sinr_max,0.1);
             sinr_max = qos_gp_conf.sinr_max;
             sinr_max_sdn = 10 ^(sinr_max/10); 
+            pwr_req_dBm = qos_gp_conf.pwr_req_dBm;
+            pwr_ext_dBm = qos_gp_conf.pwr_ext_dBm;
             
 %           create a new solution group config
             new_gp_conf  = OPT_GP_CONF_TEMPLATE;            
@@ -128,26 +136,18 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
             new_gp_conf.x_max = x_max;
             new_gp_conf.rb_num = y_max * x_max;
             
+% 			configure oma prerequisite settings
+			new_gp_conf.oma_cqi_list = [ cqi_max ];
+            new_gp_conf.oma_cqi_req_pwr_mw = [ 10^(pwr_req_dBm/10)];
+            new_gp_conf.oma_cqi_ext_pwr_mw = [ 10^(pwr_ext_dBm/10)];
+            new_gp_conf.oma_cqi_num = 1;
+
 %           add new group configs
             OPT_GP_CONF = [OPT_GP_CONF new_gp_conf];
         end
         
 %       record the group indices require allocation.
         alloc_grp_index = find(~[OPT_GP_CONF.is_fix]);
-        
-%       configure oma layer allocation prerequisites.
-        for index = alloc_grp_index
-            sinr_max_noise = 1/(OPT_GP_CONF(index).sinr_max_sdn / SIM_CONF.max_pwr);
-            oma_cqi = OPT_GP_CONF(index).cqi_max;
-            oma_cqi_req_sdn = 10 ^ (CqiMinSINR(oma_cqi,0.1)/10);
-            oma_cqi_pwr =(oma_cqi_req_sdn)*(sinr_max_noise + SIM_CONF.max_pwr)/(1+oma_cqi_req_sdn);
-%           if the power required for noma will decrease the cqi, then
-%           don't provide noma.
-            oma_cqi_pwr = min(oma_cqi_pwr,SIM_CONF.max_pwr);
-            OPT_GP_CONF(index).oma_cqi_list = [ oma_cqi ];
-            OPT_GP_CONF(index).oma_cqi_pwr_list = [ oma_cqi_pwr ];
-            OPT_GP_CONF(index).oma_cqi_num = 1;
-        end
         
 %       calculate position and offset info
         OPT_GP_CONF = CalcOptGpConfPosOfs(OPT_GP_CONF);
@@ -163,10 +163,10 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
         
         
 %       find the possible max/min remaining power lefted for NOMA resource block allocations
-        oma_max_rem_pwr = SIM_CONF.max_pwr - min([OPT_GP_CONF.oma_cqi_pwr_list SIM_CONF.max_pwr]);
-        oma_min_rem_pwr = SIM_CONF.max_pwr - max([OPT_GP_CONF.oma_cqi_pwr_list  0]);
-        if(oma_min_rem_pwr > oma_max_rem_pwr)
-            oma_min_rem_pwr = oma_max_rem_pwr;
+        oma_max_rem_pwr_mw = max([OPT_GP_CONF.oma_cqi_ext_pwr_mw 0]);
+        oma_min_rem_pwr_mw = max([OPT_GP_CONF.oma_cqi_ext_pwr_mw SIM_CONF.max_pwr_mw]);
+        if(oma_min_rem_pwr_mw > oma_max_rem_pwr_mw)
+            oma_min_rem_pwr_mw = oma_max_rem_pwr_mw;
         end
         for index = alloc_grp_index
 %           sufficient resource groups are ignored from noma layer
@@ -174,9 +174,9 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
             if( OPT_GP_CONF(index).rem_bits <=0 )
                 continue
             end
-            noise_reciprocal = OPT_GP_CONF(index).sinr_max_sdn / SIM_CONF.max_pwr;
-            noma_cqi_max =  SelectCQI(10 *log10( oma_max_rem_pwr * noise_reciprocal), 0.1);
-            noma_cqi_min =  max( SelectCQI(10 *log10( oma_min_rem_pwr * noise_reciprocal), 0.1) , 1);
+            noise_reciprocal = OPT_GP_CONF(index).sinr_max_sdn / SIM_CONF.max_pwr_mw;
+            noma_cqi_max =  SelectCQI(10 *log10( oma_max_rem_pwr_mw * noise_reciprocal), 0.1);
+            noma_cqi_min =  max( SelectCQI(10 *log10( oma_min_rem_pwr_mw * noise_reciprocal), 0.1) , 1);
             
 %           unable to provide suitable power for noma layer allocation
             if(noma_cqi_max < noma_cqi_min)
@@ -185,14 +185,13 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
             
 %           configure cqi settings for noma layer allocation
             noma_cqi_list = [];
-            noma_cqi_pwr_list = [];
+            noma_cqi_req_pwr_mw = [];
             for cqi = noma_cqi_min:noma_cqi_max
                 noma_cqi_list = [noma_cqi_list cqi];
-                noma_cqi_pwr_list = [noma_cqi_pwr_list (10 ^ (CqiMinSINR(cqi,0.1)/10))/...
-                                                       (OPT_GP_CONF(index).sinr_max_sdn / SIM_CONF.max_pwr);];
+                noma_cqi_req_pwr_mw = [noma_cqi_req_pwr_mw ((10 ^ (CqiMinSINR(cqi,0.1)/10))/noise_reciprocal)];
             end
             OPT_GP_CONF(index).noma_cqi_list = noma_cqi_list;
-            OPT_GP_CONF(index).noma_cqi_pwr_list = noma_cqi_pwr_list;
+            OPT_GP_CONF(index).noma_cqi_req_pwr_mw = noma_cqi_req_pwr_mw;
             OPT_GP_CONF(index).noma_cqi_num = length(OPT_GP_CONF(index).noma_cqi_list);
         end
         
@@ -272,7 +271,7 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
         for idx = alloc_gidx
             new_cqi_list = [];
             new_cqi_req_rb_list = [];
-            new_cqi_pwr_list = [];
+            new_cqi_req_pwr_mw = [];
             rem_bits = GP_CONF(idx).rem_bits;
             req_bits = GP_CONF(idx).req_bits;
             for uor_cqi_i = 1: GP_CONF(idx).(ln+"_cqi_num")
@@ -280,21 +279,21 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
                 cqi_sol_end = GP_CONF(idx).(ln+"_sol_ofs") + (uor_cqi_i    ) * GP_CONF(idx).rb_num;
                 rb_alloc = sum(x(cqi_sol_beg:cqi_sol_end));
                 uor_cqi = GP_CONF(idx).(ln+"_cqi_list")(uor_cqi_i);
-                pwr = GP_CONF(idx).(ln+"_cqi_pwr_list")(uor_cqi_i);
+                pwr = GP_CONF(idx).(ln+"_cqi_req_pwr_mw")(uor_cqi_i);
                 bit_alloc =  rb_alloc * GetThroughputPerRB(uor_cqi,14);
                 if( rb_alloc > 0 )
                     rem_bits = rem_bits - bit_alloc;
                     req_bits = req_bits + bit_alloc;
                     new_cqi_list = [new_cqi_list uor_cqi];
                     new_cqi_req_rb_list = [new_cqi_req_rb_list rb_alloc];
-                    new_cqi_pwr_list = [new_cqi_pwr_list pwr];
+                    new_cqi_req_pwr_mw = [new_cqi_req_pwr_mw pwr];
                 end
             end
             GP_CONF(idx).rem_bits = max(rem_bits ,0);
             GP_CONF(idx).req_bits = req_bits;
             GP_CONF(idx).(ln+"_cqi_list") = new_cqi_list;
             GP_CONF(idx).(ln+"_cqi_req_rb_list") = new_cqi_req_rb_list;
-            GP_CONF(idx).(ln+"_cqi_pwr_list") = new_cqi_pwr_list;
+            GP_CONF(idx).(ln+"_cqi_req_pwr_mw") = new_cqi_req_pwr_mw;
             GP_CONF(idx).(ln+"_cqi_num") = length(GP_CONF(idx).(ln+"_cqi_list"));
             
             if OMA_LAYER && (GP_CONF(idx).rem_bits == 0)
@@ -327,7 +326,7 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
 	                    continue
 	                end
 
-	                fprintf(' cqi:%d(x%d), pwr:%d , rbs:[',g_cqi,length(sol_pos),gpc.(layer_+"_cqi_pwr_list")(cqi_i_));
+	                fprintf(' cqi:%d(x%d), pwr:%d , rbs:[',g_cqi,length(sol_pos),10*log10(gpc.(layer_+"_cqi_req_pwr_mw")(cqi_i_)));
 	                for pos = sol_pos
 	                    fprintf('(%d,%d)', [(mod(pos,gpc.y_max)+1) (floor(pos/gpc.y_max)+1)]);
 	                end

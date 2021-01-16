@@ -178,23 +178,23 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
 
 %   resource block fraction max power constraint
     ALEQ_RBF_MAX_PWR = zeros(SIM_CONF.rbfs,sol_size);
-    BLEQ_RBF_MAX_PWR = ones(SIM_CONF.rbfs,1) * SIM_CONF.max_pwr;
+    BLEQ_RBF_MAX_PWR = ones(SIM_CONF.rbfs,1) * SIM_CONF.max_pwr_mw;
     for gp_conf = OPT_GP_CONF
 %       oma layer resource block
         for oma_cqi_i = 1 : gp_conf.oma_cqi_num
-            cqi_min_sinr_pwr = gp_conf.oma_cqi_pwr_list(oma_cqi_i);
+            cqi_min_sinr_pwr_mw = gp_conf.oma_cqi_req_pwr_mw(oma_cqi_i);
             oma_cqi_sol_beg = gp_conf.oma_sol_ofs + (oma_cqi_i - 1) * gp_conf.rb_num + 1;
             oma_cqi_sol_end = gp_conf.oma_sol_ofs + (oma_cqi_i    ) * gp_conf.rb_num    ;                
             ALEQ_RBF_MAX_PWR( : , oma_cqi_sol_beg : oma_cqi_sol_end ) = ...
-                 M_RB_TO_RBF( : , oma_cqi_sol_beg : oma_cqi_sol_end ) * cqi_min_sinr_pwr;
+                 M_RB_TO_RBF( : , oma_cqi_sol_beg : oma_cqi_sol_end ) * cqi_min_sinr_pwr_mw;
         end
 %       noma layer resource block
         for noma_cqi_i = 1 : gp_conf.noma_cqi_num
-            cqi_min_sinr_pwr = gp_conf.noma_cqi_pwr_list(noma_cqi_i);
+            cqi_min_sinr_pwr_mw = gp_conf.noma_cqi_req_pwr_mw(noma_cqi_i);
             noma_cqi_sol_beg = gp_conf.noma_sol_ofs + (noma_cqi_i - 1) * gp_conf.rb_num + 1;
             noma_cqi_sol_end = gp_conf.noma_sol_ofs + (noma_cqi_i    ) * gp_conf.rb_num    ;                
             ALEQ_RBF_MAX_PWR( : , noma_cqi_sol_beg : noma_cqi_sol_end ) = ...
-                 M_RB_TO_RBF( : , noma_cqi_sol_beg : noma_cqi_sol_end ) * cqi_min_sinr_pwr;
+                 M_RB_TO_RBF( : , noma_cqi_sol_beg : noma_cqi_sol_end ) * cqi_min_sinr_pwr_mw;
         end
     end
     

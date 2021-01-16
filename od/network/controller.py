@@ -196,7 +196,7 @@ class BaseStationController:
                                         self,
                                         sg
                                     )
-                                ).cqi
+                                ).max_cqi
                             ),
                             int(NET_RB_SLOT_SYMBOLS)
                         )
@@ -303,14 +303,15 @@ class BaseStationController:
                     (veh, self, sg) for veh in self.sg_sub_vehs[sg]
                 ])
                 #  find the minimum cqi among all the vehicles
-                min_cqi = min(status.cqi for status in net_status)
+                cqi_min_of_all_member = min(
+                    status.max_cqi for status in net_status)
                 #  the minimum cqi is zero! this social group is unable to serve!
                 #  or else some vehicle will not receive data.
-                if(min_cqi == 0):
+                if(cqi_min_of_all_member == 0):
                     continue
                 # calculate resource block size for minimum cqi
                 sg_rb_bits = GE.MATLAB_ENG.GetThroughputPerRB(
-                    float(min_cqi),
+                    float(cqi_min_of_all_member),
                     int(NET_RB_SLOT_SYMBOLS)
                 )
                 # total required resource blocks for this social group
@@ -389,7 +390,7 @@ class BaseStationController:
         SIM_CONF = {
             "rbf_h": float(round(BS_TOTAL_BAND[self.type]/NET_RB_BW_UNIT*0.9)),
             "rbf_w": float(2),
-            "max_pwr": float(BS_TRANS_PWR[self.type]),
+            "max_pwr_dBm": float(BS_TRANS_PWR[self.type]),
         }
         # Qos group config for optimizer
         QoS_GP_CONF = []
@@ -429,23 +430,23 @@ class BaseStationController:
                     continue
 
                 # find the lowest cqi in the social group subscribers
-                net_status = GV.NET_STATUS_CACHE.GetMultiNetStatus([
+                list_net_status = GV.NET_STATUS_CACHE.GetMultiNetStatus([
                     (veh, self, sg) for veh in self.sg_sub_vehs[sg]
                 ])
-                # find the minimum sinr among all members
-                min_sinr = min(status.sinr for status in net_status)
                 # find the minimum cqi among all members
-                min_cqi = min(status.cqi for status in net_status)
+                netstatus = min(list_net_status, key=lambda x: x.max_cqi)
                 #  the minimum cqi is zero! this social group is unable to serve!
                 #  or else some vehicle will not receive data.
-                if(min_cqi == 0):
+                if(netstatus.max_cqi == 0):
                     continue
                 # create group config for allocator
                 grp_config_qos.append({
                     "gid": float(sg.gid),
                     "rbf_w": float(sg_rb_ts),
                     "rbf_h": float(sg_rb_bw/NET_RB_BW_UNIT),
-                    "sinr_max": float(min_sinr),
+                    "sinr_max": float(netstatus.max_sinr),
+                    "pwr_req_dBm": float(netstatus.pwr_req_dBm),
+                    "pwr_ext_dBm":  float(netstatus.pwr_ext_dBm),
                     "rem_bits": float(sg_total_bits),
                     "mem_num": float(members),
                 })
