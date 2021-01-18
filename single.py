@@ -1,14 +1,3 @@
-# Custom
-from od.network.controller import BaseStationController
-from od.network.types import BaseStationType, ResourceAllocatorType
-from od.vehicle import VehicleRecorder
-from od.config import (SUMO_SECONDS_PER_STEP,
-                       BS_PRESET,
-                       SUMO_SIM_STEPS, SUMO_SKIP_STEPS,
-                       NET_STEPS_PER_SUMO_STEP, NET_TS_PER_NET_STEP,
-                       BS_RADIUS_COLOR, BS_RADIUS)
-from od.layer import NetObjLayer
-from od.misc.interest import InterestConfig
 import od.engine as GE
 import od.vars as GV
 # STD
@@ -20,6 +9,17 @@ import sys
 import traci
 import cProfile
 import re
+# Custom
+from od.network.controller import BaseStationController
+from od.network.types import BaseStationType, ResourceAllocatorType
+from od.vehicle import VehicleRecorder
+from od.config import (SUMO_SECONDS_PER_STEP,
+                       BS_PRESET,
+                       SUMO_SIM_STEPS, SUMO_SKIP_STEPS,
+                       NET_STEPS_PER_SUMO_STEP, NET_TS_PER_NET_STEP,
+                       BS_RADIUS_COLOR, BS_RADIUS)
+from od.layer import NetObjLayer
+from od.misc.interest import InterestConfig
 
 
 # Base Station Indicator Creator
@@ -116,7 +116,7 @@ def main(interest_config):
         traci.simulationStep()
 
     # - initialize matlab context for simulation
-    GE.MATLAB_ENG.InitializeSimulationContext(nargout=0)
+    GE.InitializeSimulationContext()
     # - initialize simulation dependent global variables
     GV.InitializeSimulationVariables(interest_config)
 

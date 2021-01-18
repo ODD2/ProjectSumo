@@ -63,7 +63,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     NET_STATION_CONTROLLER = []
     # Logger
     time_text = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-    DEBUG = oml.Printer(
+    DEBUG = oml.Logger(
         logdir,
         "Debug ({}).txt".format(time_text)
     )
