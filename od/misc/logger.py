@@ -7,6 +7,9 @@ class Logger:
         if not os.path.isdir(dirpath):
             os.makedirs(dirpath)
         self.file = open(dirpath+file, "w")
+    
+    def Encapsulate(self):
+        self.file.close()
         
     def Doc(self, msg:str):
         self.file.write(msg+'\n')

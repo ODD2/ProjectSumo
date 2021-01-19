@@ -188,9 +188,14 @@ def main(interest_config):
         veh_rec.Leave()
     # - close traci
     traci.close(wait=False)
-
+    
     # - statistic report
-    return GV.STATISTIC_RECORDER.Report(interest_config)
+    report = GV.STATISTIC_RECORDER.Report(interest_config)
+    
+    # - terminate global variables
+    GV.TerminateSimulationVariables()
+    
+    return report
 
 
 if __name__ == "__main__":

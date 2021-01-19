@@ -10,11 +10,16 @@ start_time = None
 end_time = None
 if __name__ == "__main__":
     start_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    for res_alloc_type in ResourceAllocatorType:
-        for rsu in [False, True]:
-            for seed in [13232421, 102948123, 4419883]:
+    # for res_alloc_type in ResourceAllocatorType:
+    #     for rsu in [False, True]:
+    #         for poisson in [1 ,5, 10, 15, 20, 25, 30]:
+    #             process = []
+    #             for seed in [13232421, 102948123, 4419883]:    
+    for res_alloc_type in [ResourceAllocatorType.OMA]:
+        for rsu in [False]:
+            for poisson in [1]:
                 process = []
-                for poisson in [3, 4, 5, 6, 7, 8, 9, 10]:
+                for seed in [13232421]:
                     process.append(
                         Process(
                             target=single.main,

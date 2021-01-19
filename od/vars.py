@@ -96,3 +96,11 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     NET_RES_ALLOC_TYPE = interest_config.res_alloc_type
     # Application Data
     APP_DATA_POISSON = interest_config.appdata_poisson
+
+
+def TerminateSimulationVariables():
+    global DEBUG, ERROR, STATISTIC, RESULT
+    DEBUG.Encapsulate()
+    ERROR.Encapsulate()
+    STATISTIC.Encapsulate()
+    RESULT.Encapsulate()
