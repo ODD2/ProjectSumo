@@ -87,7 +87,7 @@ class StatisticRecorder:
 
     def VehicleReceivedIntactAppdataReport(self):
         sg_stats = {}
-        GV.STATISTIC.Log("=====VehicleReceivedIntactAppdataReport=====")
+        GV.STATISTIC.Doc("=====VehicleReceivedIntactAppdataReport=====")
         for sg in SocialGroup:
             sg_total_trip_time = 0
             sg_total_trip_count = 0
@@ -108,7 +108,7 @@ class StatisticRecorder:
                     0 if record_total_trip_count == 0
                     else record_total_trip_time / record_total_trip_count
                 )
-                GV.STATISTIC.Log(
+                GV.STATISTIC.Doc(
                     '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
                         str(sg),
                         header_id,
@@ -128,10 +128,10 @@ class StatisticRecorder:
                 0 if sg_total_trip_count == 0
                 else sg_total_trip_time / sg_total_trip_count
             )
-            print("====={}=====".format(sg))
-            print("Average Trip Time: {}s".format(sg_avg_trip_time))
-            print("Maximum Trip Time: {}s".format(sg_max_trip_time))
-            print("Minimum Trip Time: {}s".format(sg_min_trip_time))
+            GV.RESULT.Doc("====={}=====".format(sg))
+            GV.RESULT.Doc("Average Trip Time: {}s".format(sg_avg_trip_time))
+            GV.RESULT.Doc("Maximum Trip Time: {}s".format(sg_max_trip_time))
+            GV.RESULT.Doc("Minimum Trip Time: {}s".format(sg_min_trip_time))
             sg_stats[sg] = {
                 "avg": sg_avg_trip_time,
                 "max": sg_max_trip_time,
@@ -141,7 +141,7 @@ class StatisticRecorder:
 
     def BaseStationAppdataTXQReport(self):
         sg_stats = {}
-        GV.STATISTIC.Log("=====BaseStationAppdataTXQReport=====")
+        GV.STATISTIC.Doc("=====BaseStationAppdataTXQReport=====")
         # time waited of appdata in transmit queue
         for sg in SocialGroup:
             sg_max_txq_wait_time = float('-inf')
@@ -193,7 +193,7 @@ class StatisticRecorder:
                     0 if record_total_txq_wait_count == 0
                     else record_total_txq_wait_time/record_total_txq_wait_count
                 )
-                GV.STATISTIC.Log(
+                GV.STATISTIC.Doc(
                     '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
                         str(sg),
                         header_id,
@@ -214,10 +214,10 @@ class StatisticRecorder:
                 0 if sg_total_txq_wait_count == 0
                 else sg_total_txq_wait_time / sg_total_txq_wait_count
             )
-            print("====={}=====".format(sg))
-            print("Average TXQ Time:{}s".format(sg_avg_txq_wait_time))
-            print("Maximum TXQ Time:{}s".format(sg_max_txq_wait_time))
-            print("Minimum TXQ Time:{}s".format(sg_min_txq_wait_time))
+            GV.RESULT.Doc("====={}=====".format(sg))
+            GV.RESULT.Doc("Average TXQ Time:{}s".format(sg_avg_txq_wait_time))
+            GV.RESULT.Doc("Maximum TXQ Time:{}s".format(sg_max_txq_wait_time))
+            GV.RESULT.Doc("Minimum TXQ Time:{}s".format(sg_min_txq_wait_time))
             sg_stats[sg] = {
                 "avg": sg_avg_txq_wait_time,
                 "max": sg_max_txq_wait_time,
@@ -227,7 +227,7 @@ class StatisticRecorder:
 
     def BaseStationAppdataTXReport(self):
         sg_stats = {}
-        GV.STATISTIC.Log("=====BaseStationAppdataTXReport=====")
+        GV.STATISTIC.Doc("=====BaseStationAppdataTXReport=====")
         for sg in SocialGroup:
             sg_max_tx_time = float('-inf')
             sg_min_tx_time = float('inf')
@@ -276,7 +276,7 @@ class StatisticRecorder:
                     0 if record_total_tx_count == 0
                     else record_total_tx_time / record_total_tx_count
                 )
-                GV.STATISTIC.Log(
+                GV.STATISTIC.Doc(
                     '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
                         str(sg),
                         header_id,
@@ -297,10 +297,10 @@ class StatisticRecorder:
                 0 if sg_total_tx_count == 0
                 else sg_total_tx_time / sg_total_tx_count
             )
-            print("====={}=====".format(sg))
-            print("Average TX Time:{}s".format(sg_avg_tx_time))
-            print("Maximum TX Time:{}s".format(sg_max_tx_time))
-            print("Minimum TX Time:{}s".format(sg_min_tx_time))
+            GV.RESULT.Doc("====={}=====".format(sg))
+            GV.RESULT.Doc("Average TX Time:{}s".format(sg_avg_tx_time))
+            GV.RESULT.Doc("Maximum TX Time:{}s".format(sg_max_tx_time))
+            GV.RESULT.Doc("Minimum TX Time:{}s".format(sg_min_tx_time))
             sg_stats[sg] = {
                 "avg": sg_avg_tx_time,
                 "max": sg_max_tx_time,
@@ -326,8 +326,8 @@ class StatisticRecorder:
             bs_type_through_put_avg = (
                 (bs_type_bits / max(bs_type_num, 1))
             )
-            print("====={}=====".format(bs_type.name))
-            print("Throughput:{:.2f}/s".format(bs_type_through_put_avg))
+            GV.RESULT.Doc("====={}=====".format(bs_type.name))
+            GV.RESULT.Doc("Throughput:{:.2f}/s".format(bs_type_through_put_avg))
             sg_stats[bs_type] = bs_type_through_put_avg
         return sg_stats
 
@@ -353,12 +353,12 @@ class StatisticRecorder:
         for bs_type in BaseStationType:
             bs_type_total_data = max(sum(sg_bs_type_data[bs_type]), 1)
             bs_type_sg_res_rate = [0 for _ in SocialGroup]
-            print("====={}=====".format(bs_type.name))
+            GV.RESULT.Doc("====={}=====".format(bs_type.name))
             for sg in SocialGroup:
                 bs_type_sg_res_rate[sg] = (
                     sg_bs_type_data[bs_type][sg]/bs_type_total_data
                 )
-                print(
+                GV.RESULT.Doc(
                     "{} Resource Usage: {:.2f}%".format(
                         sg,
                         bs_type_sg_res_rate[sg]*100
@@ -373,7 +373,7 @@ class StatisticRecorder:
                            for _ in BaseStationType]
         sg_bs_type_drop = [[0 for _ in SocialGroup]
                            for _ in BaseStationType]
-        GV.STATISTIC.Log("=====BaseStationSocailGroupDataDropRateReport=====")
+        GV.STATISTIC.Doc("=====BaseStationSocailGroupDataDropRateReport=====")
         for sg in SocialGroup:
             for record in self.sg_header[sg].values():
                 for bs in GV.NET_STATION_CONTROLLER:
@@ -383,14 +383,14 @@ class StatisticRecorder:
                         sg_bs_type_drop[bs.type][sg] += 1
 
         for bs_type in BaseStationType:
-            print("====={}=====".format(bs_type.name))
+            GV.RESULT.Doc("====={}=====".format(bs_type.name))
             bs_type_sg_drop_rate = [0 for _ in SocialGroup]
             for sg in SocialGroup:
                 bs_type_sg_drop_rate[sg] = (
                     sg_bs_type_drop[bs_type][sg] /
                     max(sg_bs_type_recv[bs_type][sg], 1)
                 )
-                print(
+                GV.RESULT.Doc(
                     "{} Drop Rate: {:.2f}%".format(
                         sg,
                         bs_type_sg_drop_rate[sg]*100

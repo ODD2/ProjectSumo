@@ -13,9 +13,9 @@ import re
 from od.network.controller import BaseStationController
 from od.network.types import BaseStationType, ResourceAllocatorType
 from od.vehicle import VehicleRecorder
-from od.config import (SUMO_SECONDS_PER_STEP,
-                       BS_PRESET,
+from od.config import (SUMO_SECONDS_PER_STEP, SUMO_SIM_GUI,
                        SUMO_SIM_STEPS, SUMO_SKIP_STEPS,
+                       BS_PRESET,
                        NET_STEPS_PER_SUMO_STEP, NET_TS_PER_NET_STEP,
                        BS_RADIUS_COLOR, BS_RADIUS)
 from od.layer import NetObjLayer
@@ -100,7 +100,7 @@ def main(interest_config):
     # Prepare Simulation
     # - start traci
     traci.start([
-        "sumo-gui",
+        "sumo-gui" if SUMO_SIM_GUI else "sumo",
         "-c",
         os.getcwd() + "/ntust.sumocfg",
         "--quit-on-end",

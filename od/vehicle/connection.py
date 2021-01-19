@@ -1,5 +1,6 @@
 from enum import IntEnum
 from od.layer import NetObjLayer
+from od.config import SUMO_SIM_GUI
 import od.vars as GV
 import traci
 

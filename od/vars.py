@@ -24,6 +24,7 @@ NET_RES_ALLOC_TYPE = None
 DEBUG = None
 ERROR = None
 STATISTIC = None
+RESULT = None
 
 # Sumo Simulation Info
 SUMO_SIM_INFO = None
@@ -43,7 +44,7 @@ APP_DATA_POISSON = None
 
 def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     global NET_CORE_CONTROLLER, NET_STATUS_CACHE, NET_STATION_CONTROLLER
-    global DEBUG, ERROR, STATISTIC
+    global DEBUG, ERROR, STATISTIC, RESULT
     global SUMO_SIM_INFO
     global STATISTIC_RECORDER
     global TRACI_LOCK
@@ -67,13 +68,17 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
         logdir,
         "Debug ({}).txt".format(time_text)
     )
-    ERROR = oml.Printer(
+    ERROR = oml.Logger(
         logdir,
         "Error ({}).txt".format(time_text)
     )
     STATISTIC = oml.Logger(
         logdir,
         "Statistic ({}).txt".format(time_text)
+    )
+    RESULT = oml.Logger(
+        logdir,
+        "Result ({}).txt".format(time_text)
     )
     # Sumo Simulation Info
     SUMO_SIM_INFO = oms.SumoSimInfo()

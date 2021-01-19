@@ -7,6 +7,10 @@ class Logger:
         if not os.path.isdir(dirpath):
             os.makedirs(dirpath)
         self.file = open(dirpath+file, "w")
+        
+    def Doc(self, msg:str):
+        self.file.write(msg+'\n')
+        return msg
 
     def Log(self, msg: str):
         log = "[{:.2f}s][{:.0f}n/{:.0f}t]{}".format(

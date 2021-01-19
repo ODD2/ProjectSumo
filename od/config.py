@@ -4,8 +4,10 @@ import os
 import sys
 
 # Sumo Simulation Settings
+# . simulation sumo type
+SUMO_SIM_GUI = False
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 100
+SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . the offset of the simulation

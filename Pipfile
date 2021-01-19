@@ -7,6 +7,8 @@ name = "pypi"
 numpy = "*"
 importlib = "*"
 traci = "*"
+jupyter = "*"
+matplotlib = "*"
 
 [dev-packages]
 pylint = "*"
