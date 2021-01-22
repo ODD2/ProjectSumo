@@ -4,6 +4,7 @@ from od.network.types import BaseStationType
 from od.network.appdata import AppData, AppDataHeader
 from od.config import NET_SG_RND_REQ_SIZE
 from od.social import SocialGroup
+from od.misc.types import DebugMsgType
 import od.vars as GV
 
 
@@ -27,6 +28,15 @@ class Application:
                 appdata.header,
                 0,
                 0
+            )
+
+            GV.DEBUG.Log(
+                "[{}][app][{}]:data intro.({})".format(
+                    self.owner.name,
+                    social_group.fname.lower(),
+                    appdata.header
+                ),
+                DebugMsgType.NET_APPDATA_INFO
             )
         # the delivered data is already intact
         elif(owner_datas[appdata.header.serial].bits ==
@@ -97,7 +107,8 @@ class VehicleApplication(Application):
                 self.owner.name,
                 social_group.fname.lower(),
                 appdata.header
-            )
+            ),
+            DebugMsgType.NET_APPDATA_INFO
         )
         GV.STATISTIC_RECORDER.VehicleReceivedIntactAppdata(
             social_group,
@@ -112,7 +123,7 @@ class VehicleApplication(Application):
             for group in SocialGroup:
                 # TODO: Make the random poisson be social group dependent
                 for _ in range(random.poisson(GV.APP_DATA_POISSON)):
-                # for _ in range(random.randint(0, GV.APP_DATA_POISSON+1)):
+                    # for _ in range(random.randint(0, GV.APP_DATA_POISSON+1)):
                     # get the range of random generated data size (byte)
                     data_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
                     # size of data (bit)
@@ -147,7 +158,8 @@ class NetworkCoreApplication(Application):
                 self.owner.name,
                 social_group.fname.lower(),
                 appdata.header
-            )
+            ),
+            DebugMsgType.NET_APPDATA_INFO
         )
         # propagate the appdata to other base stations
         self.owner.StartPropagation(
@@ -166,7 +178,8 @@ class BaseStationApplicationUMA(Application):
                 self.owner.name,
                 social_group.fname.lower(),
                 appdata.header
-            )
+            ),
+            DebugMsgType.NET_APPDATA_INFO
         )
         # propagate the appdata to other vehicles in range
         self.owner.ReceivePropagation(
@@ -185,7 +198,8 @@ class BaseStationApplicationUMI(Application):
                 self.owner.name,
                 social_group.fname.lower(),
                 appdata.header
-            )
+            ),
+            DebugMsgType.NET_APPDATA_INFO
         )
         if(social_group == SocialGroup.CRITICAL):
             # propagate the appdata to other vehicles in range.

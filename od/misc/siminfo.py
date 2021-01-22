@@ -35,6 +35,7 @@ class SumoSimInfo:
 
     def UpdateNS(self, ns):
         self.ns = ns
+        self.ts = 0
 
     def UpdateTS(self, ts):
         self.ts = ts

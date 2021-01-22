@@ -6,6 +6,7 @@ from od.network.application import VehicleApplication
 from od.network.appdata import AppData
 from od.social import SocialGroup
 from od.config import VEH_MOVE_BS_CHECK, SUMO_SIM_GUI
+from od.misc.types import DebugMsgType
 from traci import vehicle
 import od.vars as GV
 import traci.constants as tc
@@ -249,7 +250,8 @@ class VehicleRecorder():
                 self.name,
                 social_group.fname.lower(),
                 package
-            )
+            ),
+            DebugMsgType.NET_PKG_INFO
         )
 
         # Create Package
@@ -282,7 +284,8 @@ class VehicleRecorder():
                         self.name,
                         pkg.social_group.fname.lower(),
                         pkg,
-                    )
+                    ),
+                    DebugMsgType.NET_PKG_INFO
                 )
                 # process received package
                 self.PackageDelivered(pkg)
@@ -316,7 +319,8 @@ class VehicleRecorder():
                         self.name,
                         pkg.social_group.fname.lower(),
                         pkg,
-                    )
+                    ),
+                    DebugMsgType.NET_PKG_INFO
                 )
                 # Connection display are required for gui only.
                 if(SUMO_SIM_GUI):

@@ -1,13 +1,20 @@
 from od.network.types import BaseStationType
 from od.social import SocialGroup
+from od.misc.types import DebugMsgType
 import os
 import sys
 
+# System Parameters
+DEBUG_MSG_FLAGS = (
+    DebugMsgType.NET_APPDATA_INFO |
+    DebugMsgType.NET_ALLOC_INFO |
+    DebugMsgType.SUMO_VEH_INFO
+)
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = False
+SUMO_SIM_GUI = True
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 1
+SUMO_SIM_TIME_SCALER = 100
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . the offset of the simulation

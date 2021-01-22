@@ -18,6 +18,7 @@ from od.config import (SUMO_SECONDS_PER_STEP, SUMO_SIM_GUI,
                        BS_PRESET,
                        NET_STEPS_PER_SUMO_STEP, NET_TS_PER_NET_STEP,
                        BS_RADIUS_COLOR, BS_RADIUS)
+from od.misc.types import DebugMsgType
 from od.layer import NetObjLayer
 from od.misc.interest import InterestConfig
 
@@ -147,13 +148,19 @@ def main(interest_config):
 
         # remove ghost(non-exist) vehicles
         for ghost_vid in GV.SUMO_SIM_INFO.ghost_veh_ids:
-            GV.DEBUG.Log("[{}]: left the map.".format(ghost_vid))
+            GV.DEBUG.Log(
+                "[{}]: left the map.".format(ghost_vid),
+                DebugMsgType.SUMO_VEH_INFO
+            )
             vehicle_recorders[ghost_vid].Leave()
             vehicle_recorders.pop(ghost_vid)
 
         # add new vehicles
         for vid in GV.SUMO_SIM_INFO.new_veh_ids:
-            GV.DEBUG.Log("[{}]: joined the map.".format(vid))
+            GV.DEBUG.Log(
+                "[{}]: joined the map.".format(vid),
+                DebugMsgType.SUMO_VEH_INFO
+            )
             vehicle_recorders[vid] = VehicleRecorder(vid)
 
         # reset network status cache because vehicle positions have updated,
@@ -188,19 +195,19 @@ def main(interest_config):
         veh_rec.Leave()
     # - close traci
     traci.close(wait=False)
-    
+
     # - statistic report
     report = GV.STATISTIC_RECORDER.Report(interest_config)
-    
+
     # - terminate global variables
     GV.TerminateSimulationVariables()
-    
+
     return report
 
 
 if __name__ == "__main__":
     cProfile.run(
-        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,3,13232421))'
+        'main(InterestConfig(ResourceAllocatorType.OMA,True,1,102948123))'
     )
     # main(
     #     InterestConfig(

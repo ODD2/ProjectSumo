@@ -266,19 +266,19 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
     end
         
 %   add small difference for each rb per group subframe
-    for gp_conf = OPT_GP_CONF
-        gap = 1/gp_conf.rb_num;
-        for i = 1:gp_conf.oma_cqi_num
-            sol_beg = gp_conf.oma_sol_ofs + (i-1)*gp_conf.rb_num + 1;
-            sol_end = gp_conf.oma_sol_ofs + (i )*gp_conf.rb_num;
-            f(sol_beg:sol_end) = f(sol_beg:sol_end) + ((1-gap):-gap:0);
-        end
-        for i = 1:gp_conf.noma_cqi_num
-            sol_beg = gp_conf.noma_sol_ofs + (i-1)*gp_conf.rb_num + 1;
-            sol_end = gp_conf.noma_sol_ofs + (i )*gp_conf.rb_num;
-            f(sol_beg:sol_end) = f(sol_beg:sol_end) + ((1-gap):-gap:0);
-        end
-    end
+%     for gp_conf = OPT_GP_CONF
+%         gap = 1/gp_conf.rb_num;
+%         for i = 1:gp_conf.oma_cqi_num
+%             sol_beg = gp_conf.oma_sol_ofs + (i-1)*gp_conf.rb_num + 1;
+%             sol_end = gp_conf.oma_sol_ofs + (i )*gp_conf.rb_num;
+%             f(sol_beg:sol_end) = f(sol_beg:sol_end) + ((1-gap):-gap:0);
+%         end
+%         for i = 1:gp_conf.noma_cqi_num
+%             sol_beg = gp_conf.noma_sol_ofs + (i-1)*gp_conf.rb_num + 1;
+%             sol_end = gp_conf.noma_sol_ofs + (i )*gp_conf.rb_num;
+%             f(sol_beg:sol_end) = f(sol_beg:sol_end) + ((1-gap):-gap:0);
+%         end
+%     end
 
 %   group prioritization
 %   (group having large member has higher prior, group having the same
@@ -312,10 +312,12 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
                            ,'Display','none'...
 ...%                            ,'PlotFcn',@optimplotmilp...
                           );
-%                            'MaxTime',10);
 
     [x,fval,exitflag,output] = intlinprog(f,intcon,A,b,Aeq,beq,lb,ub,[],options);
     
+%   Post Process
+%   - force return integer only result.
+    x = int16(x);
     
     function STOP = CustomOutputFunction(~,OPT_VAL,~)
         if OPT_VAL.phase == "branching"

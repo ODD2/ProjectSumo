@@ -109,7 +109,7 @@ class StatisticRecorder:
                     else record_total_trip_time / record_total_trip_count
                 )
                 GV.STATISTIC.Doc(
-                    '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
+                    '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
                         str(sg),
                         header_id,
                         record_total_trip_time,
@@ -129,9 +129,9 @@ class StatisticRecorder:
                 else sg_total_trip_time / sg_total_trip_count
             )
             GV.RESULT.Doc("====={}=====".format(sg))
-            GV.RESULT.Doc("Average Trip Time: {}s".format(sg_avg_trip_time))
-            GV.RESULT.Doc("Maximum Trip Time: {}s".format(sg_max_trip_time))
-            GV.RESULT.Doc("Minimum Trip Time: {}s".format(sg_min_trip_time))
+            GV.RESULT.Doc("Average Trip Time: {:.4f}".format(sg_avg_trip_time))
+            GV.RESULT.Doc("Maximum Trip Time: {:.4f}".format(sg_max_trip_time))
+            GV.RESULT.Doc("Minimum Trip Time: {:.4f}".format(sg_min_trip_time))
             sg_stats[sg] = {
                 "avg": sg_avg_trip_time,
                 "max": sg_max_trip_time,
@@ -194,7 +194,7 @@ class StatisticRecorder:
                     else record_total_txq_wait_time/record_total_txq_wait_count
                 )
                 GV.STATISTIC.Doc(
-                    '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
+                    '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
                         str(sg),
                         header_id,
                         record_total_txq_wait_time,
@@ -215,9 +215,12 @@ class StatisticRecorder:
                 else sg_total_txq_wait_time / sg_total_txq_wait_count
             )
             GV.RESULT.Doc("====={}=====".format(sg))
-            GV.RESULT.Doc("Average TXQ Time:{}s".format(sg_avg_txq_wait_time))
-            GV.RESULT.Doc("Maximum TXQ Time:{}s".format(sg_max_txq_wait_time))
-            GV.RESULT.Doc("Minimum TXQ Time:{}s".format(sg_min_txq_wait_time))
+            GV.RESULT.Doc("Average TXQ Time:{:.4f}".format(
+                sg_avg_txq_wait_time))
+            GV.RESULT.Doc("Maximum TXQ Time:{:.4f}".format(
+                sg_max_txq_wait_time))
+            GV.RESULT.Doc("Minimum TXQ Time:{:.4f}".format(
+                sg_min_txq_wait_time))
             sg_stats[sg] = {
                 "avg": sg_avg_txq_wait_time,
                 "max": sg_max_txq_wait_time,
@@ -277,7 +280,7 @@ class StatisticRecorder:
                     else record_total_tx_time / record_total_tx_count
                 )
                 GV.STATISTIC.Doc(
-                    '[{}][{}]:{{ sum:{:.2f}s, num:{:.2f}, avg:{:.2f}s, max:{:.2f}s, min:{:.2f}s}}'.format(
+                    '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
                         str(sg),
                         header_id,
                         record_total_tx_time,
@@ -298,9 +301,9 @@ class StatisticRecorder:
                 else sg_total_tx_time / sg_total_tx_count
             )
             GV.RESULT.Doc("====={}=====".format(sg))
-            GV.RESULT.Doc("Average TX Time:{}s".format(sg_avg_tx_time))
-            GV.RESULT.Doc("Maximum TX Time:{}s".format(sg_max_tx_time))
-            GV.RESULT.Doc("Minimum TX Time:{}s".format(sg_min_tx_time))
+            GV.RESULT.Doc("Average TX Time:{:.4f}".format(sg_avg_tx_time))
+            GV.RESULT.Doc("Maximum TX Time:{:.4f}".format(sg_max_tx_time))
+            GV.RESULT.Doc("Minimum TX Time:{:.4f}".format(sg_min_tx_time))
             sg_stats[sg] = {
                 "avg": sg_avg_tx_time,
                 "max": sg_max_tx_time,
@@ -327,7 +330,9 @@ class StatisticRecorder:
                 (bs_type_bits / max(bs_type_num, 1))
             )
             GV.RESULT.Doc("====={}=====".format(bs_type.name))
-            GV.RESULT.Doc("Throughput:{:.2f}/s".format(bs_type_through_put_avg))
+            GV.RESULT.Doc(
+                "Throughput:{:.2f}/s".format(bs_type_through_put_avg)
+            )
             sg_stats[bs_type] = bs_type_through_put_avg
         return sg_stats
 

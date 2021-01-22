@@ -6,6 +6,7 @@ from od.network.package import NetworkPackage
 from od.network.types import BroadcastObject, BaseStationType, ResourceAllocatorType
 from od.vehicle.request import UploadRequest, ResendRequest
 from od.network.allocator import ResourceAllocatorOMA
+from od.misc.types import DebugMsgType
 from od.config import (NET_TS_PER_NET_STEP, NET_QOS_CHNLS, NET_RB_BW_REQ_TS,
                        NET_RB_SLOT_SYMBOLS, NET_RB_BW_UNIT,
                        BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
@@ -86,7 +87,8 @@ class BaseStationController:
                         self.name,
                         pkg.social_group.fname.lower(),
                         pkg
-                    )
+                    ),
+                    DebugMsgType.NET_PKG_INFO
                 )
                 self.PackageDelivered(pkg)
             else:
@@ -120,7 +122,8 @@ class BaseStationController:
                         self.name,
                         pkg.social_group.fname.lower(),
                         pkg
-                    )
+                    ),
+                    DebugMsgType.NET_PKG_INFO
                 )
                 # record the application data that ended transmission at current timeslot
                 stats_appdata_trans_beg[pkg.social_group].update(
@@ -469,7 +472,8 @@ class BaseStationController:
             "[{}][alloc]:report.\n{}".format(
                 self.name,
                 out.getvalue()
-            )
+            ),
+            DebugMsgType.NET_ALLOC_INFO
         )
 
         # deliver package according to optimized allocate resource

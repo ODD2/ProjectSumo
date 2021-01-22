@@ -7,7 +7,7 @@ class AppDataHeader:
         self.id = "{}-{}".format(self.owner.name, self.serial)
 
     def __str__(self):
-        return "AppDataHeader({},{}b,{}s)".format(
+        return "AppDataHeader({},{}b,{:.4f}s)".format(
             self.id,
             self.total_bits,
             self.at
