@@ -19,11 +19,11 @@ if __name__ == "__main__":
     #    for rsu in [False, True]:
     #        for poisson in [3,4,5]:
     #            for seed in [13232421, 102948123, 4419883, 5157253]:
-    for res_alloc_type  in [ResourceAllocatorType.OMA]:
-        for rsu in [True]:
+    for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
+        for rsu in [False, True]:
             process = []
-            for poisson in [4]:
-                for seed in [102948123]:
+            for poisson in [1, 2, 3, 4, 5]:
+                for seed in [13232421, 102948123, 4419883, 5157253]:
                     process.append(
                         Process(
                             target=single.main,
@@ -42,4 +42,4 @@ if __name__ == "__main__":
                 p.join()
     end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     print("Start at: " + start_time)
-    print("End at: "+ end_time)
+    print("End at: " + end_time)

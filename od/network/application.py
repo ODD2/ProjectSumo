@@ -2,7 +2,7 @@ from __future__ import annotations
 from numpy import random
 from od.network.types import BaseStationType
 from od.network.appdata import AppData, AppDataHeader
-from od.config import NET_SG_RND_REQ_SIZE
+from od.config import NET_SG_RND_REQ_SIZE, NET_SECONDS_PER_STEP, NET_SG_RND_REQ_NUM
 from od.social import SocialGroup
 from od.misc.types import DebugMsgType
 import od.vars as GV
@@ -84,7 +84,7 @@ class VehicleApplication(Application):
     def __init__(self, vehicle):
         super().__init__(vehicle)
         # The last time when this vehicle recorder generates upload request
-        self.prev_gen_time = 0
+        self.data_stack = 0
         # The social group upload data list
         self.datas = [[] for i in SocialGroup]
         # Package counter for upload req
@@ -118,34 +118,36 @@ class VehicleApplication(Application):
 
     # Send application data
     def SendData(self):
-        if (GV.SUMO_SIM_INFO.getTime() - self.prev_gen_time > 1):
-            self.prev_gen_time = GV.SUMO_SIM_INFO.getTime()
-            for group in SocialGroup:
-                # TODO: Make the random poisson be social group dependent
-                for _ in range(random.poisson(GV.APP_DATA_POISSON)):
-                    # for _ in range(random.randint(0, GV.APP_DATA_POISSON+1)):
-                    # get the range of random generated data size (byte)
-                    data_size_rnd_range = NET_SG_RND_REQ_SIZE[group]
-                    # size of data (bit)
-                    data_size = random.randint(
-                        data_size_rnd_range[0],
-                        data_size_rnd_range[1] + 1
-                    ) * 8
+        for sg in SocialGroup:
+            # TODO: Make the random poisson be social group dependent
+            self.data_stack += random.poisson(NET_SG_RND_REQ_NUM[sg]) * NET_SECONDS_PER_STEP
+            # generate network app data if the stack has sufficient data.
+            while(self.data_stack > 1):
+                # remove data from stack.
+                self.data_stack -= 1
 
-                    # create appdata
-                    self.datas[group].append(
-                        AppData(
-                            AppDataHeader(
-                                self.owner,
-                                data_size,
-                                self.data_counter,
-                                GV.SUMO_SIM_INFO.getTime()
-                            ),
+                # get the range of random generated data size (byte)
+                data_size_rnd_range = NET_SG_RND_REQ_SIZE[sg]
+                # size of data (bit)
+                data_size = random.randint(
+                    data_size_rnd_range[0],
+                    data_size_rnd_range[1] + 1
+                ) * 8
+
+                # create appdata
+                self.datas[sg].append(
+                    AppData(
+                        AppDataHeader(
+                            self.owner,
                             data_size,
-                            0
-                        )
+                            self.data_counter,
+                            GV.SUMO_SIM_INFO.getTime()
+                        ),
+                        data_size,
+                        0
                     )
-                    self.data_counter += 1
+                )
+                self.data_counter += 1
 
 
 class NetworkCoreApplication(Application):

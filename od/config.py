@@ -6,6 +6,7 @@ import sys
 
 # System Parameters
 DEBUG_MSG_FLAGS = (
+    # DebugMsgType.NET_PKG_INFO |
     DebugMsgType.NET_APPDATA_INFO |
     DebugMsgType.NET_ALLOC_INFO |
     DebugMsgType.SUMO_VEH_INFO
@@ -14,7 +15,7 @@ DEBUG_MSG_FLAGS = (
 # . simulation sumo type
 SUMO_SIM_GUI = True
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 100
+SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . the offset of the simulation
@@ -53,6 +54,11 @@ NET_RB_BW_REQ_TS = {2 * NET_RB_BW_UNIT: 1,
 NET_SG_RND_REQ_SIZE = {
     SocialGroup.CRITICAL: [300, 1100],
     SocialGroup.GENERAL: [64, 2048],
+}
+# . social group random request amount(Packages/second)
+NET_SG_RND_REQ_NUM = {
+    SocialGroup.CRITICAL: 1,
+    SocialGroup.GENERAL: 10
 }
 
 # Base Station Settings
