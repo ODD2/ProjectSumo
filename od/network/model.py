@@ -87,6 +87,8 @@ class NetStatusCache:
 
 # (VehicleRecorder, BaseStationController, SocialGroup)
 def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
+    if(vehicle.name == "2.6"):
+        a = 0
     # Vehicle's position
     Intf_dist = [5000]  # dummy base station for work around
     Intf_pwr_dBm = [BS_TRANS_PWR[bs_ctrlr.type]]

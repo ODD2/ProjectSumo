@@ -6,7 +6,7 @@ import sys
 
 # System Parameters
 DEBUG_MSG_FLAGS = (
-    # DebugMsgType.NET_PKG_INFO |
+    DebugMsgType.NET_PKG_INFO |
     DebugMsgType.NET_APPDATA_INFO |
     DebugMsgType.NET_ALLOC_INFO |
     DebugMsgType.SUMO_VEH_INFO
@@ -23,7 +23,7 @@ SUMO_SKIP_SECONDS = 252
 # . total sumo simulation steps skipped
 SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
 # . total sumo simulation seconds
-SUMO_SIM_SECONDS = 72
+SUMO_SIM_SECONDS = 2
 # . total sumo simulation steps
 SUMO_SIM_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SIM_SECONDS))
 # . total sumo seconds
@@ -50,15 +50,16 @@ NET_RB_BW_UNIT = 180000
 # . resource block bandwidth required timeslot(s)
 NET_RB_BW_REQ_TS = {2 * NET_RB_BW_UNIT: 1,
                     1 * NET_RB_BW_UNIT: 2}
-# . social group random request size
+# . social group random request size(bytes).
 NET_SG_RND_REQ_SIZE = {
     SocialGroup.CRITICAL: [300, 1100],
     SocialGroup.GENERAL: [64, 2048],
 }
 # . social group random request amount(Packages/second)
+NET_SG_RND_REQ_NUM_TIME_SCALE = 10  # seconds
 NET_SG_RND_REQ_NUM = {
-    SocialGroup.CRITICAL: 1,
-    SocialGroup.GENERAL: 10
+    SocialGroup.CRITICAL: 2,
+    SocialGroup.GENERAL: 5
 }
 
 # Base Station Settings

@@ -109,7 +109,7 @@ def main(interest_config):
         "--step-length",
         str(SUMO_SECONDS_PER_STEP),
         "--scale",
-        str(0.1)
+        str(interest_config.traffic_scale)
     ])
 
     # - skip to interest network condition
@@ -207,7 +207,7 @@ def main(interest_config):
 
 if __name__ == "__main__":
     cProfile.run(
-        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,1,102948123))'
+        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,0.25,5157253))'
     )
     # main(
     #     InterestConfig(

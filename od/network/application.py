@@ -2,7 +2,8 @@ from __future__ import annotations
 from numpy import random
 from od.network.types import BaseStationType
 from od.network.appdata import AppData, AppDataHeader
-from od.config import NET_SG_RND_REQ_SIZE, NET_SECONDS_PER_STEP, NET_SG_RND_REQ_NUM
+from od.config import (NET_SG_RND_REQ_SIZE, NET_SECONDS_PER_STEP,
+                       NET_SG_RND_REQ_NUM, NET_SG_RND_REQ_NUM_TIME_SCALE)
 from od.social import SocialGroup
 from od.misc.types import DebugMsgType
 import od.vars as GV
@@ -10,7 +11,7 @@ import od.vars as GV
 
 class Application:
     def __init__(self, owner):
-        self.data_inbox = {}
+        self.sg_data_inbox = [{} for _ in SocialGroup]
         self.owner = owner
 
     # function called by application owner
@@ -18,10 +19,10 @@ class Application:
     # after receiving this appdata segment.
     def RecvData(self, social_group: SocialGroup, appdata: AppData):
         # received the first data from the data's owner
-        if (appdata.header.owner.name not in self.data_inbox):
-            self.data_inbox[appdata.header.owner.name] = {}
+        if (appdata.header.owner.name not in self.sg_data_inbox[social_group]):
+            self.sg_data_inbox[social_group][appdata.header.owner.name] = {}
         # datas, of the same owner as the received one, that have been received by this application.
-        owner_datas = self.data_inbox[appdata.header.owner.name]
+        owner_datas = self.sg_data_inbox[social_group][appdata.header.owner.name]
         # the delivered data is a new one, create record
         if(appdata.header.serial not in owner_datas):
             owner_datas[appdata.header.serial] = AppData(
@@ -74,7 +75,7 @@ class Application:
                 self.owner.name,
                 social_group,
                 appdata,
-                self.data_inbox[header.owner.name][header.serial]
+                self.sg_data_inbox[social_group][header.owner.name][header.serial]
             )
         )
         # sys.exit()
@@ -120,7 +121,8 @@ class VehicleApplication(Application):
     def SendData(self):
         for sg in SocialGroup:
             # TODO: Make the random poisson be social group dependent
-            self.data_stack += random.poisson(NET_SG_RND_REQ_NUM[sg]) * NET_SECONDS_PER_STEP
+            self.data_stack += random.poisson(NET_SG_RND_REQ_NUM[sg]) * \
+                NET_SECONDS_PER_STEP / NET_SG_RND_REQ_NUM_TIME_SCALE
             # generate network app data if the stack has sufficient data.
             while(self.data_stack > 1):
                 # remove data from stack.

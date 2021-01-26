@@ -19,10 +19,11 @@ if __name__ == "__main__":
     #    for rsu in [False, True]:
     #        for poisson in [3,4,5]:
     #            for seed in [13232421, 102948123, 4419883, 5157253]:
-    for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
+    for res_alloc_type in ResourceAllocatorType:
         for rsu in [False, True]:
             process = []
-            for poisson in [1, 2, 3, 4, 5]:
+            # for traffic_scale in [0.2, 0.25, 0.3, 0.35, 0.4]:
+            for traffic_scale in [0.45, 0.5, 0.55, 0.6, 0.65]:
                 for seed in [13232421, 102948123, 4419883, 5157253]:
                     process.append(
                         Process(
@@ -31,7 +32,7 @@ if __name__ == "__main__":
                                 InterestConfig(
                                     res_alloc_type,
                                     rsu,
-                                    poisson,
+                                    traffic_scale,
                                     seed
                                 ),
                             )

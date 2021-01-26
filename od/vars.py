@@ -38,9 +38,6 @@ TRACI_LOCK = None
 # Base Station
 BS_SETTING = None
 
-# Application Data
-APP_DATA_POISSON = None
-
 
 def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     global NET_CORE_CONTROLLER, NET_STATUS_CACHE, NET_STATION_CONTROLLER
@@ -50,7 +47,6 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     global TRACI_LOCK
     global BS_SETTING
     global NET_RES_ALLOC_TYPE
-    global APP_DATA_POISSON
     # Directories
     rngdir = "{}/".format(interest_config.rng_seed)
     datadir = "data/" + rngdir
@@ -94,8 +90,6 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
             BS_SETTING[name] = setting
     # Downlink Resource Allocation
     NET_RES_ALLOC_TYPE = interest_config.res_alloc_type
-    # Application Data
-    APP_DATA_POISSON = interest_config.appdata_poisson
 
 
 def TerminateSimulationVariables():
