@@ -28,8 +28,7 @@ class ResourceAllocatorOMA:
     def Allocate(self, bandwidth, timeslots):
         offset_timeslot = -1
         if(bandwidth == NET_RB_BW_UNIT*1 and timeslots == 2):
-            if(self.alloc_resources[0] >= bandwidth and
-               self.alloc_resources[1] >= bandwidth):
+            if(self.alloc_resources[0] >= bandwidth and self.alloc_resources[1] >= bandwidth):
                 self.alloc_resources[0] -= bandwidth
                 self.alloc_resources[1] -= bandwidth
                 offset_timeslot = 0
@@ -49,7 +48,6 @@ class ResourceAllocatorOMA:
             # if(self.alloc_resources[higer_bandwidth_ts] >= bandwidth):
             #     self.alloc_resources[higer_bandwidth_ts] -= bandwidth
             #     offset_timeslot = higer_bandwidth_ts
-            
 
         else:
             GV.ERROR.Log(

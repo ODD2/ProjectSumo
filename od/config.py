@@ -3,17 +3,19 @@ from od.social import SocialGroup
 from od.misc.types import DebugMsgType
 import os
 import sys
+import math
 
 # System Parameters
 DEBUG_MSG_FLAGS = (
-    DebugMsgType.NET_PKG_INFO |
-    DebugMsgType.NET_APPDATA_INFO |
-    DebugMsgType.NET_ALLOC_INFO |
-    DebugMsgType.SUMO_VEH_INFO
+    DebugMsgType.NONE
+    # DebugMsgType.NET_PKG_INFO |
+    # DebugMsgType.NET_APPDATA_INFO |
+    # DebugMsgType.NET_ALLOC_INFO |
+    # DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = True
+SUMO_SIM_GUI = False
 # . simulation scaler
 SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
@@ -23,7 +25,7 @@ SUMO_SKIP_SECONDS = 252
 # . total sumo simulation steps skipped
 SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
 # . total sumo simulation seconds
-SUMO_SIM_SECONDS = 2
+SUMO_SIM_SECONDS = 72
 # . total sumo simulation steps
 SUMO_SIM_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SIM_SECONDS))
 # . total sumo seconds
@@ -58,8 +60,8 @@ NET_SG_RND_REQ_SIZE = {
 # . social group random request amount(Packages/second)
 NET_SG_RND_REQ_NUM_TIME_SCALE = 10  # seconds
 NET_SG_RND_REQ_NUM = {
-    SocialGroup.CRITICAL: 2,
-    SocialGroup.GENERAL: 5
+    SocialGroup.CRITICAL: 4,
+    SocialGroup.GENERAL: 10
 }
 
 # Base Station Settings
@@ -164,7 +166,7 @@ BS_PRESET = {
 
 # Vehicle Settings
 # . vehicle base station subscribe move distance
-VEH_MOVE_BS_CHECK = 10  # meters
+VEH_MOVE_BS_CHECK = 1  # meters
 # . the vehicle height
 VEH_HEIGHT = 1.5  # meters
 

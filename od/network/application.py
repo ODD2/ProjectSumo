@@ -85,7 +85,7 @@ class VehicleApplication(Application):
     def __init__(self, vehicle):
         super().__init__(vehicle)
         # The last time when this vehicle recorder generates upload request
-        self.data_stack = 0
+        self.data_stack = [0 for i in SocialGroup]
         # The social group upload data list
         self.datas = [[] for i in SocialGroup]
         # Package counter for upload req
@@ -121,12 +121,12 @@ class VehicleApplication(Application):
     def SendData(self):
         for sg in SocialGroup:
             # TODO: Make the random poisson be social group dependent
-            self.data_stack += random.poisson(NET_SG_RND_REQ_NUM[sg]) * \
+            self.data_stack[sg] += random.poisson(NET_SG_RND_REQ_NUM[sg]) * \
                 NET_SECONDS_PER_STEP / NET_SG_RND_REQ_NUM_TIME_SCALE
             # generate network app data if the stack has sufficient data.
-            while(self.data_stack > 1):
+            while(self.data_stack[sg] > 1):
                 # remove data from stack.
-                self.data_stack -= 1
+                self.data_stack[sg] -= 1
 
                 # get the range of random generated data size (byte)
                 data_size_rnd_range = NET_SG_RND_REQ_SIZE[sg]

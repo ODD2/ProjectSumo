@@ -159,6 +159,9 @@ class StatisticRecorder:
                 for bs in GV.NET_STATION_CONTROLLER:
                     serial = bs.serial
                     bs_total_txq_wait_time = 0
+                    # the data was never received by this base station, ignore.
+                    if(len(record.time_bs_txq[serial]) == 0):
+                        continue
                     # sum up total base station txq wait time.
                     for time_interval in record.time_bs_txq[serial]:
                         time_enter = time_interval[0]
@@ -172,9 +175,11 @@ class StatisticRecorder:
                         # accumulate time.
                         if(not math.isclose(time_enter, time_exit) and time_enter * time_exit > 0):
                             bs_total_txq_wait_time += (time_exit - time_enter)
+
                     # ignore if there's no waiting time.
-                    if bs_total_txq_wait_time == 0:
-                        continue
+                    # if bs_total_txq_wait_time == 0:
+                    #     continue
+
                     # add txq wait time to record.
                     record_total_txq_wait_count += 1
                     record_total_txq_wait_time += bs_total_txq_wait_time

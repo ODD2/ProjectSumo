@@ -1,5 +1,10 @@
-from od.config import SUMO_SECONDS_PER_STEP,NET_SECONDS_PER_STEP,NET_SECONDS_PER_TS
+from od.config import SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP, NET_SECONDS_PER_TS
 import traci
+import math
+
+# Numeric Precision Settings
+TIME_ROUND_DECIMAL = math.floor(abs(math.log(NET_SECONDS_PER_TS, 10))) + 1
+
 
 class SumoSimInfo:
     def __init__(self):
@@ -41,10 +46,16 @@ class SumoSimInfo:
         self.ts = ts
 
     def getTimeNS(self):
-        return (self.ss * SUMO_SECONDS_PER_STEP +
-                self.ns * NET_SECONDS_PER_STEP)
+        return round(
+            (self.ss * SUMO_SECONDS_PER_STEP +
+             self.ns * NET_SECONDS_PER_STEP),
+            TIME_ROUND_DECIMAL
+        )
 
     def getTime(self):
-        return (self.ss * SUMO_SECONDS_PER_STEP +
-                self.ns * NET_SECONDS_PER_STEP +
-                self.ts * NET_SECONDS_PER_TS)
+        return round(
+            (self.ss * SUMO_SECONDS_PER_STEP +
+             self.ns * NET_SECONDS_PER_STEP +
+             self.ts * NET_SECONDS_PER_TS),
+            TIME_ROUND_DECIMAL
+        )

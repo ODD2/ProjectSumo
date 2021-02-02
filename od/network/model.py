@@ -87,8 +87,6 @@ class NetStatusCache:
 
 # (VehicleRecorder, BaseStationController, SocialGroup)
 def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
-    if(vehicle.name == "2.6"):
-        a = 0
     # Vehicle's position
     Intf_dist = [5000]  # dummy base station for work around
     Intf_pwr_dBm = [BS_TRANS_PWR[bs_ctrlr.type]]
@@ -115,9 +113,8 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
     fc = BS_FREQ[bs_ctrlr.type]
     # height of vehicle
     h_MS = VEH_HEIGHT
-    # delay spread. (up to 4 us)
-    # DS_Desired = random.normal(0, 4)
-    DS_Desired = 0.5
+    # delay spread.
+    DS_Desired = 0.1
     # distance between vehicle and station
     UE_dist = max(
         pow((bs_ctrlr.pos[0] - vehicle.pos[0])**2 +
