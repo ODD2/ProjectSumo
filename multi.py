@@ -5,6 +5,7 @@ from multiprocessing import Process
 from threading import Thread
 from datetime import datetime
 import single
+import numpy as np
 
 start_time = None
 end_time = None
@@ -22,8 +23,7 @@ if __name__ == "__main__":
     for res_alloc_type in ResourceAllocatorType:
         for rsu in [False, True]:
             process = []
-            # for traffic_scale in [0.2, 0.25, 0.3, 0.35, 0.4]:
-            for traffic_scale in [0.45, 0.5, 0.55, 0.6, 0.65]:
+            for traffic_scale in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
                 for seed in [13232421, 102948123, 4419883, 5157253]:
                     process.append(
                         Process(

@@ -371,7 +371,7 @@ class BaseStationController:
                         # remove appdatas in collection
                         self.sg_brdcst_datas[qos][sg] = self.sg_brdcst_datas[qos][sg][data_i:]
                         # create package
-                        package = NetworkPackage(
+                        package = self.CreatePackage(
                             self,
                             BroadcastObject,
                             sg,
@@ -388,6 +388,10 @@ class BaseStationController:
 
     # arrange downlink resource in NOMA
     def ArrangeDownlinkResourceNOMA(self):
+        # DEBUG
+        # if(self.name == "bs4" and GV.SUMO_SIM_INFO.getTime() > 272.0125):
+        #     a = 0
+
         # TODO: Serve Resend Requests
         # Simulation config for matlab optimizer
         SIM_CONF = {
@@ -539,7 +543,7 @@ class BaseStationController:
                                 # collection done, remove appdatas that have been delivered
                                 self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][deliver_index:]
                                 # create package
-                                package = NetworkPackage(
+                                package = self.CreatePackage(
                                     self,
                                     BroadcastObject,
                                     social_group,
@@ -558,6 +562,32 @@ class BaseStationController:
                 else:
                     continue
 
+    # Create package
+    def CreatePackage(self, src, dest, social_group: SocialGroup, total_bits, appdatas, trans_ts, offset_ts):
+        # create package
+        package = NetworkPackage(
+            src,
+            dest,
+            social_group,
+            total_bits,
+            appdatas,
+            trans_ts,
+            offset_ts
+        )
+
+        # log
+        GV.DEBUG.Log(
+            "[{}][package][{}]:create.({})".format(
+                self.name,
+                social_group.fname.lower(),
+                package
+            ),
+            DebugMsgType.NET_PKG_INFO
+        )
+
+        # Create Package
+        return package
+
     # Function called by VehicleRecorder to deliver package to this base station
     def ReceivePackage(self, package: NetworkPackage):
         self.pkg_in_proc[LinkType.UPLINK].append(package)
@@ -566,6 +596,7 @@ class BaseStationController:
     def ReceivePropagation(self, social_group: SocialGroup, header: AppDataHeader):
         if(social_group not in self.sg_brdcst_datas[social_group.qos]):
             self.sg_brdcst_datas[social_group.qos][social_group] = []
+
         self.sg_brdcst_datas[social_group.qos][social_group].append(
             AppData(
                 header,

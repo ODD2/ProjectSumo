@@ -25,7 +25,7 @@ class VehicleRecorder():
         self.pos = (0, 0)
 
         # Vehicle Position of Latest Base Station Subscribe Process
-        self.chk_pos = (0, 0)
+        self.chk_pos = (float('Inf'), float('Inf'))
 
         # Best connectivity base station for each social group, categorized by base station type
         self.sub_sg_bs = [[None for j in SocialGroup]
@@ -78,6 +78,7 @@ class VehicleRecorder():
                     if (bs_ctrl not in invalid_bs):
                         distance = pow((self.pos[0] - bs_ctrl.pos[0])**2 +
                                        (self.pos[1] - bs_ctrl.pos[1])**2, 0.5)
+
                         if (distance > bs_ctrl.radius):
                             self.UnsubscribeBS(bs_type, social_group)
                             invalid_bs.append(bs_ctrl)
@@ -129,13 +130,17 @@ class VehicleRecorder():
             if ctrl_range[0] != None
         ])
 
-        # subscribe base station
+        # update subscription base stations
         for bs_type in BaseStationType:
             for sg in SocialGroup:
                 # get the base station controller
                 bs_ctrl = bs_near[bs_type][0]
                 # there's no base station of this type
                 if(bs_ctrl == None):
+                    self.UnsubscribeBS(
+                        bs_type,
+                        sg
+                    )
                     continue
                 # subscribe to base station
                 self.SubscribeBS(
