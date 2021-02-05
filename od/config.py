@@ -15,7 +15,7 @@ DEBUG_MSG_FLAGS = (
 )
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = False
+SUMO_SIM_GUI = True
 # . simulation scaler
 SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
@@ -114,15 +114,23 @@ BS_UMI_RB_BW_SG = {
 }
 # Base Station Presets
 BS_PRESET = {
-    "bs1": {
+    "UMA-1": {
         "color": (0, 0, 0, 255),
-        "pos": (285, 245),
+        "pos": (160, 100),
         "img": os.getcwd() + "/wifi.png",
         "width": 5,
         "height": 3.9,
         "type": BaseStationType.UMA,
     },
-    "bs2": {
+    "UMA-2": {
+        "color": (0, 0, 0, 255),
+        "pos": (450, 330),
+        "img": os.getcwd() + "/wifi.png",
+        "width": 5,
+        "height": 3.9,
+        "type": BaseStationType.UMA,
+    },
+    "UMI-1": {
         "color": (0, 0, 0, 255),
         "pos": (127, 217),
         "img": os.getcwd() + "/wifi.png",
@@ -130,7 +138,7 @@ BS_PRESET = {
         "height": 3.9,
         "type": BaseStationType.UMI,
     },
-    "bs3": {
+    "UMI-2": {
         "color": (0, 0, 0, 255),
         "pos": (52, 145),
         "img": os.getcwd() + "/wifi.png",
@@ -138,7 +146,7 @@ BS_PRESET = {
         "height": 3.9,
         "type": BaseStationType.UMI,
     },
-    "bs4": {
+    "UMI-3": {
         "color": (0, 0, 0, 255),
         "pos": (315, 395),
         "img": os.getcwd() + "/wifi.png",
@@ -146,7 +154,7 @@ BS_PRESET = {
         "height": 3.9,
         "type": BaseStationType.UMI,
     },
-    "bs5": {
+    "UMI-4": {
         "color": (0, 0, 0, 255),
         "pos": (270, 50),
         "img": os.getcwd() + "/wifi.png",
@@ -154,7 +162,7 @@ BS_PRESET = {
         "height": 3.9,
         "type": BaseStationType.UMI,
     },
-    "bs6": {
+    "UMI-5": {
         "color": (0, 0, 0, 255),
         "pos": (525, 95),
         "img": os.getcwd() + "/wifi.png",

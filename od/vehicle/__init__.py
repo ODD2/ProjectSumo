@@ -141,13 +141,13 @@ class VehicleRecorder():
                         bs_type,
                         sg
                     )
-                    continue
                 # subscribe to base station
-                self.SubscribeBS(
-                    bs_type,
-                    sg,
-                    bs_ctrl
-                )
+                else:
+                    self.SubscribeBS(
+                        bs_type,
+                        sg,
+                        bs_ctrl
+                    )
 
     # Subscribe base station
     def SubscribeBS(self, bs_type, social_group: SocialGroup, bs_ctrl):

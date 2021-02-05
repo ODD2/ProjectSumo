@@ -388,10 +388,6 @@ class BaseStationController:
 
     # arrange downlink resource in NOMA
     def ArrangeDownlinkResourceNOMA(self):
-        # DEBUG
-        # if(self.name == "bs4" and GV.SUMO_SIM_INFO.getTime() > 272.0125):
-        #     a = 0
-
         # TODO: Serve Resend Requests
         # Simulation config for matlab optimizer
         SIM_CONF = {

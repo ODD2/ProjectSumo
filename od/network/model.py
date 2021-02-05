@@ -122,10 +122,7 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         10
     )
 
-    for intf_BS_obj in [x for x in GV.NET_STATION_CONTROLLER if x.type == bs_ctrlr.type]:
-        if (intf_BS_obj == bs_ctrlr):
-            continue
-
+    for intf_BS_obj in [x for x in GV.NET_STATION_CONTROLLER if x.type == bs_ctrlr.type and x != bs_ctrlr]:
         # intf-station antenna height
         Intf_h_BS.append(BS_HEIGHT[intf_BS_obj.type])
         # intf-station transmission power
@@ -160,7 +157,9 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         float(CP*1000),  # us->ns
         True if bs_ctrlr.type == BaseStationType.UMA else False,
         float(0.001),
-        float(tx_p_dBm - 10*math.log10(2)),
+        float(tx_p_dBm - 3.01029995664),
+        # 10*log10(pwr_mw/2) = 10*log10(pwr_mw) - 10*log10(2)
+        #                    = pwr_dBm - 3.01029995664
         False,
         True,
         nargout=9,
