@@ -40,6 +40,6 @@ function [a,b] = TestEntry()
         }...
     };
 %     QoS_GP_CONF = {};
-    [a,b] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF);
+    [a,b] = PlannerV1(SIM_CONF,QoS_GP_CONF);
 end
 

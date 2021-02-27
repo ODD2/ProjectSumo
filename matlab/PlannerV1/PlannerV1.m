@@ -1,4 +1,4 @@
-function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
+function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
 
     for qos = 1:length(QoS_GP_CONF)
         QoS_GP_CONF{qos} = [QoS_GP_CONF{qos}{:}];

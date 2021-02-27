@@ -464,7 +464,7 @@ class BaseStationController:
         # create stdout receiver, save output for debug
         out = io.StringIO()
         # optimize allocation request
-        gid_req_res, exitflag = GE.MATLAB_ENG.NomaPlannerV1(
+        gid_req_res, exitflag = GE.MATLAB_ENG.PlannerV1(
             SIM_CONF, QoS_GP_CONF, nargout=2, stdout=out
         )
         #  save output for debug
