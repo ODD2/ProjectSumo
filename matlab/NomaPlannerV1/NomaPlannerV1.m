@@ -65,6 +65,7 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
                          "grp_sol_ofs",0,...
                          ...%Optimization settings
                          "is_fix",false,...
+                         "eager_rate",0,...
                          ...%OMA settings
                          "oma_cqi_num",0,...
                          "oma_cqi_list",[],...
@@ -130,6 +131,7 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
             
 %           newly joined groups will try to allocate both in oma&noma layer
             new_gp_conf.is_fix = false;
+            new_gp_conf.eager_rate = qos_gp_conf.mem_num / max(qos_gp_conf.rem_bits,1);
             
 %           number of possible RB positions
             new_gp_conf.y_max = y_max;
@@ -324,7 +326,7 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
 %       print the final allocation result        
         for gpc = SOL_GP_CONF
             fprintf('===== QoS:%d, Gid:%d, Geo:(%d,%d) =====\n',...
-            		[gpc.qos gpc.gid gpc.rbf_h gpc.rbf_w]);
+            		[gpc.qos gpc.gid gpc.rbf_w gpc.rbf_h]);
             fprintf('{\n');
             for layer_ = ["oma" "noma"]
             	fprintf(" --- %s Layer ---\n", [ upper(layer_) ] );
@@ -338,7 +340,7 @@ function [GID_REQ_RES,ExitFlag] = NomaPlannerV1(SIM_CONF,QoS_GP_CONF)
 	                    continue
 	                end
 
-	                fprintf(' cqi:%d(x%d), pwr:%d , rbs:[',g_cqi,length(sol_pos),10*log10(gpc.(layer_+"_cqi_req_pwr_mw")(cqi_i_)));
+	                fprintf(' cqi:%d(x%d), pwr:%d , rbs:[',g_cqi,length(sol_pos),gpc.(layer_+"_cqi_req_pwr_mw")(cqi_i_));
 	                for pos = sol_pos
 	                    fprintf('(%d,%d)', [(mod(pos,gpc.y_max)+1) (floor(pos/gpc.y_max)+1)]);
 	                end

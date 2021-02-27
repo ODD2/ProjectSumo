@@ -296,10 +296,9 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
     weight_scale = 1;
     ts_weight = 1;
     cqi_weight = (ts_weight * ts_range(end) +1);
-    er_weight = 1.1;
-    qos_scale = (cqi_weight * cqi_range(end) + ts_weight * ts_range(end))*er_weight*er_range(end) + 1;
-    qos_scale = qos_scale * max([OPT_GP_CONF.rbf_w] .* [OPT_GP_CONF.rbf_h]);
-    
+    er_weight = (cqi_weight * cqi_range(end) + ts_weight * ts_range(end) + 1);
+    qos_scale = (er_weight * er_range(end) + cqi_weight * cqi_range(end) + ts_weight * ts_range(end) + 1);
+    qos_scale = q
     ts_weight = ts_weight * weight_scale;
     cqi_weight = cqi_weight * weight_scale;
     er_weight = er_weight * weight_scale;
@@ -328,7 +327,7 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
                     sol_end = sol_ofs + (cqi_i - 1) * gp_conf.rb_num + (ts_beg    ) * gp_conf.y_max;                
                     ts_end = SIM_CONF.rbf_w - (ts_beg + (gp_conf.rbf_w - 1));
                     
-                    fval = ((ts_end * ts_weight + cqi * cqi_weight) * er * er_weight) * (qos_scale^(max_qos - qos));
+                    fval = (ts_end * ts_weight + cqi * cqi_weight + er * er_weight) * (qos_scale^(max_qos - qos));
                     
                     %assign local fval.
                     f(sol_beg : sol_end ) = fval;

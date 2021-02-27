@@ -15,7 +15,7 @@ DEBUG_MSG_FLAGS = (
 )
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = True
+SUMO_SIM_GUI = False
 # . simulation scaler
 SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step

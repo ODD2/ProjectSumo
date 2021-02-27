@@ -96,7 +96,7 @@ if __name__ == "__main__":
                         )
                     )
 
-    ParallelSimulationManager(weight_intconfs, 50)
+    ParallelSimulationManager(weight_intconfs, 80)
     end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     print("Start at: " + start_time)
     print("End at: " + end_time)
