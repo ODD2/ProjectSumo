@@ -253,141 +253,7 @@ class BaseStationController:
 
     # arrange downlink resource
     def ArrangeDownlinkResource(self):
-        if (GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA):
-            self.ArrangeDownlinkResourceOMA()
-        elif (GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.NOMA_OPT):
-            self.ArrangeDownlinkResourceNOMA()
-
-    # arrange downlink resource in OMA
-    def ArrangeDownlinkResourceOMA(self):
-        # OMA resource allocator
-        ra_oma = ResourceAllocatorOMA(
-            BS_TOTAL_BAND[self.type]*0.9,
-            NET_TS_PER_NET_STEP
-        )
-        # TODO: Serve Resend Requests
-
-        # Serve Broadcast Appdatas
-        for qos in range(NET_QOS_CHNLS):
-            for sg in self.sg_brdcst_datas[qos].keys():
-                # if there's no appdata to broadcast for this social group
-                if(len(self.sg_brdcst_datas[qos][sg]) == 0):
-                    continue
-                # the member of the social group
-                members = len(self.sg_sub_vehs[sg])
-                # required resource block bandwidth for this social group msg
-                sg_rb_bw = self.RequiredBandwidth(sg)
-                # required timeslots for using this bandwidth
-                sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
-                # calculate the total bits for this social group to send all its broadcast appdatas
-                sg_rem_bits = sum(
-                    data.bits for data in self.sg_brdcst_datas[qos][sg]
-                )
-                # if this base station has no subscribers or unsent data in this social group
-                if(members == 0 or sg_rem_bits == 0):
-                    GV.STATISTIC_RECORDER.BaseStationAppdataDrop(
-                        sg,
-                        self,
-                        list(map(
-                            lambda x: x.header,
-                            self.sg_brdcst_datas[qos][sg]
-                        ))
-                    )
-                    # clear all broadcast appdatas of this social group
-                    # cause there's no receiver
-                    self.sg_brdcst_datas[qos][sg].clear()
-                    continue
-                # if there's no resource for this social group
-                if(not ra_oma.Spare(sg_rb_bw, sg_rb_ts)):
-                    continue
-
-                # fetch all the vehicle network status
-                net_status = GV.NET_STATUS_CACHE.GetMultiNetStatus([
-                    (veh, self, sg) for veh in self.sg_sub_vehs[sg]
-                ])
-                #  find the minimum cqi among all the vehicles
-                cqi_min_of_all_member = min(
-                    status.max_cqi for status in net_status)
-                #  the minimum cqi is zero! this social group is unable to serve!
-                #  or else some vehicle will not receive data.
-                if(cqi_min_of_all_member == 0):
-                    continue
-                # calculate resource block size for minimum cqi
-                sg_rb_bits = GE.MATLAB_ENG.GetThroughputPerRB(
-                    float(cqi_min_of_all_member),
-                    int(NET_RB_SLOT_SYMBOLS)
-                )
-                # total required resource blocks for this social group
-                sg_max_req_rb = math.ceil(sg_rem_bits/sg_rb_bits)
-                # allocate resource blocks
-                sg_ts_req_rb = [0 for _ in range(NET_TS_PER_NET_STEP)]
-                for _ in range(sg_max_req_rb):
-                    offset_ts = ra_oma.Allocate(
-                        sg_rb_bw, sg_rb_ts
-                    )
-                    # unable to allocate
-                    if(offset_ts < 0):
-                        break
-                    # allocate successful
-                    sg_ts_req_rb[offset_ts] += 1
-                # deploy resource and create packages
-                for ts in range(NET_TS_PER_NET_STEP):
-                    while(sg_ts_req_rb[ts] > 0):
-                        # consume resource block
-                        sg_ts_req_rb[ts] -= 1
-                        # collect appdatas this package is delivering
-                        package_appdatas = []
-                        remain_bits = sg_rb_bits
-                        # the appdata index that is currently collecting
-                        data_i = 0
-                        data_num = len(self.sg_brdcst_datas[qos][sg])
-                        # collect package appdata
-                        while (data_i < data_num and remain_bits > 0):
-                            appdata = self.sg_brdcst_datas[qos][sg][data_i]
-                            # actual transmit bit
-                            trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
-                            package_appdatas.append(
-                                AppData(
-                                    appdata.header,
-                                    trans_bits,
-                                    appdata.offset
-                                )
-                            )
-                            # consume remain bits
-                            remain_bits -= trans_bits
-                            # consume bits to deliver
-                            appdata.bits -= trans_bits
-                            # add delivered bits
-                            appdata.offset += trans_bits
-                            # appdata totally delivered, serve next appdata
-                            if appdata.bits == 0:
-                                data_i += 1
-                                # Statistic - appdata serve timestamp
-                                GV.STATISTIC_RECORDER.BaseStationAppdataServe(
-                                    sg,
-                                    self,
-                                    [appdata.header]
-                                )
-                        # remove appdatas in collection
-                        self.sg_brdcst_datas[qos][sg] = self.sg_brdcst_datas[qos][sg][data_i:]
-                        # create package
-                        package = self.CreatePackage(
-                            self,
-                            BroadcastObject,
-                            sg,
-                            sg_rb_bits-remain_bits,
-                            package_appdatas,
-                            sg_rb_ts,
-                            ts,
-                        )
-                        # put package in process list
-                        self.pkg_in_proc[LinkType.DOWNLINK].append(package)
-                        # send package
-                        for veh in self.sg_sub_vehs[sg]:
-                            veh.ReceivePackage(package)
-
-    # arrange downlink resource in NOMA
-    def ArrangeDownlinkResourceNOMA(self):
+        GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA
         # TODO: Serve Resend Requests
         # Simulation config for matlab optimizer
         SIM_CONF = {
@@ -448,8 +314,16 @@ class BaseStationController:
                     "rbf_w": float(sg_rb_ts),
                     "rbf_h": float(sg_rb_bw/NET_RB_BW_UNIT),
                     "sinr_max": float(netstatus.max_sinr),
-                    "pwr_req_dBm": float(netstatus.pwr_req_dBm),
-                    "pwr_ext_dBm":  float(netstatus.pwr_ext_dBm),
+                    "pwr_req_dBm":  (
+                        float(BS_TRANS_PWR[self.type])
+                        if GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA else
+                        float(netstatus.pwr_req_dBm)
+                    ),
+                    "pwr_ext_dBm":  (
+                        float(0)
+                        if GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA else
+                        float(netstatus.pwr_ext_dBm)
+                    ),
                     "rem_bits": float(sg_total_bits),
                     "mem_num": float(members),
                 })
@@ -478,85 +352,81 @@ class BaseStationController:
 
         # deliver package according to optimized allocate resource
         # TODO: improve approach(only iterate through gid_req_res rather than the whole qos).
-        for qos in range(NET_QOS_CHNLS):
-            for social_group in self.sg_brdcst_datas[qos].keys():
-                gname = "g"+str(social_group.gid)
-                if (gname in gid_req_res):
-                    for t_name, val_cqi in gid_req_res[gname].items():
-                        for cqi_name, rb_num in val_cqi.items():
-                            # required resource block bandwidth for this social group msg
-                            sg_rb_bw = self.RequiredBandwidth(social_group)
-                            # required timeslots for using this bandwidth
-                            sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
-                            # social group resource block cqi
-                            sg_rb_cqi = int(cqi_name[1:])
-                            # social group rosource block size for the specified cqi
-                            sg_rb_bits = GE.MATLAB_ENG.GetThroughputPerRB(
-                                sg_rb_cqi, NET_RB_SLOT_SYMBOLS
-                            )
-                            # the offset timeslot of the package
-                            offset_ts = int(t_name[1:])
+        for gid_key, gid_items in gid_req_res.items():
+            sg = SocialGroup(int(gid_key[1:]))
+            for ts_key, ts_items in gid_items.items():
+                for cqi_key, rb_num in ts_items.items():
+                    # required resource block bandwidth for this social group msg
+                    sg_rb_bw = self.RequiredBandwidth(sg)
+                    # required timeslots for using this bandwidth
+                    sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
+                    # social group resource block cqi
+                    sg_rb_cqi = int(cqi_key[1:])
+                    # social group rosource block size for the specified cqi
+                    sg_rb_bits = GE.MATLAB_ENG.GetThroughputPerRB(
+                        sg_rb_cqi, NET_RB_SLOT_SYMBOLS
+                    )
+                    # the offset timeslot of the package
+                    offset_ts = int(ts_key[1:])
 
-                            # start collect appdata for remaining resource
-                            for _ in range(rb_num):
-                                # total bits allocated for this social group
-                                remain_bits = sg_rb_bits
-                                # currently delivering appdata index in group
-                                deliver_index = 0
-                                # the total number of appdatas waiting to deliver
-                                appdata_num = len(
-                                    self.sg_brdcst_datas[qos][social_group]
+                    # start collect appdata for remaining resource
+                    for _ in range(rb_num):
+                        # total bits allocated for this social group
+                        remain_bits = sg_rb_bits
+                        # currently delivering appdata index in group
+                        deliver_index = 0
+                        # the total number of appdatas waiting to deliver
+                        appdata_num = len(
+                            self.sg_brdcst_datas[sg.qos][sg]
+                        )
+                        # the appdatas this group cast package is going to deliver
+                        package_appdatas = []
+                        while(deliver_index < appdata_num and remain_bits > 0):
+                            appdata = self.sg_brdcst_datas[sg.qos][sg][deliver_index]
+                            # calculate the total bits that could actually transmit
+                            trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
+                            # add data into package
+                            package_appdatas.append(
+                                AppData(
+                                    appdata.header,
+                                    trans_bits,
+                                    appdata.offset
                                 )
-                                # the appdatas this group cast package is going to deliver
-                                package_appdatas = []
-                                while(deliver_index < appdata_num and remain_bits > 0):
-                                    appdata = self.sg_brdcst_datas[qos][social_group][deliver_index]
-                                    # calculate the total bits that could actually transmit
-                                    trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
-                                    # add data into package
-                                    package_appdatas.append(
-                                        AppData(
-                                            appdata.header,
-                                            trans_bits,
-                                            appdata.offset
-                                        )
-                                    )
-                                    # consume remain bits
-                                    remain_bits -= trans_bits
-                                    # consume bits to deliver
-                                    appdata.bits -= trans_bits
-                                    # add delivered bits
-                                    appdata.offset += trans_bits
-                                    # if there's no bits to deliver move on to the next appdata
-                                    if(appdata.bits == 0):
-                                        deliver_index += 1
-                                        # Statistic - appdata serve timestamp
-                                        GV.STATISTIC_RECORDER.BaseStationAppdataServe(
-                                            social_group,
-                                            self,
-                                            [appdata.header]
-                                        )
-                                # collection done, remove appdatas that have been delivered
-                                self.sg_brdcst_datas[qos][social_group] = self.sg_brdcst_datas[qos][social_group][deliver_index:]
-                                # create package
-                                package = self.CreatePackage(
+                            )
+                            # consume remain bits
+                            remain_bits -= trans_bits
+                            # consume bits to deliver
+                            appdata.bits -= trans_bits
+                            # add delivered bits
+                            appdata.offset += trans_bits
+                            # if there's no bits to deliver move on to the next appdata
+                            if(appdata.bits == 0):
+                                deliver_index += 1
+                                # Statistic - appdata serve timestamp
+                                GV.STATISTIC_RECORDER.BaseStationAppdataServe(
+                                    sg,
                                     self,
-                                    BroadcastObject,
-                                    social_group,
-                                    sg_rb_bits-remain_bits,
-                                    package_appdatas,
-                                    sg_rb_ts,
-                                    offset_ts
+                                    [appdata.header]
                                 )
-                                # send package
-                                for veh in self.sg_sub_vehs[social_group]:
-                                    veh.ReceivePackage(package)
-                                # put package in process list
-                                self.pkg_in_proc[LinkType.DOWNLINK].append(
-                                    package
-                                )
-                else:
-                    continue
+                        # collection done, remove appdatas that have been delivered
+                        self.sg_brdcst_datas[sg.qos][sg] = self.sg_brdcst_datas[sg.qos][sg][deliver_index:]
+                        # create package
+                        package = self.CreatePackage(
+                            self,
+                            BroadcastObject,
+                            sg,
+                            sg_rb_bits-remain_bits,
+                            package_appdatas,
+                            sg_rb_ts,
+                            offset_ts
+                        )
+                        # send package
+                        for veh in self.sg_sub_vehs[sg]:
+                            veh.ReceivePackage(package)
+                        # put package in process list
+                        self.pkg_in_proc[LinkType.DOWNLINK].append(
+                            package
+                        )
 
     # Create package
     def CreatePackage(self, src, dest, social_group: SocialGroup, total_bits, appdatas, trans_ts, offset_ts):

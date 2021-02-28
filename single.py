@@ -207,7 +207,7 @@ def main(interest_config):
 
 if __name__ == "__main__":
     cProfile.run(
-        'main(InterestConfig(ResourceAllocatorType.OMA,False,0.6,5157253))'
+        'main(InterestConfig(ResourceAllocatorType.OMA,True,1,123456))'
     )
     # main(
     #     InterestConfig(

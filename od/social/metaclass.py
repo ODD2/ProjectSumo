@@ -65,5 +65,8 @@ class SocialGroupMeta(type):
         dct["sg_attrs"] = sg_attrs
         return super(SocialGroupMeta, cls).__new__(cls, name, bases, dct)
 
-    def __iter__(self):
-        return iter(self.sg_attrs)
+    def __iter__(cls):
+        return iter(cls.sg_attrs)
+
+    def __call__(cls, gid: int):
+        return cls.sg_attrs[gid] if gid < len(cls.sg_attrs) else None
