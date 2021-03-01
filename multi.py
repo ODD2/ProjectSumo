@@ -107,6 +107,18 @@ if __name__ == "__main__":
             InterestConfig(ResourceAllocatorType.NOMA_OPT, True, 0.5, 123456)
         )
     )
+    weight_intconfs.append(
+        WeightInterestConfig(
+            0,
+            InterestConfig(ResourceAllocatorType.OMA, False, 0.5, 123456)
+        )
+    )
+    weight_intconfs.append(
+        WeightInterestConfig(
+            0,
+            InterestConfig(ResourceAllocatorType.NOMA_OPT, False, 0.5, 123456)
+        )
+    )
 
     ParallelSimulationManager(weight_intconfs, 80)
     end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")

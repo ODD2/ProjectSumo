@@ -92,7 +92,7 @@ class VehicleApplication(Application):
         self.data_counter = 0
 
     def Run(self):
-        self.SendData()
+        self.SpawnData()
 
     # Receive application data
     def RecvData(self, social_group: SocialGroup, appdata: AppData):
@@ -118,10 +118,10 @@ class VehicleApplication(Application):
         )
 
     # Send application data
-    def SendData(self):
+    def SpawnData(self):
         for sg in SocialGroup:
             # TODO: Make the random poisson be social group dependent
-            self.data_stack[sg] += random.poisson(NET_SG_RND_REQ_NUM[sg]) * \
+            self.data_stack[sg] += random.poisson(NET_SG_RND_REQ_NUM[sg] * GV.NET_SG_RND_REQ_MOD[sg]) * \
                 NET_SECONDS_PER_STEP / NET_SG_RND_REQ_NUM_TIME_SCALE
             # generate network app data if the stack has sufficient data.
             while(self.data_stack[sg] > 1):
@@ -130,6 +130,7 @@ class VehicleApplication(Application):
 
                 # get the range of random generated data size (byte)
                 data_size_rnd_range = NET_SG_RND_REQ_SIZE[sg]
+
                 # size of data (bit)
                 data_size = random.randint(
                     data_size_rnd_range[0],
@@ -137,19 +138,30 @@ class VehicleApplication(Application):
                 ) * 8
 
                 # create appdata
-                self.datas[sg].append(
-                    AppData(
-                        AppDataHeader(
-                            self.owner,
-                            data_size,
-                            self.data_counter,
-                            GV.SUMO_SIM_INFO.getTime()
-                        ),
+                appdata = AppData(
+                    AppDataHeader(
+                        self.owner,
                         data_size,
-                        0
-                    )
+                        self.data_counter,
+                        GV.SUMO_SIM_INFO.getTime()
+                    ),
+                    data_size,
+                    0
                 )
+                self.datas[sg].append(appdata)
+
+                # add counter
                 self.data_counter += 1
+
+                # Log
+                GV.DEBUG.Log(
+                    "[{}][app][{}]:data spawn.({})".format(
+                        self.owner.name,
+                        sg.fname.lower(),
+                        appdata.header
+                    ),
+                    DebugMsgType.NET_APPDATA_INFO
+                )
 
 
 class NetworkCoreApplication(Application):

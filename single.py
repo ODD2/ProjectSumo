@@ -144,7 +144,8 @@ def main(interest_config):
         # forward sumo simulation step
         traci.simulationStep()
         # fetch the newest sumo simulation informations
-        GV.SUMO_SIM_INFO.UpdateSS()
+        UpdateSS([GV.SUMO_SIM_INFO])
+        UpdateSS(GV.SUMO_SIM_EVENTS)
 
         # remove ghost(non-exist) vehicles
         for ghost_vid in GV.SUMO_SIM_INFO.ghost_veh_ids:
@@ -207,7 +208,7 @@ def main(interest_config):
 
 if __name__ == "__main__":
     cProfile.run(
-        'main(InterestConfig(ResourceAllocatorType.OMA,True,1,123456))'
+        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,0.1,123456))'
     )
     # main(
     #     InterestConfig(

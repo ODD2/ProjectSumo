@@ -8,7 +8,7 @@ import math
 # System Parameters
 DEBUG_MSG_FLAGS = (
     # DebugMsgType.NONE
-    DebugMsgType.NET_PKG_INFO |
+    # DebugMsgType.NET_PKG_INFO |
     DebugMsgType.NET_APPDATA_INFO |
     DebugMsgType.NET_ALLOC_INFO |
     DebugMsgType.SUMO_VEH_INFO
@@ -21,11 +21,11 @@ SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . the offset of the simulation
-SUMO_SKIP_SECONDS = 252
+SUMO_SKIP_SECONDS = 245
 # . total sumo simulation steps skipped
 SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
 # . total sumo simulation seconds
-SUMO_SIM_SECONDS = 72
+SUMO_SIM_SECONDS = 10
 # . total sumo simulation steps
 SUMO_SIM_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SIM_SECONDS))
 # . total sumo seconds
@@ -33,6 +33,9 @@ SUMO_TOTAL_SECONDS = SUMO_SKIP_SECONDS + SUMO_SIM_SECONDS
 # . total sumo steps
 SUMO_TOTAL_STEPS = SUMO_SKIP_STEPS + SUMO_SIM_STEPS
 
+# Sumo Simulation Event Settings
+EVENT_EARTHQUAKE_OFS_STEPS = int(round(5 / SUMO_SECONDS_PER_STEP))
+EVENT_EARTHQUAKE_DUR_STEPS = int(round(5 / SUMO_SECONDS_PER_STEP))
 
 # Network Settings
 # . total QoS network channels. qos channel starts from 0.
@@ -58,10 +61,15 @@ NET_SG_RND_REQ_SIZE = {
     SocialGroup.GENERAL: [64, 2048],
 }
 # . social group random request amount(Packages/second)
-NET_SG_RND_REQ_NUM_TIME_SCALE = 10  # seconds
+#   For general, referencing the recommened birate for streaming at 720p 60fps.(2200Kbps~6000Kbps)
+#    - https://support.google.com/youtube/answer/2853702?hl=en#zippy=%2Cp-fps%2Cp
+#   the calculation would be: ((2250+6000)*1024/2) / ((64+2048)*8/2)
+#
+#   For critical, the value is preset to an average of 64Kbps.
+NET_SG_RND_REQ_NUM_TIME_SCALE = 1  # seconds
 NET_SG_RND_REQ_NUM = {
-    SocialGroup.CRITICAL: 4,
-    SocialGroup.GENERAL: 10
+    SocialGroup.CRITICAL: int(round(((64)*1024/2) / ((300+1100)*8/2))),
+    SocialGroup.GENERAL: int(round(((500+2000)*1024/2) / ((64+2048)*8/2)))
 }
 
 # Base Station Settings
