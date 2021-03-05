@@ -15,9 +15,9 @@ DEBUG_MSG_FLAGS = (
 )
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = False
+SUMO_SIM_GUI = True
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 1
+SUMO_SIM_TIME_SCALER = 100
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . the offset of the simulation
@@ -25,7 +25,7 @@ SUMO_SKIP_SECONDS = 245
 # . total sumo simulation steps skipped
 SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
 # . total sumo simulation seconds
-SUMO_SIM_SECONDS = 10
+SUMO_SIM_SECONDS = 8
 # . total sumo simulation steps
 SUMO_SIM_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SIM_SECONDS))
 # . total sumo seconds
@@ -34,8 +34,8 @@ SUMO_TOTAL_SECONDS = SUMO_SKIP_SECONDS + SUMO_SIM_SECONDS
 SUMO_TOTAL_STEPS = SUMO_SKIP_STEPS + SUMO_SIM_STEPS
 
 # Sumo Simulation Event Settings
-EVENT_EARTHQUAKE_OFS_STEPS = int(round(5 / SUMO_SECONDS_PER_STEP))
-EVENT_EARTHQUAKE_DUR_STEPS = int(round(5 / SUMO_SECONDS_PER_STEP))
+EVENT_EARTHQUAKE_OFS_STEPS = int(round(3 / SUMO_SECONDS_PER_STEP))
+EVENT_EARTHQUAKE_DUR_STEPS = int(round(3 / SUMO_SECONDS_PER_STEP))
 
 # Network Settings
 # . total QoS network channels. qos channel starts from 0.

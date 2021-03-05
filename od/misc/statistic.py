@@ -7,9 +7,16 @@ from od.misc.interest import InterestConfig
 from od.network.appdata import AppDataHeader
 import od.vars as GV
 # STD
+from enum import IntEnum
 import math
 import pickle
 import os
+
+
+class NetFlowType(IntEnum):
+    CRITICAL = 0
+    GENERAL = 1
+    C2G = 2
 
 
 class AppdataStatistic:
@@ -85,270 +92,381 @@ class StatisticRecorder:
             record = self.GetAppdataRecord(sg, header)
             record.time_bs_serv[bs] = GV.SUMO_SIM_INFO.getTime()
 
-    def VehicleReceivedIntactAppdataReport(self):
-        sg_stats = {}
-        GV.STATISTIC.Doc("=====VehicleReceivedIntactAppdataReport=====")
-        for sg in SocialGroup:
-            sg_total_trip_time = 0
-            sg_total_trip_count = 0
-            sg_max_trip_time = float('-inf')
-            sg_min_trip_time = float('inf')
-            sg_avg_trip_time = 0
-            for header_id, record in self.sg_header[sg].items():
-                record_total_trip_time = 0
-                record_total_trip_count = 0
-                record_max_trip_time = float('-inf')
-                record_min_trip_time = float('inf')
-                for trip_time in record.time_veh_trip.values():
-                    record_total_trip_time += trip_time
-                    record_total_trip_count += 1
-                    record_max_trip_time = record_max_trip_time if record_max_trip_time > trip_time else trip_time
-                    record_min_trip_time = record_min_trip_time if record_min_trip_time < trip_time else trip_time
-                record_avg_trip_time = (
-                    0 if record_total_trip_count == 0
-                    else record_total_trip_time / record_total_trip_count
-                )
-                GV.STATISTIC.Doc(
-                    '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
-                        str(sg),
-                        header_id,
-                        record_total_trip_time,
-                        record_total_trip_count,
-                        record_avg_trip_time,
-                        record_max_trip_time,
-                        record_min_trip_time,
-                    )
-                )
-                sg_total_trip_time += record_total_trip_time
-                sg_total_trip_count += record_total_trip_count
-                sg_min_trip_time = sg_min_trip_time if sg_min_trip_time < record_min_trip_time else record_min_trip_time
-                sg_max_trip_time = sg_max_trip_time if sg_max_trip_time > record_max_trip_time else record_max_trip_time
+    # extract specific network traffic from self.sg_headers
+    def ExtractNetworkTraffic(self, nft):
+        if(nft == NetFlowType.CRITICAL):
+            return self.sg_header[SocialGroup.CRITICAL]
+        elif(nft == NetFlowType.GENERAL):
+            return self.sg_header[SocialGroup.GENERAL]
+        elif(nft == NetFlowType.C2G):
+            umi_bs_ctrlrs = [x for x in GV.NET_STATION_CONTROLLER if x.type == BaseStationType.UMI]
+            c2g_flows = {}
+            for header, record in self.sg_header[SocialGroup.CRITICAL].items():
+                for bs_ctrlr in umi_bs_ctrlrs:
+                    if record.time_bs_serv[bs_ctrlr] > 0:
+                        c2g_flows[header] = self.sg_header[SocialGroup.GENERAL][header]
+            return c2g_flows
+        return {}
 
-            sg_avg_trip_time = (
-                0 if sg_total_trip_count == 0
-                else sg_total_trip_time / sg_total_trip_count
-            )
-            GV.RESULT.Doc("====={}=====".format(sg))
-            GV.RESULT.Doc("Average Trip Time: {:.4f}".format(sg_avg_trip_time))
-            GV.RESULT.Doc("Maximum Trip Time: {:.4f}".format(sg_max_trip_time))
-            GV.RESULT.Doc("Minimum Trip Time: {:.4f}".format(sg_min_trip_time))
-            sg_stats[sg] = {
-                "avg": sg_avg_trip_time,
-                "max": sg_max_trip_time,
-                "min": sg_min_trip_time,
+    # create report for network traffics.
+    def CreateReport(self):
+        # summary of different estimate features
+        sum_e2e_time = [None for x in NetFlowType]
+        sum_wait_time = [None for x in NetFlowType]
+        sum_tx_time = [None for x in NetFlowType]
+        sum_bst_thrput = [[None for x in BaseStationType] for x in NetFlowType]
+
+        # summarize
+        for nft in NetFlowType:
+            app_stats = self.ExtractNetworkTraffic(nft)
+            sum_e2e_time[nft] = self.VehicleReceivedIntactAppdataReport(app_stats)
+            sum_wait_time[nft] = self.BaseStationAppdataTXQReport(app_stats)
+            sum_tx_time[nft] = self.BaseStationAppdataTXReport(app_stats)
+            for bst in BaseStationType:
+                sum_bst_thrput[nft][bst] = self.BaseStationTypeThroughPutReport(app_stats, bst)
+
+        # base station type throughput
+        rep_bst_thrput = {
+            bst.name: {
+                nft.name: sum_bst_thrput[nft][bst]["bits"] for nft in NetFlowType
             }
-        return sg_stats
+            for bst in BaseStationType
+        }
+        rep_bst_thrput_rate = {
+            bst.name: {
+                nft.name: 0 for nft in NetFlowType
+            }
+            for bst in BaseStationType
+        }
+        for bst in BaseStationType:
+            rep_bst_thrput[bst.name]["total"] = 0
+            # add critical/general network flows
+            for nft in [NetFlowType.CRITICAL, NetFlowType.GENERAL]:
+                rep_bst_thrput[bst.name]["total"] += sum_bst_thrput[nft][bst]["bits"]
+            # create report
+            for nft in NetFlowType:
+                rep_bst_thrput_rate[bst.name][nft.name] = (
+                    sum_bst_thrput[nft][bst]["bits"] / max(1, rep_bst_thrput[bst.name]["total"])
+                )
 
-    def BaseStationAppdataTXQReport(self):
-        sg_stats = {}
-        GV.STATISTIC.Doc("=====BaseStationAppdataTXQReport=====")
+        # system throughput
+        rep_sys_thrput = {
+            nft.name: 0
+            for nft in NetFlowType
+        }
+        rep_sys_thrput_rate = {
+            nft.name: 0
+            for nft in NetFlowType
+        }
+        rep_sys_thrput["total"] = 0
+        for bst in BaseStationType:
+            for nft in NetFlowType:
+                bits = sum_bst_thrput[nft][bst]["bits"]
+                rep_sys_thrput[nft.name] += bits
+                if nft != NetFlowType.C2G:
+                    rep_sys_thrput["total"] += bits
+        # create report
+        for nft in NetFlowType:
+            rep_sys_thrput_rate[nft.name] = (
+                rep_sys_thrput[nft.name] / max(1, rep_sys_thrput["total"])
+            )
+
+        # base station type social group usage
+        rep_bst_sg_rate = {
+            x.name: {
+                y.name: None
+                for y in NetFlowType
+            }
+            for x in BaseStationType
+        }
+        for bst in BaseStationType:
+            total_count = 0
+            # add critical/general network flows
+            for nft in [NetFlowType.CRITICAL, NetFlowType.GENERAL]:
+                total_count += sum_bst_thrput[nft][bst]["count"]
+
+            # prevent deviding 0
+            total_count = max(total_count, 1)
+
+            # create report
+            for nft in NetFlowType:
+                rep_bst_sg_rate[bst.name][nft.name] = sum_bst_thrput[nft][bst]["count"] / total_count
+
+        # end to end time
+        rep_e2e_time = {
+            x.name: sum_e2e_time[x]
+            for x in NetFlowType
+        }
+        # wait time
+        rep_wait_time = {
+            x.name: sum_wait_time[x]
+            for x in NetFlowType
+        }
+
+        # transmit time
+        rep_tx_time = {
+            x.name: sum_tx_time[x]
+            for x in NetFlowType
+        }
+
+        # create report
+        report = {
+            "end-to-end": rep_e2e_time,
+            "wait-time": rep_wait_time,
+            "tx-time": rep_tx_time,
+            "bst-thrput": rep_bst_thrput,
+            "bst-thrput-rate": rep_bst_thrput_rate,
+            "sys-thrput": rep_sys_thrput,
+            "sys-thrput-rate": rep_sys_thrput_rate,
+            "bst-sg-rate": rep_bst_sg_rate,
+        }
+
+        # print report
+        self.PrintReport(report, 0)
+
+        return report
+
+    # print report function
+    def PrintReport(self, report, depth):
+        for key, value in report.items():
+            text = "[{}]".format(str(key).upper())
+            if depth > 0:
+                text = "{:>{}s}".format("", 4*depth) + text
+
+            if type(value) is not dict:
+                text += ":{:.4f}".format(value)
+                GV.RESULT.Doc(text)
+            else:
+                GV.RESULT.Doc(text)
+                self.PrintReport(value, depth+1)
+        if depth == 0:
+            GV.RESULT.Doc("")
+
+    # Reports
+
+    def VehicleReceivedIntactAppdataReport(self, app_stats):
+        # predefine
+        total_trip_time = 0
+        total_trip_count = 0
+        max_trip_time = float('-inf')
+        min_trip_time = float('inf')
+        avg_trip_time = 0
+        # collect data from app stats
+        for header_id, record in app_stats.items():
+            record_total_trip_time = 0
+            record_total_trip_count = 0
+            record_max_trip_time = float('-inf')
+            record_min_trip_time = float('inf')
+
+            for trip_time in record.time_veh_trip.values():
+                record_total_trip_time += trip_time
+                record_total_trip_count += 1
+                record_max_trip_time = record_max_trip_time if record_max_trip_time > trip_time else trip_time
+                record_min_trip_time = record_min_trip_time if record_min_trip_time < trip_time else trip_time
+
+            record_avg_trip_time = (
+                0 if record_total_trip_count == 0
+                else record_total_trip_time / record_total_trip_count
+            )
+
+            GV.STATISTIC.Doc(
+                '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
+                    __name__,
+                    header_id,
+                    record_total_trip_time,
+                    record_total_trip_count,
+                    record_avg_trip_time,
+                    record_max_trip_time,
+                    record_min_trip_time,
+                )
+            )
+            total_trip_time += record_total_trip_time
+            total_trip_count += record_total_trip_count
+            min_trip_time = min_trip_time if min_trip_time < record_min_trip_time else record_min_trip_time
+            max_trip_time = max_trip_time if max_trip_time > record_max_trip_time else record_max_trip_time
+
+        # calculate average
+        avg_trip_time = (0 if total_trip_count == 0 else total_trip_time / total_trip_count)
+
+        return {
+            "avg": avg_trip_time,
+            "max": max_trip_time,
+            "min": min_trip_time,
+        }
+
+    def BaseStationAppdataTXQReport(self, app_stats):
         # time waited of appdata in transmit queue
-        for sg in SocialGroup:
-            sg_max_txq_wait_time = float('-inf')
-            sg_min_txq_wait_time = float('inf')
-            sg_total_txq_wait_time = 0
-            sg_total_txq_wait_count = 0
-            sg_avg_txq_wait_time = 0
-            for header_id, record in self.sg_header[sg].items():
-                # the time for this appdata to wait in the transmit queues
-                record_max_txq_wait_time = float('-inf')
-                record_min_txq_wait_time = float('inf')
-                record_total_txq_wait_time = 0
-                record_total_txq_wait_count = 0
-                # evaluate record
-                for bs in GV.NET_STATION_CONTROLLER:
-                    serial = bs.serial
-                    bs_total_txq_wait_time = 0
-                    # the data was never received by this base station, ignore.
-                    if(len(record.time_bs_txq[serial]) == 0):
-                        continue
-                    # sum up total base station txq wait time.
-                    for time_interval in record.time_bs_txq[serial]:
-                        time_enter = time_interval[0]
-                        time_exit = time_interval[1]
-                        # Error detection
-                        if(time_enter == 0 or time_exit == 0):
-                            print(
-                                "Error! TXQ time unexpected. {}".format(
-                                    record.time_bs_txq[serial])
-                            )
-                        # accumulate time.
-                        if(not math.isclose(time_enter, time_exit) and time_enter * time_exit > 0):
-                            bs_total_txq_wait_time += (time_exit - time_enter)
+        max_txq_wait_time = float('-inf')
+        min_txq_wait_time = float('inf')
+        total_txq_wait_time = 0
+        total_txq_wait_count = 0
+        avg_txq_wait_time = 0
+        for header_id, record in app_stats.items():
+            # the time for this appdata to wait in the transmit queues
+            record_max_txq_wait_time = float('-inf')
+            record_min_txq_wait_time = float('inf')
+            record_total_txq_wait_time = 0
+            record_total_txq_wait_count = 0
+            # evaluate record
+            for bs in GV.NET_STATION_CONTROLLER:
+                serial = bs.serial
+                bs_total_txq_wait_time = 0
+                # the data was never received by this base station, ignore.
+                if(len(record.time_bs_txq[serial]) == 0):
+                    continue
+                # sum up total base station txq wait time.
+                for time_interval in record.time_bs_txq[serial]:
+                    time_enter = time_interval[0]
+                    time_exit = time_interval[1]
+                    # Error detection
+                    if(time_enter == 0 or time_exit == 0):
+                        GV.ERROR.Log(
+                            "Error! TXQ time unexpected. {}".format(record.time_bs_txq[serial])
+                        )
+                    # accumulate time.
+                    if(not math.isclose(time_enter, time_exit) and time_enter * time_exit > 0):
+                        bs_total_txq_wait_time += (time_exit - time_enter)
 
-                    # ignore if there's no waiting time.
-                    # if bs_total_txq_wait_time == 0:
-                    #     continue
+                # ignore if there's no waiting time.
+                # if bs_total_txq_wait_time == 0:
+                #     continue
 
-                    # add txq wait time to record.
-                    record_total_txq_wait_count += 1
-                    record_total_txq_wait_time += bs_total_txq_wait_time
-                    record_max_txq_wait_time = (
-                        record_max_txq_wait_time
-                        if record_max_txq_wait_time > bs_total_txq_wait_time
-                        else bs_total_txq_wait_time
-                    )
-                    record_min_txq_wait_time = (
-                        record_min_txq_wait_time
-                        if record_min_txq_wait_time < bs_total_txq_wait_time
-                        else bs_total_txq_wait_time
-                    )
-                # record summery
-                record_avg_txq_wait_time = (
-                    0 if record_total_txq_wait_count == 0
-                    else record_total_txq_wait_time/record_total_txq_wait_count
+                # add txq wait time to record.
+                record_total_txq_wait_count += 1
+                record_total_txq_wait_time += bs_total_txq_wait_time
+                record_max_txq_wait_time = (
+                    record_max_txq_wait_time
+                    if record_max_txq_wait_time > bs_total_txq_wait_time
+                    else bs_total_txq_wait_time
                 )
-                GV.STATISTIC.Doc(
-                    '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
-                        str(sg),
-                        header_id,
-                        record_total_txq_wait_time,
-                        record_total_txq_wait_count,
-                        record_avg_txq_wait_time,
-                        record_max_txq_wait_time,
-                        record_min_txq_wait_time,
-                    )
+                record_min_txq_wait_time = (
+                    record_min_txq_wait_time
+                    if record_min_txq_wait_time < bs_total_txq_wait_time
+                    else bs_total_txq_wait_time
                 )
-                # accumulate record
-                sg_total_txq_wait_time += record_total_txq_wait_time
-                sg_total_txq_wait_count += record_total_txq_wait_count
-                sg_max_txq_wait_time = sg_max_txq_wait_time if sg_max_txq_wait_time > record_max_txq_wait_time else record_max_txq_wait_time
-                sg_min_txq_wait_time = sg_min_txq_wait_time if sg_min_txq_wait_time < record_min_txq_wait_time else record_min_txq_wait_time
-            # simulation summary
-            sg_avg_txq_wait_time = (
-                0 if sg_total_txq_wait_count == 0
-                else sg_total_txq_wait_time / sg_total_txq_wait_count
+            # record summary
+            record_avg_txq_wait_time = (
+                0 if record_total_txq_wait_count == 0
+                else record_total_txq_wait_time/record_total_txq_wait_count
             )
-            GV.RESULT.Doc("====={}=====".format(sg))
-            GV.RESULT.Doc("Average TXQ Time:{:.4f}".format(
-                sg_avg_txq_wait_time))
-            GV.RESULT.Doc("Maximum TXQ Time:{:.4f}".format(
-                sg_max_txq_wait_time))
-            GV.RESULT.Doc("Minimum TXQ Time:{:.4f}".format(
-                sg_min_txq_wait_time))
-            sg_stats[sg] = {
-                "avg": sg_avg_txq_wait_time,
-                "max": sg_max_txq_wait_time,
-                "min": sg_min_txq_wait_time,
-            }
-        return sg_stats
-
-    def BaseStationAppdataTXReport(self):
-        sg_stats = {}
-        GV.STATISTIC.Doc("=====BaseStationAppdataTXReport=====")
-        for sg in SocialGroup:
-            sg_max_tx_time = float('-inf')
-            sg_min_tx_time = float('inf')
-            sg_total_tx_time = 0
-            sg_total_tx_count = 0
-            sg_avg_tx_time = 0
-            for header_id, record in self.sg_header[sg].items():
-                # the time for this appdata to deliver by all base stations.
-                record_max_tx_time = float('-inf')
-                record_min_tx_time = float('inf')
-                record_total_tx_time = 0
-                record_total_tx_count = 0
-                # evaluate record
-                for bs in GV.NET_STATION_CONTROLLER:
-                    serial = bs.serial
-                    bs_total_tx_time = 0
-                    # ignore if base station never transmit this appdata.
-                    # or if base station did not seccessfully transmit the appdata.
-                    if(record.time_bs_drop[serial] > 0 or
-                       record.time_bs_serv[serial] < 0):
-                        continue
-                    # sum up all the base station tx time
-                    for time_pair in record.time_bs_tx[serial]:
-                        time_begin = time_pair[0]
-                        time_end = time_pair[1]
-                        if(time_begin * time_end > 0):
-                            # ignore trivial values
-                            if(math.isclose(time_begin, time_end)):
-                                continue
-                            bs_total_tx_time += time_end - time_begin
-                    # add tx time to record
-                    record_total_tx_count += 1
-                    record_total_tx_time += bs_total_tx_time
-                    record_max_tx_time = (
-                        record_max_tx_time
-                        if record_max_tx_time > bs_total_tx_time
-                        else bs_total_tx_time
-                    )
-                    record_min_tx_time = (
-                        record_min_tx_time
-                        if record_min_tx_time < bs_total_tx_time
-                        else bs_total_tx_time
-                    )
-                # record summery
-                record_avg_tx_time = (
-                    0 if record_total_tx_count == 0
-                    else record_total_tx_time / record_total_tx_count
+            GV.STATISTIC.Doc(
+                '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
+                    __name__,
+                    header_id,
+                    record_total_txq_wait_time,
+                    record_total_txq_wait_count,
+                    record_avg_txq_wait_time,
+                    record_max_txq_wait_time,
+                    record_min_txq_wait_time,
                 )
-                GV.STATISTIC.Doc(
-                    '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
-                        str(sg),
-                        header_id,
-                        record_total_tx_time,
-                        record_total_tx_count,
-                        record_avg_tx_time,
-                        record_max_tx_time,
-                        record_min_tx_time,
-                    )
+            )
+            # add record
+            total_txq_wait_time += record_total_txq_wait_time
+            total_txq_wait_count += record_total_txq_wait_count
+            max_txq_wait_time = max_txq_wait_time if max_txq_wait_time > record_max_txq_wait_time else record_max_txq_wait_time
+            min_txq_wait_time = min_txq_wait_time if min_txq_wait_time < record_min_txq_wait_time else record_min_txq_wait_time
+
+        avg_txq_wait_time = (0 if total_txq_wait_count ==
+                             0 else total_txq_wait_time / total_txq_wait_count)
+
+        return {
+            "avg": avg_txq_wait_time,
+            "max": max_txq_wait_time,
+            "min": min_txq_wait_time,
+        }
+
+    def BaseStationAppdataTXReport(self, app_stats):
+        max_tx_time = float('-inf')
+        min_tx_time = float('inf')
+        total_tx_time = 0
+        total_tx_count = 0
+        avg_tx_time = 0
+        for header_id, record in app_stats.items():
+            # the time for this appdata to deliver by all base stations.
+            record_max_tx_time = float('-inf')
+            record_min_tx_time = float('inf')
+            record_total_tx_time = 0
+            record_total_tx_count = 0
+            # evaluate record
+            for bs in GV.NET_STATION_CONTROLLER:
+                serial = bs.serial
+                bs_total_tx_time = 0
+                # ignore if base station never transmit this appdata.
+                # or if base station did not seccessfully transmit the appdata.
+                if(record.time_bs_drop[serial] > 0 or
+                   record.time_bs_serv[serial] < 0):
+                    continue
+                # sum up all the base station tx time
+                for time_pair in record.time_bs_tx[serial]:
+                    time_begin = time_pair[0]
+                    time_end = time_pair[1]
+                    if(time_begin * time_end > 0):
+                        # ignore trivial values
+                        if(math.isclose(time_begin, time_end)):
+                            continue
+                        bs_total_tx_time += time_end - time_begin
+                # add tx time to record
+                record_total_tx_count += 1
+                record_total_tx_time += bs_total_tx_time
+                record_max_tx_time = (
+                    record_max_tx_time
+                    if record_max_tx_time > bs_total_tx_time
+                    else bs_total_tx_time
                 )
-                # accumulate record
-                sg_total_tx_time += record_total_tx_time
-                sg_total_tx_count += record_total_tx_count
-                sg_max_tx_time = sg_max_tx_time if sg_max_tx_time > record_max_tx_time else record_max_tx_time
-                sg_min_tx_time = sg_min_tx_time if sg_min_tx_time < record_min_tx_time else record_min_tx_time
-            # simulation summery
-            sg_avg_tx_time = (
-                0 if sg_total_tx_count == 0
-                else sg_total_tx_time / sg_total_tx_count
+                record_min_tx_time = (
+                    record_min_tx_time
+                    if record_min_tx_time < bs_total_tx_time
+                    else bs_total_tx_time
+                )
+            # record summary
+            record_avg_tx_time = (
+                0 if record_total_tx_count == 0
+                else record_total_tx_time / record_total_tx_count
             )
-            GV.RESULT.Doc("====={}=====".format(sg))
-            GV.RESULT.Doc("Average TX Time:{:.4f}".format(sg_avg_tx_time))
-            GV.RESULT.Doc("Maximum TX Time:{:.4f}".format(sg_max_tx_time))
-            GV.RESULT.Doc("Minimum TX Time:{:.4f}".format(sg_min_tx_time))
-            sg_stats[sg] = {
-                "avg": sg_avg_tx_time,
-                "max": sg_max_tx_time,
-                "min": sg_min_tx_time,
-            }
-        return sg_stats
+            GV.STATISTIC.Doc(
+                '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
+                    __name__,
+                    header_id,
+                    record_total_tx_time,
+                    record_total_tx_count,
+                    record_avg_tx_time,
+                    record_max_tx_time,
+                    record_min_tx_time,
+                )
+            )
+            # accumulate record
+            total_tx_time += record_total_tx_time
+            total_tx_count += record_total_tx_count
+            max_tx_time = max_tx_time if max_tx_time > record_max_tx_time else record_max_tx_time
+            min_tx_time = min_tx_time if min_tx_time < record_min_tx_time else record_min_tx_time
 
-    def BaseStationThroughPutReport(self):
-        # pass
-        sg_stats = {}
-        bs_bits = [0 for _ in GV.NET_STATION_CONTROLLER]
-        for sg in SocialGroup:
-            for record in self.sg_header[sg].values():
-                for bs in GV.NET_STATION_CONTROLLER:
-                    if(record.time_bs_serv[bs] > 0):
-                        bs_bits[bs] += record.bits
-        for bs_type in BaseStationType:
-            bs_type_num = 0
-            bs_type_bits = 0
-            for bs in [x for x in GV.NET_STATION_CONTROLLER if x.type == bs_type]:
-                bs_type_bits += bs_bits[bs]
-                bs_type_num += 1
-            bs_type_through_put_avg = (
-                (bs_type_bits / max(bs_type_num, 1))
-            )
-            GV.RESULT.Doc("====={}=====".format(bs_type.name))
-            GV.RESULT.Doc(
-                "Throughput:{:.2f}/s".format(bs_type_through_put_avg)
-            )
-            sg_stats[bs_type] = bs_type_through_put_avg
-        return sg_stats
+        avg_tx_time = (0 if total_tx_count == 0 else total_tx_time / total_tx_count)
 
-    def SystemThroughPutReport(self):
-        total_bits = 0
-        for sg in SocialGroup:
-            for record in self.sg_header[sg].values():
-                for bs in GV.NET_STATION_CONTROLLER:
-                    if(record.time_bs_serv[bs] > 0):
-                        total_bits += record.bits
-        return total_bits
+        return {
+            "avg": avg_tx_time,
+            "max": max_tx_time,
+            "min": min_tx_time,
+        }
+
+    def BaseStationTypeThroughPutReport(self, app_stats, bs_type):
+        # size of data.
+        bits = 0
+        # number of data.
+        count = 0
+        # prevent duplicating data.
+        bs_ctrlrs = [x for x in GV.NET_STATION_CONTROLLER if x.type == bs_type]
+
+        for header, record in app_stats.items():
+            for bs in bs_ctrlrs:
+                if(record.time_bs_serv[bs] > 0):
+                    bits += record.bits
+                    count += 1
+                    break
+
+        return {
+            "bits": bits,
+            "count": count
+        }
 
     def BaseStationSocialGroupResourceUsageReport(self):
         sg_stats = {}
@@ -375,6 +493,7 @@ class StatisticRecorder:
                     )
                 )
             sg_stats[bs_type] = bs_type_sg_res_rate
+
         return sg_stats
 
     def BaseStationSocailGroupDataDropRateReport(self):
@@ -438,16 +557,8 @@ class StatisticRecorder:
         # preprocess the raw statistics
         self.Preprocess()
         # create report
-        statistic_report = {
-            "interest_config": self.interest_config,
-            "veh_recv_intact_appdata_trip": self.VehicleReceivedIntactAppdataReport(),
-            "bs_appdata_txq_wait": self.BaseStationAppdataTXQReport(),
-            "bs_appdata_tx": self.BaseStationAppdataTXReport(),
-            "bs_through_put": self.BaseStationThroughPutReport(),
-            "bs_sg_res_use_rate": self.BaseStationSocialGroupResourceUsageReport(),
-            "sys_through_put": self.SystemThroughPutReport(),
-            # "bs_sg_data_drop_rate": self.BaseStationSocailGroupDataDropRateReport(),
-        }
+        statistic_report = self.CreateReport()
+        statistic_report["interest"] = self.interest_config
         # save the statistic to file for further estimation
         if save:
             if not os.path.isdir(self.dirpath):
