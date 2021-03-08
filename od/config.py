@@ -8,16 +8,16 @@ import math
 # System Parameters
 DEBUG_MSG_FLAGS = (
     # DebugMsgType.NONE
-    # DebugMsgType.NET_PKG_INFO |
+    DebugMsgType.NET_PKG_INFO |
     DebugMsgType.NET_APPDATA_INFO |
     DebugMsgType.NET_ALLOC_INFO |
     DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = True
+SUMO_SIM_GUI = False
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 100
+SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . the offset of the simulation
@@ -25,7 +25,7 @@ SUMO_SKIP_SECONDS = 245
 # . total sumo simulation steps skipped
 SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
 # . total sumo simulation seconds
-SUMO_SIM_SECONDS = 8
+SUMO_SIM_SECONDS = 7
 # . total sumo simulation steps
 SUMO_SIM_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SIM_SECONDS))
 # . total sumo seconds
@@ -34,8 +34,8 @@ SUMO_TOTAL_SECONDS = SUMO_SKIP_SECONDS + SUMO_SIM_SECONDS
 SUMO_TOTAL_STEPS = SUMO_SKIP_STEPS + SUMO_SIM_STEPS
 
 # Sumo Simulation Event Settings
-EVENT_EARTHQUAKE_OFS_STEPS = int(round(3 / SUMO_SECONDS_PER_STEP))
-EVENT_EARTHQUAKE_DUR_STEPS = int(round(3 / SUMO_SECONDS_PER_STEP))
+EVENT_EARTHQUAKE_OFS_STEPS = int(round(2 / SUMO_SECONDS_PER_STEP))
+EVENT_EARTHQUAKE_DUR_STEPS = int(round(2 / SUMO_SECONDS_PER_STEP))
 
 # Network Settings
 # . total QoS network channels. qos channel starts from 0.
@@ -69,7 +69,7 @@ NET_SG_RND_REQ_SIZE = {
 NET_SG_RND_REQ_NUM_TIME_SCALE = 1  # seconds
 NET_SG_RND_REQ_NUM = {
     SocialGroup.CRITICAL: int(round(((64)*1024/2) / ((300+1100)*8/2))),
-    SocialGroup.GENERAL: int(round(((500+2000)*1024/2) / ((64+2048)*8/2)))
+    SocialGroup.GENERAL: int(round(((400+1000)*1024/2) / ((64+2048)*8/2)))
 }
 
 # Base Station Settings

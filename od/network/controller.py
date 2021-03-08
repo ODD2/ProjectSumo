@@ -163,9 +163,9 @@ class BaseStationController:
             self.app.RecvData(package.social_group, appdata)
 
     # Function called by VehicleRecorder to submit upload requests to this base station
-    def ReceiveUploadRequest(self, sender, social_group: SocialGroup, total_bits: int):
+    def ReceiveUploadRequest(self, sender, social_group: SocialGroup, total_bits: int, starv_time: float):
         self.sg_upload_req[social_group.qos][social_group].append(
-            UploadRequest(sender, total_bits)
+            UploadRequest(sender, total_bits, starv_time)
         )
 
     # arrange uplink resource
@@ -175,6 +175,10 @@ class BaseStationController:
             BS_TOTAL_BAND[self.type]*0.9,
             NET_TS_PER_NET_STEP
         )
+
+        # preset for speed-up
+        time_ms = GV.SUMO_SIM_INFO.getTime()
+
         # Serve requests
         for qos in range(NET_QOS_CHNLS):
             for sg in self.sg_upload_req[qos].keys():
@@ -185,6 +189,11 @@ class BaseStationController:
                 req_bw_per_rb = self.RequiredBandwidth(sg)
                 # required timeslots for using this bandwidth
                 req_ts_per_rb = NET_RB_BW_REQ_TS[req_bw_per_rb]
+                # the maximum rb a subframe can hold
+                max_frame_rb = (
+                    (BS_TOTAL_BAND[self.type]*0.9 / req_bw_per_rb) *
+                    (NET_TS_PER_NET_STEP/req_ts_per_rb)
+                )
                 # check if this base station has resource left
                 if(ra_oma.Spare(req_bw_per_rb, req_ts_per_rb)):
                     # fetch resource block trans size for every request
@@ -204,11 +213,14 @@ class BaseStationController:
                             int(NET_RB_SLOT_SYMBOLS)
                         )
                         req_rbsize_pairs.append((req, rbsize))
+
                     # sort with resource block size (the larger size the higher priority)
                     req_rbsize_pairs.sort(
-                        reverse=True,
                         key=(
-                            lambda req_rbsize_pair: req_rbsize_pair[1]
+                            lambda req_rbsize_pair: (
+                                math.floor(req_rbsize_pair[0].starv_time*1000) * max_frame_rb +
+                                min(math.ceil(req_rbsize_pair[0].total_bits/req_rbsize_pair[1]), max_frame_rb)
+                            )
                         )
                     )
                     # serve requests
@@ -351,15 +363,24 @@ class BaseStationController:
         )
 
         # deliver package according to optimized allocate resource
-        # TODO: improve approach(only iterate through gid_req_res rather than the whole qos).
         for gid_key, gid_items in gid_req_res.items():
             sg = SocialGroup(int(gid_key[1:]))
+            # required resource block bandwidth for this social group msg
+            sg_rb_bw = self.RequiredBandwidth(sg)
+            # required timeslots for using this bandwidth
+            sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
+            max_frame_bits = (
+                (BS_TOTAL_BAND[self.type]*0.9 / sg_rb_bw)*933 *
+                (NET_TS_PER_NET_STEP/sg_rb_ts)
+            )
+            self.sg_brdcst_datas[sg.qos][sg].sort(
+                key=lambda appdata: (
+                    (math.floor(appdata.header.at * 1000) * max_frame_bits) +
+                    min(appdata.bits, max_frame_bits)
+                )
+            )
             for ts_key, ts_items in gid_items.items():
                 for cqi_key, rb_num in ts_items.items():
-                    # required resource block bandwidth for this social group msg
-                    sg_rb_bw = self.RequiredBandwidth(sg)
-                    # required timeslots for using this bandwidth
-                    sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
                     # social group resource block cqi
                     sg_rb_cqi = int(cqi_key[1:])
                     # social group rosource block size for the specified cqi

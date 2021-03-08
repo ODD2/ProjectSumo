@@ -76,25 +76,25 @@ def ParallelSimulationManager(weight_intconfs, limit):
 if __name__ == "__main__":
     start_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     weight_intconfs = []
-    for res_alloc_type in ResourceAllocatorType:
-        for rsu in [False, True]:
-            for traffic_scale in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
-                for seed in range(1):
-                    weight = (6**traffic_scale)
-                    weight *= 1.3 if rsu else 1
-                    weight *= 1.5 if res_alloc_type == ResourceAllocatorType.NOMA_OPT else 1
-                    config = InterestConfig(
-                        res_alloc_type,
-                        rsu,
-                        traffic_scale,
-                        seed
-                    )
-                    weight_intconfs.append(
-                        WeightInterestConfig(
-                            weight,
-                            config
-                        )
-                    )
+    # for res_alloc_type in ResourceAllocatorType:
+    #     for rsu in [False, True]:
+    #         for traffic_scale in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+    #             for seed in range(1):
+    #                 weight = (3**traffic_scale)
+    #                 weight *= 1.3 if rsu else 1
+    #                 weight *= 1.5 if res_alloc_type == ResourceAllocatorType.NOMA_OPT else 1
+    #                 config = InterestConfig(
+    #                     res_alloc_type,
+    #                     rsu,
+    #                     traffic_scale,
+    #                     seed
+    #                 )
+    #                 weight_intconfs.append(
+    #                     WeightInterestConfig(
+    #                         weight,
+    #                         config
+    #                     )
+    #                 )
 
     # weight_intconfs.append(
     #     WeightInterestConfig(
@@ -108,18 +108,18 @@ if __name__ == "__main__":
     #         InterestConfig(ResourceAllocatorType.NOMA_OPT, True, 0.5, 123456)
     #     )
     # )
-    # weight_intconfs.append(
-    #     WeightInterestConfig(
-    #         0,
-    #         InterestConfig(ResourceAllocatorType.OMA, False, 0.5, 123456)
-    #     )
-    # )
-    # weight_intconfs.append(
-    #     WeightInterestConfig(
-    #         0,
-    #         InterestConfig(ResourceAllocatorType.NOMA_OPT, False, 0.5, 123456)
-    #     )
-    # )
+    weight_intconfs.append(
+        WeightInterestConfig(
+            0,
+            InterestConfig(ResourceAllocatorType.NOMA_OPT, True, 0.5, 0)
+        )
+    )
+    weight_intconfs.append(
+        WeightInterestConfig(
+            0,
+            InterestConfig(ResourceAllocatorType.NOMA_OPT, False, 0.9, 0)
+        )
+    )
 
     ParallelSimulationManager(weight_intconfs, 80)
     end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")

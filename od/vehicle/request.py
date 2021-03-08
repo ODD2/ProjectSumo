@@ -4,9 +4,10 @@ from od.network.appdata import AppDataHeader
 
 # Requests from vehicles for upload resources
 class UploadRequest:
-    def __init__(self, sender: VehicleRecorder, total_bits: int):
+    def __init__(self, sender: VehicleRecorder, total_bits: int, starv_time: float):
         self.sender = sender
         self.total_bits = total_bits
+        self.starv_time = starv_time
 
 
 # Requests from vehicles for non-intact appdata

@@ -184,12 +184,18 @@ class VehicleRecorder():
                 bs_ctrl = self.SelectSocialBS(social_group)
                 if (bs_ctrl != None):
                     sg_total_bits = 0
+                    sg_starv_time = float("inf")
+
                     for appdata in self.app.datas[social_group]:
                         sg_total_bits += appdata.bits
+                        if(appdata.header.at < sg_starv_time):
+                            sg_starv_time = appdata.header.at
+
                     bs_ctrl.ReceiveUploadRequest(
                         self,
                         social_group,
                         sg_total_bits,
+                        sg_starv_time
                     )
                 else:
                     GV.ERROR.Log("Error: No BS to serve request.")
