@@ -197,7 +197,7 @@ Max_SINR_rx_dB_10 = SINR_rx_dB_10_new;
 DS_intf_dBm = 10 * log10(sum_intf_self_MP_mW); %mW to dBm
 
 %UE_CQI = SelectCQI(SINR_rx_dB, 0.1); %determine CQI for UE %submit r0
-CQI_out = SelectCQI(Max_SINR_rx_dB_10, 0.1); %determine CQI for UE %9-25
+CQI_out = SelectCQI_BLER10P(Max_SINR_rx_dB_10); %determine CQI for UE %9-25
 %CQI_out == 0 (outage)
 
 %Determine minimum tx_power, used for NOMA
@@ -257,7 +257,7 @@ for cur_tx_p_dBm = tx_p_dBm:-tx_delta_dBm:min_tx_pwr_dBm %Set minimum
     
 
     SINR_rx_dB_10_cur = 10*log10( P_RX_mW_cur / (N0_mW + INTF_P_RX_mW ));
-    CQI_out_cur = SelectCQI(SINR_rx_dB_10_cur, 0.1);
+    CQI_out_cur = SelectCQI_BLER10P(SINR_rx_dB_10_cur);
     if(CQI_out_cur == cur_CQI)
         min_tx_p_dBm = cur_tx_p_dBm;
         Min_SINR_rx_dB_10 = SINR_rx_dB_10_cur;

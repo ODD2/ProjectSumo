@@ -95,16 +95,16 @@ class StatisticRecorder:
     # extract specific network traffic from self.sg_headers
     def ExtractNetworkTraffic(self, nft):
         if(nft == NetFlowType.CRITICAL):
-            return self.sg_header[SocialGroup.CRITICAL]
+            return self.sg_header[SocialGroup.CRASH]
         elif(nft == NetFlowType.GENERAL):
-            return self.sg_header[SocialGroup.GENERAL]
+            return self.sg_header[SocialGroup.RCWS]
         elif(nft == NetFlowType.C2G):
             umi_bs_ctrlrs = [x for x in GV.NET_STATION_CONTROLLER if x.type == BaseStationType.UMI]
             c2g_flows = {}
-            for header, record in self.sg_header[SocialGroup.CRITICAL].items():
+            for header, record in self.sg_header[SocialGroup.CRASH].items():
                 for bs_ctrlr in umi_bs_ctrlrs:
                     if record.time_bs_serv[bs_ctrlr] > 0:
-                        c2g_flows[header] = self.sg_header[SocialGroup.GENERAL][header]
+                        c2g_flows[header] = self.sg_header[SocialGroup.RCWS][header]
             return c2g_flows
         return {}
 

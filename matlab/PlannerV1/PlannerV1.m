@@ -107,7 +107,7 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
             y_max = SIM_CONF.rbf_h - (qos_gp_conf.rbf_h - 1);
             x_max = SIM_CONF.rbf_w - (qos_gp_conf.rbf_w - 1);  
 %           calculate the maximum cqi and fetch required power in dBm
-            cqi_max = SelectCQI(qos_gp_conf.sinr_max,0.1);
+            cqi_max = SelectCQI_BLER10P(qos_gp_conf.sinr_max);
             sinr_max = qos_gp_conf.sinr_max;
             sinr_max_sdn = 10 ^(sinr_max/10); 
             pwr_req_dBm = qos_gp_conf.pwr_req_dBm;
@@ -186,8 +186,8 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
             end
 
             noise_reciprocal = OPT_GP_CONF(index).sinr_max_sdn / SIM_CONF.max_pwr_mw;
-            noma_cqi_max =  SelectCQI(10 *log10( oma_max_rem_pwr_mw * noise_reciprocal), 0.1);
-            noma_cqi_min =  max( SelectCQI(10 *log10( oma_min_rem_pwr_mw * noise_reciprocal), 0.1) , 1);
+            noma_cqi_max =  SelectCQI_BLER10P(10 *log10( oma_max_rem_pwr_mw * noise_reciprocal));
+            noma_cqi_min =  max( SelectCQI_BLER10P(10 *log10( oma_min_rem_pwr_mw * noise_reciprocal)) , 1);
 %           unable to provide suitable power for noma layer allocation
             if(noma_cqi_max < noma_cqi_min)
                 continue
@@ -210,7 +210,7 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
 %       calculate position and offset info
         OPT_GP_CONF = CalcOptGpConfPosOfs(OPT_GP_CONF);
         
-        [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,false);
+        [x,~,exitflag,~] = Optimize(SIM_CONF,OPT_GP_CONF,false);
 
         fprintf("NOMA Allocation Done!\n")
         

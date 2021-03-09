@@ -358,19 +358,19 @@ class VehicleRecorder():
     # Select the service base station according to the social type provided.
     def SelectSocialBS(self, social_group: SocialGroup):
         # 2021/1/11 Scenario:
-        # UMIs are spcificly for critical data, only Critical datas select UMI
+        # UMIs are spcificly for time critical data, only critical datas select UMI
         # as a type of upload destination. Any other social datas never select a UMI.
-        if (social_group == SocialGroup.CRITICAL):
+        if (social_group == SocialGroup.CRASH):
             return (
                 self.sub_sg_bs[BaseStationType.UMI][social_group] if
                 self.sub_sg_bs[BaseStationType.UMI][social_group] != None
                 else self.sub_sg_bs[BaseStationType.UMA][social_group]
             )
-        # elif (social_group == SocialGroup.GENERAL):
+        # elif (social_group == SocialGroup.RCWS):
         #     return (
         #         self.sub_sg_bs[BaseStationType.UMI][social_group] if
         #         (self.sub_sg_bs[BaseStationType.UMI][social_group] !=
-        #          None and len(self.app.datas[SocialGroup.CRITICAL]) == 0)
+        #          None and len(self.app.datas[SocialGroup.CRASH]) == 0)
         #         else self.sub_sg_bs[BaseStationType.UMA][social_group]
         #     )
         else:

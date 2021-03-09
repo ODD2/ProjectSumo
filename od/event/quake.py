@@ -10,7 +10,7 @@ class EarthQuake(SumoSimEvents):
         self.sg_crit_net_req_mod = 5
 
     def Begin(self):
-        GV.NET_SG_RND_REQ_MOD[SocialGroup.CRITICAL] *= self.sg_crit_net_req_mod
+        GV.NET_SG_RND_REQ_MOD[SocialGroup.CRASH] *= self.sg_crit_net_req_mod
 
     def End(self):
-        GV.NET_SG_RND_REQ_MOD[SocialGroup.CRITICAL] /= self.sg_crit_net_req_mod
+        GV.NET_SG_RND_REQ_MOD[SocialGroup.CRASH] /= self.sg_crit_net_req_mod

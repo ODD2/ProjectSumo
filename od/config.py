@@ -15,9 +15,9 @@ DEBUG_MSG_FLAGS = (
 )
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = False
+SUMO_SIM_GUI = True
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 1
+SUMO_SIM_TIME_SCALER = 10
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . the offset of the simulation
@@ -25,7 +25,7 @@ SUMO_SKIP_SECONDS = 245
 # . total sumo simulation steps skipped
 SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
 # . total sumo simulation seconds
-SUMO_SIM_SECONDS = 7
+SUMO_SIM_SECONDS = 2
 # . total sumo simulation steps
 SUMO_SIM_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SIM_SECONDS))
 # . total sumo seconds
@@ -57,19 +57,19 @@ NET_RB_BW_REQ_TS = {2 * NET_RB_BW_UNIT: 1,
                     1 * NET_RB_BW_UNIT: 2}
 # . social group random request size(bytes).
 NET_SG_RND_REQ_SIZE = {
-    SocialGroup.CRITICAL: [300, 1100],
-    SocialGroup.GENERAL: [64, 2048],
+    SocialGroup.CRASH: [300, 1100],
+    SocialGroup.RCWS: [64, 2048],
 }
 # . social group random request amount(Packages/second)
 #   For general, referencing the recommened birate for streaming at 720p 60fps.(2200Kbps~6000Kbps)
 #    - https://support.google.com/youtube/answer/2853702?hl=en#zippy=%2Cp-fps%2Cp
 #   the calculation would be: ((2250+6000)*1024/2) / ((64+2048)*8/2)
 #
-#   For critical, the value is preset to an average of 64Kbps.
+#   For emergency group, the value is preset to an average of 64Kbps.
 NET_SG_RND_REQ_NUM_TIME_SCALE = 1  # seconds
 NET_SG_RND_REQ_NUM = {
-    SocialGroup.CRITICAL: int(round(((64)*1024/2) / ((300+1100)*8/2))),
-    SocialGroup.GENERAL: int(round(((400+1000)*1024/2) / ((64+2048)*8/2)))
+    SocialGroup.CRASH: int(round(((64)*1024/2) / ((300+1100)*8/2))),
+    SocialGroup.RCWS: int(round(((400+1000)*0.7*1024/2) / ((64+2048)*8/2)))
 }
 
 # Base Station Settings
@@ -110,15 +110,15 @@ BS_RADIUS = {
 BS_UMA_CP = 4.69
 # . umi base station's cyclic prefix(us)
 BS_UMI_CP_SOCIAL = {
-    SocialGroup.CRITICAL: 2.34,
-    SocialGroup.GENERAL: 4.69
+    SocialGroup.CRASH: 2.34,
+    SocialGroup.RCWS: 4.69
 }
 # . uma base station's resource block bandwidth
 BS_UMA_RB_BW = 1 * NET_RB_BW_UNIT
 # . umi base station's resource block bandwidth
 BS_UMI_RB_BW_SG = {
-    SocialGroup.CRITICAL: 2 * NET_RB_BW_UNIT,
-    SocialGroup.GENERAL: 1 * NET_RB_BW_UNIT
+    SocialGroup.CRASH: 2 * NET_RB_BW_UNIT,
+    SocialGroup.RCWS: 1 * NET_RB_BW_UNIT
 }
 # Base Station Presets
 BS_PRESET = {

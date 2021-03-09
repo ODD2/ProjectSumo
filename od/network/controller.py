@@ -61,7 +61,7 @@ class BaseStationController:
     # Called every network step
     def UpdateNS(self, ns):
         self.ArrangeUplinkResource()
-        self.ArrangeDownlinkResource()
+        # self.ArrangeDownlinkResource()
 
     # Called every timeslot
     def UpdateT(self, ts):
@@ -542,6 +542,6 @@ class NetworkCoreController:
     #         self.app.RecvData(package.social_group, appdata)
 
     def StartPropagation(self, social_group: SocialGroup, header: AppDataHeader):
-        # Propagate all data to UMA as general data.
+        # Propagate all data to UMA as road consition warning(RCW) data.
         for bs_ctrlr in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
-            bs_ctrlr.ReceivePropagation(SocialGroup.GENERAL, header)
+            bs_ctrlr.ReceivePropagation(SocialGroup.RCWS, header)

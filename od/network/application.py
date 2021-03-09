@@ -217,7 +217,7 @@ class BaseStationApplicationUMI(Application):
             ),
             DebugMsgType.NET_APPDATA_INFO
         )
-        if(social_group == SocialGroup.CRITICAL):
+        if(social_group == SocialGroup.CRASH):
             # propagate the appdata to other vehicles in range.
             self.owner.ReceivePropagation(
                 social_group,

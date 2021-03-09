@@ -57,12 +57,10 @@ def UpdateSS(objs):
     return
 
     # threads = []
-    # Update vehicles (Parellelized)
     # for obj in objs:
     #     t = Thread(target=obj.UpdateSS)
     #     t.start()
     #     threads.append(t)
-    # Wait until all vehicles to finished their jobs
     # for t in threads:
     #     t.join()
 
@@ -74,11 +72,9 @@ def UpdateNS(objs, ns):
     return
 
     # threads = []
-    # Update vehicles (Parellelized)
     # for obj in objs:
     #     threads.append(Thread(target=obj.UpdateNS, args=(ns,)))
     #     threads[-1].start()
-    # Wait until all vehicles to finished their jobs
     # for t in threads:
     #     t.join()
 
