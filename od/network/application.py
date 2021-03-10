@@ -3,8 +3,9 @@ from numpy import random
 from od.network.types import BaseStationType
 from od.network.appdata import AppData, AppDataHeader
 from od.config import (NET_SG_RND_REQ_SIZE, NET_SECONDS_PER_STEP,
-                       NET_SG_RND_REQ_NUM, NET_SG_RND_REQ_NUM_TIME_SCALE)
-from od.social import SocialGroup
+                       NET_SG_RND_REQ_NUM, NET_SG_RND_REQ_NUM_TIME_SCALE,
+                       NET_TIMEOUT_SECONDS)
+from od.social import SocialGroup, QoSLevel
 from od.misc.types import DebugMsgType
 import od.vars as GV
 
@@ -87,12 +88,13 @@ class VehicleApplication(Application):
         # The last time when this vehicle recorder generates upload request
         self.data_stack = [0 for i in SocialGroup]
         # The social group upload data list
-        self.datas = [[] for i in SocialGroup]
+        self.sg_data_queue = [[] for i in SocialGroup]
         # Package counter for upload req
         self.data_counter = 0
 
     def Run(self):
         self.SpawnData()
+        self.CheckTimeout()
 
     # Receive application data
     def RecvData(self, social_group: SocialGroup, appdata: AppData):
@@ -119,6 +121,7 @@ class VehicleApplication(Application):
 
     # Send application data
     def SpawnData(self):
+        current_time = GV.SUMO_SIM_INFO.getTime()
         for sg in SocialGroup:
             # TODO: Make the random poisson be social group dependent
             self.data_stack[sg] += random.poisson(NET_SG_RND_REQ_NUM[sg] * GV.NET_SG_RND_REQ_MOD[sg]) * \
@@ -143,14 +146,14 @@ class VehicleApplication(Application):
                         self.owner,
                         data_size,
                         self.data_counter,
-                        GV.SUMO_SIM_INFO.getTime()
+                        current_time
                     ),
                     data_size,
                     0
                 )
-                self.datas[sg].append(appdata)
+                self.sg_data_queue[sg].append(appdata)
 
-                # add counter
+                # Add counter
                 self.data_counter += 1
 
                 # Log
@@ -162,6 +165,27 @@ class VehicleApplication(Application):
                     ),
                     DebugMsgType.NET_APPDATA_INFO
                 )
+                # Statistics
+                GV.STATISTIC_RECORDER.VehicleCreateAppdata(sg, appdata.header)
+
+    # Check for timeout application data of GENERAL QoS.
+    def CheckTimeout(self):
+        current_time = GV.SUMO_SIM_INFO.getTime()
+        for sg in [x for x in SocialGroup if x.qos == QoSLevel.GENERAL]:
+            drop_index = 0
+            for appdata in self.sg_data_queue[sg]:
+                if appdata.header.at + NET_TIMEOUT_SECONDS <= current_time:
+                    drop_index += 1
+                else:
+                    break
+            if(drop_index > 0):
+                # record over time.
+                GV.STATISTIC_RECORDER.VehicleOverTimeAppdata(
+                    sg,
+                    map(lambda x: x.header, self.sg_data_queue[sg][:drop_index])
+                )
+                # drop over time datas.
+                self.sg_data_queue[sg][drop_index:]
 
 
 class NetworkCoreApplication(Application):

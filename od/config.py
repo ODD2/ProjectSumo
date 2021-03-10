@@ -18,11 +18,11 @@ DEBUG_MSG_FLAGS = (
 # . simulation sumo type
 SUMO_SIM_GUI = True
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 1
+SUMO_SIM_TIME_SCALER = 100
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . total traffic running seconds before network simulation start
-SUMO_SKIP_SECONDS = 245
+SUMO_SKIP_SECONDS = 185
 SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
 # . total network warm up seconds for a more realistic network environment.
 SUMO_NET_WARMUP_SECONDS = 1
@@ -30,8 +30,6 @@ SUMO_NET_WARMUP_STEPS = int(round((SUMO_NET_WARMUP_SECONDS/SUMO_SECONDS_PER_STEP
 
 
 # Network Settings
-# . total QoS network channels. qos channel starts from 0.
-NET_QOS_CHNLS = (max(SocialGroup, key=lambda x: x.qos).qos) + 1
 # . resource block symbols
 NET_RB_SLOT_SYMBOLS = 14
 # . seconds per network simulation step

@@ -1,4 +1,4 @@
-from od.social import SocialGroup
+from od.social import SocialGroup, QoSLevel
 from od.network.types import LinkType
 from od.network.application import NetworkCoreApplication, BaseStationApplication
 from od.network.appdata import AppData, AppDataHeader
@@ -7,7 +7,7 @@ from od.network.types import BroadcastObject, BaseStationType, ResourceAllocator
 from od.vehicle.request import UploadRequest, ResendRequest
 from od.network.allocator import ResourceAllocatorOMA
 from od.misc.types import DebugMsgType
-from od.config import (NET_TS_PER_NET_STEP, NET_QOS_CHNLS, NET_RB_BW_REQ_TS,
+from od.config import (NET_TS_PER_NET_STEP, NET_RB_BW_REQ_TS,
                        NET_RB_SLOT_SYMBOLS, NET_RB_BW_UNIT,
                        BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
                        BS_TOTAL_BAND, BS_RADIUS,
@@ -39,12 +39,12 @@ class BaseStationController:
         self.pkg_in_proc = [[] for i in LinkType]
 
         # upload requests
-        self.sg_upload_req = ([{} for x in range(NET_QOS_CHNLS)])
+        self.sg_upload_req = ([{} for x in QoSLevel])
         for sg in SocialGroup:
             self.sg_upload_req[sg.qos][sg] = []
 
         # broadcast reqeusts
-        self.sg_brdcst_datas = ([{} for x in range(NET_QOS_CHNLS)])
+        self.sg_brdcst_datas = ([{} for x in QoSLevel])
         for sg in SocialGroup:
             self.sg_brdcst_datas[sg.qos][sg] = []
 
@@ -61,7 +61,7 @@ class BaseStationController:
     # Called every network step
     def UpdateNS(self, ns):
         self.ArrangeUplinkResource()
-        # self.ArrangeDownlinkResource()
+        self.ArrangeDownlinkResource()
 
     # Called every timeslot
     def UpdateT(self, ts):
@@ -180,7 +180,7 @@ class BaseStationController:
         time_ms = GV.SUMO_SIM_INFO.getTime()
 
         # Serve requests
-        for qos in range(NET_QOS_CHNLS):
+        for qos in QoSLevel:
             for sg in self.sg_upload_req[qos].keys():
                 # Check if there exists pending requests
                 if(len(self.sg_upload_req[qos][sg]) == 0):
@@ -276,7 +276,7 @@ class BaseStationController:
         # Qos group config for optimizer
         QoS_GP_CONF = []
         # Collect group configs
-        for qos in range(NET_QOS_CHNLS):
+        for qos in QoSLevel:
             # a group config type in python
             grp_config_qos = []
             # create group config for this qos

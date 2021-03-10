@@ -1,7 +1,8 @@
 # Custom
 from od.social import SocialGroup
 from od.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
-                       NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS, SUMO_SIM_SECONDS)
+                       NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS, SUMO_SIM_SECONDS,
+                       SUMO_SKIP_SECONDS, SUMO_NET_WARMUP_SECONDS, EVENT_CONFIGS)
 from od.network.types import BaseStationType
 from od.misc.interest import InterestConfig
 from od.network.appdata import AppDataHeader
@@ -23,6 +24,7 @@ class AppdataStatistic:
     def __init__(self, header: AppDataHeader):
         self.bits = header.total_bits
         self.at = header.at
+        self.over_time_at = -1
         self.time_veh_trip = {}
         self.time_bs_txq = [[] for _ in GV.NET_STATION_CONTROLLER]
         self.time_bs_tx = [[] for _ in GV.NET_STATION_CONTROLLER]
@@ -37,6 +39,10 @@ class StatisticRecorder:
         self.dirpath = dirpath
         self.interest_config = interest_config
         self.sg_header = [{} for _ in SocialGroup]
+        self.interval = (
+            SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + min(map(lambda x: x.ofs_sec, EVENT_CONFIGS)),
+            SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + max(map(lambda x: x.ofs_sec+x.dur_sec, EVENT_CONFIGS))
+        )
 
     def GetAppdataRecord(self, sg, header):
         self.CreateIfAbsent(sg, header)
@@ -46,51 +52,74 @@ class StatisticRecorder:
         if(header.id not in self.sg_header[sg]):
             self.sg_header[sg][header.id] = AppdataStatistic(header)
 
+    # call by vehicle while createing new data.
+    def VehicleCreateAppdata(self, sg, header):
+        record = self.GetAppdataRecord(sg, header)
+
+    # call by vehicle while receive data from other vehicles
     def VehicleReceivedIntactAppdata(self, sg, vehicle, header):
+        current_time = GV.SUMO_SIM_INFO.getTime()
         record = self.GetAppdataRecord(sg, header)
         record.time_veh_trip[vehicle.name] = (
-            GV.SUMO_SIM_INFO.getTime() - header.at
+            current_time - header.at
         )
+
+    # call by vehicle while application data has gone over time
+    def VehicleOverTimeAppdata(self, sg, headers):
+        current_time = GV.SUMO_SIM_INFO.getTime()
+        for header in headers:
+            record = self.GetAppdataRecord(sg, header)
+            record.over_time_at = current_time
+
+    # call by vehicle while application data has gone over time
+    def BaseStationOverTimeAppdata(self, sg, bs, headers):
+        pass
 
     # call by BaseStation while a appdata returns to TX queue
     def BaseStationAppdataEnterTXQ(self, sg, bs, headers):
+        current_time = GV.SUMO_SIM_INFO.getTime()
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
             record.time_bs_txq[bs].append(
-                [GV.SUMO_SIM_INFO.getTime(), 0]
+                [current_time, 0]
             )
 
     # call by BaseStation while a appdata exits TX queue
     def BaseStationAppdataExitTXQ(self, sg, bs, headers):
+        current_time = GV.SUMO_SIM_INFO.getTime()
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
-            record.time_bs_txq[bs][-1][1] = GV.SUMO_SIM_INFO.getTime()
+            record.time_bs_txq[bs][-1][1] = current_time
 
     # call by BaseStation while a appdata start TX
     def BaseStationAppdataStartTX(self, sg, bs, headers):
+        current_time = GV.SUMO_SIM_INFO.getTime()
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
             record.time_bs_tx[bs].append(
-                [GV.SUMO_SIM_INFO.getTime(), 0]
+                [current_time, 0]
             )
 
     # call by BaseStation while a appdata end TX
     def BaseStationAppdataEndTX(self, sg, bs, headers):
+        current_time = GV.SUMO_SIM_INFO.getTime()
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
-            record.time_bs_tx[bs][-1][1] = GV.SUMO_SIM_INFO.getTime()
+            record.time_bs_tx[bs][-1][1] = current_time
 
     # call by BaseStation while dropping a appdata
     def BaseStationAppdataDrop(self, sg, bs, headers):
+        current_time = GV.SUMO_SIM_INFO.getTime()
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
-            record.time_bs_drop[bs] = GV.SUMO_SIM_INFO.getTime()
+            record.time_bs_drop[bs] = current_time
 
     # call by BaseStation when appdata totally served
     def BaseStationAppdataServe(self, sg, bs, headers):
+        current_time = GV.SUMO_SIM_INFO.getTime()
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
-            record.time_bs_serv[bs] = GV.SUMO_SIM_INFO.getTime()
+            record.time_bs_serv[bs] = current_time
 
     # extract specific network traffic from self.sg_headers
     def ExtractNetworkTraffic(self, nft):
@@ -115,15 +144,18 @@ class StatisticRecorder:
         sum_wait_time = [None for x in NetFlowType]
         sum_tx_time = [None for x in NetFlowType]
         sum_bst_thrput = [[None for x in BaseStationType] for x in NetFlowType]
-
+        sum_timeout_ratio = [None for x in NetFlowType]
         # summarize
         for nft in NetFlowType:
+            GV.STATISTIC.Doc("<{}>".format(nft.name.upper()))
             app_stats = self.ExtractNetworkTraffic(nft)
             sum_e2e_time[nft] = self.VehicleReceivedIntactAppdataReport(app_stats)
             sum_wait_time[nft] = self.BaseStationAppdataTXQReport(app_stats)
             sum_tx_time[nft] = self.BaseStationAppdataTXReport(app_stats)
+            sum_timeout_ratio[nft] = self.ApplicationTimeoutRatioReport(app_stats)
             for bst in BaseStationType:
                 sum_bst_thrput[nft][bst] = self.BaseStationTypeThroughPutReport(app_stats, bst)
+            GV.STATISTIC.Doc("</{}>".format(nft.name.upper()))
 
         # base station type throughput
         rep_bst_thrput = {
@@ -165,7 +197,6 @@ class StatisticRecorder:
                 rep_sys_thrput[nft.name] += bits
                 if nft != NetFlowType.C2G:
                     rep_sys_thrput["total"] += bits
-        # create report
         for nft in NetFlowType:
             rep_sys_thrput_rate[nft.name] = (
                 rep_sys_thrput[nft.name] / max(1, rep_sys_thrput["total"])
@@ -202,10 +233,14 @@ class StatisticRecorder:
             x.name: sum_wait_time[x]
             for x in NetFlowType
         }
-
         # transmit time
         rep_tx_time = {
             x.name: sum_tx_time[x]
+            for x in NetFlowType
+        }
+        # timeout ratio
+        rep_timeout_ratio = {
+            x.name: sum_timeout_ratio[x]
             for x in NetFlowType
         }
 
@@ -219,6 +254,7 @@ class StatisticRecorder:
             "sys-thrput": rep_sys_thrput,
             "sys-thrput-rate": rep_sys_thrput_rate,
             "bst-sg-rate": rep_bst_sg_rate,
+            "to-ratio": rep_timeout_ratio,
         }
 
         # print report
@@ -244,6 +280,7 @@ class StatisticRecorder:
 
     # Reports
     def VehicleReceivedIntactAppdataReport(self, app_stats):
+        GV.STATISTIC.Doc("<End-to-End>")
         # predefine
         total_trip_time = 0
         total_trip_count = 0
@@ -269,8 +306,7 @@ class StatisticRecorder:
             )
 
             GV.STATISTIC.Doc(
-                '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
-                    __name__,
+                '[{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
                     header_id,
                     record_total_trip_time,
                     record_total_trip_count,
@@ -286,7 +322,7 @@ class StatisticRecorder:
 
         # calculate average
         avg_trip_time = (0 if total_trip_count == 0 else total_trip_time / total_trip_count)
-
+        GV.STATISTIC.Doc("</End-to-End>")
         return {
             "avg": avg_trip_time,
             "max": max_trip_time,
@@ -294,6 +330,7 @@ class StatisticRecorder:
         }
 
     def BaseStationAppdataTXQReport(self, app_stats):
+        GV.STATISTIC.Doc("<TXQ-WAIT>")
         # time waited of appdata in transmit queue
         max_txq_wait_time = float('-inf')
         min_txq_wait_time = float('inf')
@@ -349,8 +386,7 @@ class StatisticRecorder:
                 else record_total_txq_wait_time/record_total_txq_wait_count
             )
             GV.STATISTIC.Doc(
-                '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
-                    __name__,
+                '[{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
                     header_id,
                     record_total_txq_wait_time,
                     record_total_txq_wait_count,
@@ -368,6 +404,7 @@ class StatisticRecorder:
         avg_txq_wait_time = (0 if total_txq_wait_count ==
                              0 else total_txq_wait_time / total_txq_wait_count)
 
+        GV.STATISTIC.Doc("</TXQ-WAIT>")
         return {
             "avg": avg_txq_wait_time,
             "max": max_txq_wait_time,
@@ -375,6 +412,7 @@ class StatisticRecorder:
         }
 
     def BaseStationAppdataTXReport(self, app_stats):
+        GV.STATISTIC.Doc("<TX-TIME>")
         max_tx_time = float('-inf')
         min_tx_time = float('inf')
         total_tx_time = 0
@@ -423,8 +461,7 @@ class StatisticRecorder:
                 else record_total_tx_time / record_total_tx_count
             )
             GV.STATISTIC.Doc(
-                '[{}][{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
-                    __name__,
+                '[{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
                     header_id,
                     record_total_tx_time,
                     record_total_tx_count,
@@ -440,12 +477,19 @@ class StatisticRecorder:
             min_tx_time = min_tx_time if min_tx_time < record_min_tx_time else record_min_tx_time
 
         avg_tx_time = (0 if total_tx_count == 0 else total_tx_time / total_tx_count)
-
+        GV.STATISTIC.Doc("</TX-TIME>")
         return {
             "avg": avg_tx_time,
             "max": max_tx_time,
             "min": min_tx_time,
         }
+
+    def ApplicationTimeoutRatioReport(self, app_stats):
+        count = 0
+        for record in app_stats.values():
+            if(record.over_time_at > 0):
+                count += 1
+        return count/max(len(app_stats), 1)
 
     def BaseStationTypeThroughPutReport(self, app_stats, bs_type):
         # size of data.
@@ -528,6 +572,16 @@ class StatisticRecorder:
         return sg_stats
 
     def Preprocess(self):
+        # extract only appdata that're in interest intervals.
+        for sg in SocialGroup:
+            self.sg_header[sg] = {
+                header: record
+                for header, record in self.sg_header[sg].items()
+                if (record.at >= self.interval[0] and
+                    record.at <= self.interval[1])
+            }
+
+        # preprocess txq timing adjustments
         for sg in SocialGroup:
             for record in self.sg_header[sg].values():
                 for serial in GV.NET_STATION_CONTROLLER:
@@ -551,6 +605,25 @@ class StatisticRecorder:
                                 # if it's unset because the simulation ended (not dropped also not served)
                                 # set the dequeue time to the simulation end time.
                                 record.time_bs_txq[serial][-1][1] = SUMO_TOTAL_SECONDS
+
+        # preprocess overtimes
+        for sg in SocialGroup:
+            for record in self.sg_header[sg].values():
+                # ignore appdata that're flagged overtime.
+                if(record.over_time_at > 0):
+                    continue
+                # ignore appdata that're obviously served.
+                elif(len(record.time_veh_trip) > 0):
+                    continue
+                # ignore appdata that're dropped by base station.(account as drop, not overtime)
+                elif(not max(record.time_bs_drop) == -1):
+                    continue
+                # ignore appdata that've been served by at least  one base station.
+                elif(max(record.time_bs_serv) > -1):
+                    continue
+                # this appdata should flag as overtime.
+                else:
+                    record.over_time_at = SUMO_TOTAL_SECONDS
 
     def Report(self, save=True):
         # preprocess the raw statistics

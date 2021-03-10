@@ -79,7 +79,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     )
     STATISTIC = oml.Logger(
         logdir,
-        "Statistic ({}).txt".format(time_text)
+        "Statistic ({}).xml".format(time_text)
     )
     RESULT = oml.Logger(
         logdir,

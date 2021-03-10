@@ -180,13 +180,13 @@ class VehicleRecorder():
     # Submit upload requests
     def RequestUploadResource(self):
         for social_group in SocialGroup:
-            if (len(self.app.datas[social_group]) > 0):
+            if (len(self.app.sg_data_queue[social_group]) > 0):
                 bs_ctrl = self.SelectSocialBS(social_group)
                 if (bs_ctrl != None):
                     sg_total_bits = 0
                     sg_starv_time = float("inf")
 
-                    for appdata in self.app.datas[social_group]:
+                    for appdata in self.app.sg_data_queue[social_group]:
                         sg_total_bits += appdata.bits
                         if(appdata.header.at < sg_starv_time):
                             sg_starv_time = appdata.header.at
@@ -215,7 +215,7 @@ class VehicleRecorder():
     # Create package
     def CreatePackage(self, dest, social_group: SocialGroup, total_bits, trans_ts, offset_ts):
         # the number of appdata waiting for services
-        datas_count = len(self.app.datas[social_group])
+        datas_count = len(self.app.sg_data_queue[social_group])
         # the serving appdata index
         data_delivering = 0
         # the appdatas collected in the package
@@ -223,7 +223,7 @@ class VehicleRecorder():
         # while there's still space for allocation
         remain_bits = total_bits
         while(remain_bits > 0 and data_delivering < datas_count):
-            appdata = self.app.datas[social_group][data_delivering]
+            appdata = self.app.sg_data_queue[social_group][data_delivering]
             data_size = remain_bits if appdata.bits > remain_bits else appdata.bits
             package_datas.append(
                 AppData(
@@ -243,7 +243,7 @@ class VehicleRecorder():
                 data_delivering += 1
 
         # Remove appdata from list if it has no remaining bits to transmit
-        self.app.datas[social_group] = self.app.datas[social_group][data_delivering:]
+        self.app.sg_data_queue[social_group] = self.app.sg_data_queue[social_group][data_delivering:]
 
         package = NetworkPackage(
             self,
@@ -370,7 +370,7 @@ class VehicleRecorder():
         #     return (
         #         self.sub_sg_bs[BaseStationType.UMI][social_group] if
         #         (self.sub_sg_bs[BaseStationType.UMI][social_group] !=
-        #          None and len(self.app.datas[SocialGroup.CRASH]) == 0)
+        #          None and len(self.app.sg_data_queue[SocialGroup.CRASH]) == 0)
         #         else self.sub_sg_bs[BaseStationType.UMA][social_group]
         #     )
         else:
