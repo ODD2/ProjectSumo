@@ -1,6 +1,6 @@
 # SocialGroup and QOS priority(Lower value has higher priority, 0 is the lowest value.)
 from enum import IntEnum
-from .metaclass import SocialGroupMeta, SocialGroupConfig
+from od.social.metaclass import SocialGroupMeta, SocialGroupConfig
 from od.network.types import BaseStationType
 
 

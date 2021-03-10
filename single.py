@@ -108,7 +108,7 @@ def main(interest_config):
         str(interest_config.traffic_scale)
     ])
 
-    # - skip to interest network condition
+    # - skipping until desire vehicle network condition.
     for _ in range(SUMO_SKIP_STEPS):
         traci.simulationStep()
 

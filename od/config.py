@@ -1,6 +1,7 @@
 from od.network.types import BaseStationType
 from od.social import SocialGroup
 from od.misc.types import DebugMsgType
+from od.event.config import SumoSimEventConf
 import os
 import sys
 import math
@@ -17,25 +18,16 @@ DEBUG_MSG_FLAGS = (
 # . simulation sumo type
 SUMO_SIM_GUI = True
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 10
+SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
-# . the offset of the simulation
+# . total traffic running seconds before network simulation start
 SUMO_SKIP_SECONDS = 245
-# . total sumo simulation steps skipped
 SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
-# . total sumo simulation seconds
-SUMO_SIM_SECONDS = 2
-# . total sumo simulation steps
-SUMO_SIM_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SIM_SECONDS))
-# . total sumo seconds
-SUMO_TOTAL_SECONDS = SUMO_SKIP_SECONDS + SUMO_SIM_SECONDS
-# . total sumo steps
-SUMO_TOTAL_STEPS = SUMO_SKIP_STEPS + SUMO_SIM_STEPS
+# . total network warm up seconds for a more realistic network environment.
+SUMO_NET_WARMUP_SECONDS = 1
+SUMO_NET_WARMUP_STEPS = int(round((SUMO_NET_WARMUP_SECONDS/SUMO_SECONDS_PER_STEP)))
 
-# Sumo Simulation Event Settings
-EVENT_EARTHQUAKE_OFS_STEPS = int(round(2 / SUMO_SECONDS_PER_STEP))
-EVENT_EARTHQUAKE_DUR_STEPS = int(round(2 / SUMO_SECONDS_PER_STEP))
 
 # Network Settings
 # . total QoS network channels. qos channel starts from 0.
@@ -45,11 +37,13 @@ NET_RB_SLOT_SYMBOLS = 14
 # . seconds per network simulation step
 NET_SECONDS_PER_STEP = SUMO_SIM_TIME_SCALER * 0.001
 # . network simulation steps per sumo simulation step
-NET_STEPS_PER_SUMO_STEP = int(SUMO_SECONDS_PER_STEP / NET_SECONDS_PER_STEP)
+NET_STEPS_PER_SUMO_STEP = int(round(SUMO_SECONDS_PER_STEP / NET_SECONDS_PER_STEP))
 # . seconds per network timeslot
 NET_SECONDS_PER_TS = SUMO_SIM_TIME_SCALER * 0.0005
 # . network timeslots per network simulation step
-NET_TS_PER_NET_STEP = int(NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS)
+NET_TS_PER_NET_STEP = int(round(NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS))
+# . network application request timeout limit.
+NET_TIMEOUT_SECONDS = 5
 # . resource block bandwidth units
 NET_RB_BW_UNIT = 180000
 # . resource block bandwidth required timeslot(s)
@@ -185,6 +179,25 @@ BS_PRESET = {
 VEH_MOVE_BS_CHECK = 1  # meters
 # . the vehicle height
 VEH_HEIGHT = 1.5  # meters
+
+# Sumo Simulation Event Settings
+EVENT_CONFIGS = [
+    SumoSimEventConf(0, 2),
+]
+EVENT_MAX_SECONDS = max(map(lambda x: (x.dur_sec + x.ofs_sec), EVENT_CONFIGS))
+
+# Timing Settings
+# . total sumo simulation seconds (network warmup + event + inspect duration.)
+SUMO_SIM_SECONDS = (
+    SUMO_NET_WARMUP_SECONDS +
+    EVENT_MAX_SECONDS +
+    NET_TIMEOUT_SECONDS
+)
+SUMO_SIM_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SIM_SECONDS))
+# . total sumo seconds
+SUMO_TOTAL_SECONDS = SUMO_SKIP_SECONDS + SUMO_SIM_SECONDS
+SUMO_TOTAL_STEPS = SUMO_SKIP_STEPS + SUMO_SIM_STEPS
+
 
 # Basic Requirement Check
 if SUMO_SECONDS_PER_STEP < NET_SECONDS_PER_STEP:

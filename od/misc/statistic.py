@@ -243,7 +243,6 @@ class StatisticRecorder:
             GV.RESULT.Doc("")
 
     # Reports
-
     def VehicleReceivedIntactAppdataReport(self, app_stats):
         # predefine
         total_trip_time = 0

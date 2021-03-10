@@ -88,13 +88,8 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
 
     # Sumo Simulation Info
     SUMO_SIM_INFO = oms.SumoSimInfo()
-    SUMO_SIM_EVENTS = [
-        oeq.EarthQuake(
-            oc.EVENT_EARTHQUAKE_OFS_STEPS,
-            oc.EVENT_EARTHQUAKE_DUR_STEPS
-        )
+    SUMO_SIM_EVENTS = list(map(lambda x: oeq.EarthQuake(x), oc.EVENT_CONFIGS))
 
-    ]
     # Statistsic
     STATISTIC_RECORDER = omss.StatisticRecorder(statdir, interest_config)
 
@@ -105,7 +100,8 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     BS_SETTING = {}
     for name, setting in oc.BS_PRESET.items():
         if (setting["type"] == ont.BaseStationType.UMA or
-                (interest_config.req_rsu and setting["type"] == ont.BaseStationType.UMI)):
+                (interest_config.req_rsu and
+                 setting["type"] == ont.BaseStationType.UMI)):
             BS_SETTING[name] = setting
 
     # Downlink Resource Allocation
