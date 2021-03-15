@@ -8,17 +8,17 @@ import math
 
 # System Parameters
 DEBUG_MSG_FLAGS = (
-    # DebugMsgType.NONE
-    DebugMsgType.NET_PKG_INFO |
-    DebugMsgType.NET_APPDATA_INFO |
-    DebugMsgType.NET_ALLOC_INFO |
-    DebugMsgType.SUMO_VEH_INFO
+    DebugMsgType.NONE
+    # DebugMsgType.NET_PKG_INFO |
+    # DebugMsgType.NET_APPDATA_INFO |
+    # DebugMsgType.NET_ALLOC_INFO |
+    # DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = True
+SUMO_SIM_GUI = False
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 100
+SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . total traffic running seconds before network simulation start
@@ -41,7 +41,7 @@ NET_SECONDS_PER_TS = SUMO_SIM_TIME_SCALER * 0.0005
 # . network timeslots per network simulation step
 NET_TS_PER_NET_STEP = int(round(NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS))
 # . network application request timeout limit.
-NET_TIMEOUT_SECONDS = 5
+NET_TIMEOUT_SECONDS = 7
 # . resource block bandwidth units
 NET_RB_BW_UNIT = 180000
 # . resource block bandwidth required timeslot(s)
@@ -61,7 +61,7 @@ NET_SG_RND_REQ_SIZE = {
 NET_SG_RND_REQ_NUM_TIME_SCALE = 1  # seconds
 NET_SG_RND_REQ_NUM = {
     SocialGroup.CRASH: int(round(((64)*1024/2) / ((300+1100)*8/2))),
-    SocialGroup.RCWS: int(round(((400+1000)*0.7*1024/2) / ((64+2048)*8/2)))
+    SocialGroup.RCWS: int(round(((400+1000)*1024/2) / ((64+2048)*8/2)))
 }
 
 # Base Station Settings

@@ -2,7 +2,7 @@
 from od.social import SocialGroup
 from od.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
                        NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS, SUMO_SIM_SECONDS,
-                       SUMO_SKIP_SECONDS, SUMO_NET_WARMUP_SECONDS, EVENT_CONFIGS)
+                       SUMO_SKIP_SECONDS, SUMO_NET_WARMUP_SECONDS, EVENT_CONFIGS, NET_TIMEOUT_SECONDS)
 from od.network.types import BaseStationType
 from od.misc.interest import InterestConfig
 from od.network.appdata import AppDataHeader
@@ -24,12 +24,13 @@ class AppdataStatistic:
     def __init__(self, header: AppDataHeader):
         self.bits = header.total_bits
         self.at = header.at
-        self.over_time_at = -1
+        self.is_src_ot = False
         self.time_veh_trip = {}
         self.time_bs_txq = [[] for _ in GV.NET_STATION_CONTROLLER]
         self.time_bs_tx = [[] for _ in GV.NET_STATION_CONTROLLER]
         self.time_bs_serv = [-1 for _ in GV.NET_STATION_CONTROLLER]
         self.time_bs_drop = [-1 for _ in GV.NET_STATION_CONTROLLER]
+        self.is_bs_ot = [False for _ in GV.NET_STATION_CONTROLLER]
 
 
 class StatisticRecorder:
@@ -65,11 +66,11 @@ class StatisticRecorder:
         )
 
     # call by vehicle while application data has gone over time
-    def VehicleOverTimeAppdata(self, sg, headers):
-        current_time = GV.SUMO_SIM_INFO.getTime()
-        for header in headers:
-            record = self.GetAppdataRecord(sg, header)
-            record.over_time_at = current_time
+    # def VehicleOverTimeAppdata(self, sg, headers):
+    #     current_time = GV.SUMO_SIM_INFO.getTime()
+    #     for header in headers:
+    #         record = self.GetAppdataRecord(sg, header)
+    #         record.is_src_ot = current_time
 
     # call by vehicle while application data has gone over time
     def BaseStationOverTimeAppdata(self, sg, bs, headers):
@@ -152,7 +153,7 @@ class StatisticRecorder:
             sum_e2e_time[nft] = self.VehicleReceivedIntactAppdataReport(app_stats)
             sum_wait_time[nft] = self.BaseStationAppdataTXQReport(app_stats)
             sum_tx_time[nft] = self.BaseStationAppdataTXReport(app_stats)
-            sum_timeout_ratio[nft] = self.ApplicationTimeoutRatioReport(app_stats)
+            sum_timeout_ratio[nft] = self.AppdataSourceTimeoutRatioReport(app_stats)
             for bst in BaseStationType:
                 sum_bst_thrput[nft][bst] = self.BaseStationTypeThroughPutReport(app_stats, bst)
             GV.STATISTIC.Doc("</{}>".format(nft.name.upper()))
@@ -484,12 +485,16 @@ class StatisticRecorder:
             "min": min_tx_time,
         }
 
-    def ApplicationTimeoutRatioReport(self, app_stats):
-        count = 0
+    def AppdataSourceTimeoutRatioReport(self, app_stats):
+        total_bits = 0
+        ot_bits = 0
         for record in app_stats.values():
-            if(record.over_time_at > 0):
-                count += 1
-        return count/max(len(app_stats), 1)
+            total_bits += record.bits
+            if(record.is_src_ot):
+                ot_bits += record.bits
+        return ot_bits/max(total_bits, 1)
+
+    # def BaseStationAppdataTimeoutRatioReport(self, app_stats):
 
     def BaseStationTypeThroughPutReport(self, app_stats, bs_type):
         # size of data.
@@ -610,20 +615,16 @@ class StatisticRecorder:
         for sg in SocialGroup:
             for record in self.sg_header[sg].values():
                 # ignore appdata that're flagged overtime.
-                if(record.over_time_at > 0):
+                if(record.is_src_ot):
                     continue
-                # ignore appdata that're obviously served.
-                elif(len(record.time_veh_trip) > 0):
-                    continue
-                # ignore appdata that're dropped by base station.(account as drop, not overtime)
-                elif(not max(record.time_bs_drop) == -1):
-                    continue
-                # ignore appdata that've been served by at least  one base station.
-                elif(max(record.time_bs_serv) > -1):
-                    continue
-                # this appdata should flag as overtime.
+                # Check data source overtime condition.
+                elif(max(map(lambda x: len(x), record.time_bs_txq)) == 0):
+                    record.is_src_ot = True
+                # Check base station overtime condition.
                 else:
-                    record.over_time_at = SUMO_TOTAL_SECONDS
+                    for bs in GV.NET_STATION_CONTROLLER:
+                        if(record.time_bs_serv[bs] - record.at >= NET_TIMEOUT_SECONDS):
+                            record.is_bs_ot[bs] = True
 
     def Report(self, save=True):
         # preprocess the raw statistics

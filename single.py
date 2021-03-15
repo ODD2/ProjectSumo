@@ -93,9 +93,7 @@ def UpdateT(objs, ts):
     #     t.join()
 
 
-def main(interest_config):
-    # Prepare Simulation
-    # - start traci
+def InitTraci(interest_config):
     traci.start([
         "sumo-gui" if SUMO_SIM_GUI else "sumo",
         "-c",
@@ -108,12 +106,18 @@ def main(interest_config):
         str(interest_config.traffic_scale)
     ])
 
+
+def main(interest_config):
+    # Prepare Simulation
+    # - start traci
+    InitTraci(interest_config)
+
     # - skipping until desire vehicle network condition.
     for _ in range(SUMO_SKIP_STEPS):
         traci.simulationStep()
 
     # - initialize matlab context for simulation
-    GE.InitializeSimulationContext()
+    GE.InitializeSimulationContext(interest_config)
     # - initialize simulation dependent global variables
     GV.InitializeSimulationVariables(interest_config)
 
@@ -204,7 +208,7 @@ def main(interest_config):
 
 if __name__ == "__main__":
     cProfile.run(
-        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,0.6,0))'
+        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,1.1,9))'
     )
     # main(
     #     InterestConfig(

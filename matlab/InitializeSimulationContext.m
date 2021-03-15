@@ -1,3 +1,3 @@
-function [] = InitializeSimulationContext()
-	rng(0)
+function [] = InitializeSimulationContext(seed)
+	rng(seed)
 end

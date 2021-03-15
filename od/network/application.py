@@ -94,7 +94,6 @@ class VehicleApplication(Application):
 
     def Run(self):
         self.SpawnData()
-        self.CheckTimeout()
 
     # Receive application data
     def RecvData(self, social_group: SocialGroup, appdata: AppData):
@@ -169,23 +168,23 @@ class VehicleApplication(Application):
                 GV.STATISTIC_RECORDER.VehicleCreateAppdata(sg, appdata.header)
 
     # Check for timeout application data of GENERAL QoS.
-    def CheckTimeout(self):
-        current_time = GV.SUMO_SIM_INFO.getTime()
-        for sg in [x for x in SocialGroup if x.qos == QoSLevel.GENERAL]:
-            drop_index = 0
-            for appdata in self.sg_data_queue[sg]:
-                if appdata.header.at + NET_TIMEOUT_SECONDS <= current_time:
-                    drop_index += 1
-                else:
-                    break
-            if(drop_index > 0):
-                # record over time.
-                GV.STATISTIC_RECORDER.VehicleOverTimeAppdata(
-                    sg,
-                    map(lambda x: x.header, self.sg_data_queue[sg][:drop_index])
-                )
-                # drop over time datas.
-                self.sg_data_queue[sg][drop_index:]
+    # def CheckTimeout(self):
+    #     current_time = GV.SUMO_SIM_INFO.getTime()
+    #     for sg in [x for x in SocialGroup if x.qos == QoSLevel.GENERAL]:
+    #         drop_index = 0
+    #         for appdata in self.sg_data_queue[sg]:
+    #             if appdata.header.at + NET_TIMEOUT_SECONDS <= current_time:
+    #                 drop_index += 1
+    #             else:
+    #                 break
+    #         if(drop_index > 0):
+    #             # record over time.
+    #             GV.STATISTIC_RECORDER.VehicleOverTimeAppdata(
+    #                 sg,
+    #                 map(lambda x: x.header, self.sg_data_queue[sg][:drop_index])
+    #             )
+    #             # drop over time datas.
+    #             self.sg_data_queue[sg][drop_index:]
 
 
 class NetworkCoreApplication(Application):
