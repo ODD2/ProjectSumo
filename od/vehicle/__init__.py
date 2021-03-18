@@ -300,20 +300,17 @@ class VehicleRecorder():
                 )
                 # process received package
                 self.PackageDelivered(pkg)
-                # Connection display are required for gui only.
-                if(SUMO_SIM_GUI):
-                    # change connection state
-                    self.con_state[pkg.src.name].rec.ChangeState(
-                        ConnectionState.Success
-                    )
+                # change connection state
+                self.con_state[pkg.src.name].rec.ChangeState(
+                    ConnectionState.Success
+                )
             else:
                 # update connection state
                 pkg_in_proc.append(pkg)
-                # Connection display are required for gui only.
-                if(SUMO_SIM_GUI):
-                    self.con_state[pkg.src.name].rec.ChangeState(
-                        ConnectionState.Transmit
-                    )
+                # change connection state
+                self.con_state[pkg.src.name].rec.ChangeState(
+                    ConnectionState.Transmit
+                )
         # .remove delivered packages
         self.pkg_in_proc[LinkType.DOWNLINK] = pkg_in_proc
 
@@ -333,20 +330,16 @@ class VehicleRecorder():
                     ),
                     DebugMsgType.NET_PKG_INFO
                 )
-                # Connection display are required for gui only.
-                if(SUMO_SIM_GUI):
-                    # update connection state
-                    self.con_state[pkg.dest.name].rec.ChangeState(
-                        ConnectionState.Success
-                    )
+                # update connection state
+                self.con_state[pkg.dest.name].rec.ChangeState(
+                    ConnectionState.Success
+                )
             else:
                 pkg_in_proc.append(pkg)
-                # Connection display are required for gui only.
-                if(SUMO_SIM_GUI):
-                    # update connection state
-                    self.con_state[pkg.dest.name].rec.ChangeState(
-                        ConnectionState.Transmit
-                    )
+                # update connection state
+                self.con_state[pkg.dest.name].rec.ChangeState(
+                    ConnectionState.Transmit
+                )
         # . remove sent packages
         self.pkg_in_proc[LinkType.UPLINK] = pkg_in_proc
 
@@ -398,10 +391,6 @@ class VehicleRecorder():
 
     # The Connection manager to manage connection between self and others
     def ConnectionChange(self, build, opponent):
-        # Connection display are required for gui only.
-        if(not SUMO_SIM_GUI):
-            return
-
         if (build):
             # Create connection recorder for this base station if not exists
             if (opponent.name not in self.con_state):

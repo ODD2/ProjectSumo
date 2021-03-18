@@ -22,6 +22,9 @@ class WeightProcess:
         self.process = process
         self.process.start()
 
+    def getPid(self):
+        return self.process.pid
+
 
 def Worker(s: Semaphore, target, args):
     target(*args)
@@ -78,33 +81,52 @@ def ParallelSimulationManager(weight_intconfs, limit):
 if __name__ == "__main__":
     start_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     weight_intconfs = []
-    for res_alloc_type in ResourceAllocatorType:
-        for rsu in [False, True]:
-            for traffic_scale in [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2]:
-                for seed in [6, 7, 8, 9, 10]:
-                    weight = (3**traffic_scale)
-                    weight *= 1.3 if rsu else 1
-                    weight *= 1.5 if res_alloc_type == ResourceAllocatorType.NOMA_OPT else 1
-                    config = InterestConfig(
-                        res_alloc_type,
-                        rsu,
-                        traffic_scale,
-                        seed
-                    )
-                    weight_intconfs.append(
-                        WeightInterestConfig(
-                            weight,
-                            config
-                        )
-                    )
-
+    # for res_alloc_type in ResourceAllocatorType:
+    #     for rsu in [False, True]:
+    #         for traffic_scale in [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2]:
+    #             for seed in [16, 17, 18, 19, 20]:
+    #                 config = InterestConfig(
+    #                     res_alloc_type,
+    #                     rsu,
+    #                     traffic_scale,
+    #                     seed
+    #                 )
+    #                 weight_intconfs.append(
+    #                     WeightInterestConfig(
+    #                         config
+    #                     )
+    #                 )
     # weight_intconfs.append(
-    #     WeightInterestConfig(InterestConfig(ResourceAllocatorType.OMA, False, 0.8, 8))
+    #     WeightInterestConfig(
+    #         InterestConfig(ResourceAllocatorType.OMA, True, 0.6, 11)
+    #     )
     # )
     # weight_intconfs.append(
-    #     WeightInterestConfig(InterestConfig(ResourceAllocatorType.OMA, False, 0.6, 9))
+    #     WeightInterestConfig(
+    #         InterestConfig(ResourceAllocatorType.OMA, True, 1.2, 12)
+    #     )
     # )
-    ParallelSimulationManager(weight_intconfs, 60)
-    end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    print("Start at: " + start_time)
-    print("End at: " + end_time)
+    # weight_intconfs.append(
+    #     WeightInterestConfig(
+    #         InterestConfig(ResourceAllocatorType.NOMA_OPT, False, 0.7, 12)
+    #     )
+    # )
+    # weight_intconfs.append(
+    #     WeightInterestConfig(
+    #         InterestConfig(ResourceAllocatorType.OMA, True, 1.1, 14)
+    #     )
+    # )
+    weight_intconfs.append(
+        WeightInterestConfig(
+            InterestConfig(ResourceAllocatorType.NOMA_OPT, False, 0.7, 18)
+        )
+    )
+    weight_intconfs.append(
+        WeightInterestConfig(
+            InterestConfig(ResourceAllocatorType.OMA, True, 1.1, 19)
+        )
+    )
+ParallelSimulationManager(weight_intconfs, 80)
+end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+print("Start at: " + start_time)
+print("End at: " + end_time)
