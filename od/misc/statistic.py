@@ -495,7 +495,6 @@ class StatisticRecorder:
         return ot_bits/max(total_bits, 1)
 
     # def BaseStationAppdataTimeoutRatioReport(self, app_stats):
-
     def BaseStationTypeThroughPutReport(self, app_stats, bs_type):
         # size of data.
         bits = 0

@@ -1,8 +1,8 @@
 function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
-
     for qos = 1:length(QoS_GP_CONF)
         QoS_GP_CONF{qos} = [QoS_GP_CONF{qos}{:}];
     end
+
 %The entry point for optimization
 %     SIM_CONF = struct("rbf_h",4,...
 %                       "rbf_w",2,...
@@ -272,7 +272,7 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
 %   Helper Functions
     function NEW_GP_CONF = UpdateOptimizeResult(alloc_gidx,GP_CONF,x,extflg,OMA_LAYER)
 %       error condition
-        if(~( extflg==1 || extflg == -1 || extflg == 2 ))
+        if(~( extflg==1 || extflg == 2 ))
             x = zeros(1,GP_CONF(end).grp_sol_ofs + GP_CONF(end).grp_sol_size);
         end
         
