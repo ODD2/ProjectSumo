@@ -4,6 +4,8 @@ from od.view import DisplayStatistics
 from multiprocessing import Process, Semaphore
 from threading import Thread
 from datetime import datetime
+from time import sleep
+from os import path
 import single
 import numpy as np
 
@@ -17,13 +19,17 @@ class WeightInterestConfig:
 
 
 class WeightProcess:
-    def __init__(self, weight, process: Process):
-        self.weight = weight
+    def __init__(self, conf, process: Process):
+        self.conf = conf
         self.process = process
         self.process.start()
 
     def getPid(self):
         return self.process.pid
+
+    def CheckResult(self):
+        interest = self.conf.interest_config
+        return path.isfile("data/{}/{}/report.pickle".format(interest.rng_seed, str(interest)))
 
 
 def Worker(s: Semaphore, target, args):
@@ -33,18 +39,19 @@ def Worker(s: Semaphore, target, args):
 
 def ParallelSimulationManager(weight_intconfs, limit):
     s = Semaphore(0)
-    min_i = 0
-    max_i = len(weight_intconfs) - 1
-    weight_intconfs.sort(key=lambda x: x.weight, reverse=True)
     weight_process = []
+
     while(True):
         remain_weight_intconfs = []
-
+        # arrange weighted interest configs to let heavier ones to have higher precedence.
+        weight_intconfs.sort(key=lambda x: x.weight, reverse=True)
+        # arrange resource to interest configs accroding to its weight
         for weight_intconf in weight_intconfs:
             if(weight_intconf.weight < limit):
+                sleep(1)
                 weight_process.append(
                     WeightProcess(
-                        weight_intconf.weight,
+                        weight_intconf,
                         Process(
                             target=Worker,
                             args=(
@@ -58,21 +65,30 @@ def ParallelSimulationManager(weight_intconfs, limit):
                 limit -= weight_intconf.weight
             else:
                 remain_weight_intconfs.append(weight_intconf)
-
+        # if there're no remaining interest configs, begin to wait all process to end.
         if(len(remain_weight_intconfs) == 0):
             break
 
+        # remove allocated configs.
         weight_intconfs = remain_weight_intconfs
 
+        # wait untill enough resource for the most required config.
         while(limit < weight_intconfs[0].weight):
+            # wait for working process to end
             s.acquire()
-            i = 0
-            while(i < len(weight_process)):
-                if(not weight_process[i].process.is_alive()):
-                    limit += weight_process[i].weight
-                    weight_process = weight_process[: i] + weight_process[i+1:]
+            # check which process(es) ended
+            remain_weight_process = []
+            for wp in weight_process:
+                if(not wp.process.is_alive()):
+                    # if process is not alive, meaning it has ended, do result check.
+                    if(wp.CheckResult()):
+                        limit += wp.conf.weight
+                    else:
+                        weight_intconfs.append(wp.conf)
+
                 else:
-                    i += 1
+                    remain_weight_process.append(wp)
+            weight_process = remain_weight_process
 
     for wp in weight_process:
         wp.process.join()
@@ -81,52 +97,22 @@ def ParallelSimulationManager(weight_intconfs, limit):
 if __name__ == "__main__":
     start_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     weight_intconfs = []
-    # for res_alloc_type in ResourceAllocatorType:
-    #     for rsu in [False, True]:
-    #         for traffic_scale in [0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2]:
-    #             for seed in [16, 17, 18, 19, 20]:
-    #                 config = InterestConfig(
-    #                     res_alloc_type,
-    #                     rsu,
-    #                     traffic_scale,
-    #                     seed
-    #                 )
-    #                 weight_intconfs.append(
-    #                     WeightInterestConfig(
-    #                         config
-    #                     )
-    #                 )
-    # weight_intconfs.append(
-    #     WeightInterestConfig(
-    #         InterestConfig(ResourceAllocatorType.OMA, True, 0.6, 11)
-    #     )
-    # )
-    # weight_intconfs.append(
-    #     WeightInterestConfig(
-    #         InterestConfig(ResourceAllocatorType.OMA, True, 1.2, 12)
-    #     )
-    # )
-    # weight_intconfs.append(
-    #     WeightInterestConfig(
-    #         InterestConfig(ResourceAllocatorType.NOMA_OPT, False, 0.7, 12)
-    #     )
-    # )
-    # weight_intconfs.append(
-    #     WeightInterestConfig(
-    #         InterestConfig(ResourceAllocatorType.OMA, True, 1.1, 14)
-    #     )
-    # )
-    weight_intconfs.append(
-        WeightInterestConfig(
-            InterestConfig(ResourceAllocatorType.NOMA_OPT, False, 0.7, 18)
-        )
-    )
-    weight_intconfs.append(
-        WeightInterestConfig(
-            InterestConfig(ResourceAllocatorType.OMA, True, 1.1, 19)
-        )
-    )
-ParallelSimulationManager(weight_intconfs, 80)
-end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-print("Start at: " + start_time)
-print("End at: " + end_time)
+    for res_alloc_type in ResourceAllocatorType:
+        for rsu in [False, True]:
+            for traffic_scale in [0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0]:
+                for seed in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]:
+                    config = InterestConfig(
+                        res_alloc_type,
+                        rsu,
+                        traffic_scale,
+                        seed
+                    )
+                    weight_intconfs.append(
+                        WeightInterestConfig(
+                            config
+                        )
+                    )
+    ParallelSimulationManager(weight_intconfs, 100)
+    end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    print("Start at: " + start_time)
+    print("End at: " + end_time)

@@ -222,6 +222,7 @@ class BaseStationApplicationUMA(Application):
         )
         # propagate the appdata to other vehicles in range
         self.owner.ReceivePropagation(
+            self.owner,
             social_group,
             appdata.header
         )
@@ -243,11 +244,13 @@ class BaseStationApplicationUMI(Application):
         if(social_group == SocialGroup.CRASH):
             # propagate the appdata to other vehicles in range.
             self.owner.ReceivePropagation(
+                self.owner,
                 social_group,
                 appdata.header
             )
         # propagate the appdata to the network core controller.
         GV.NET_CORE_CONTROLLER.ReceivePropagation(
+            self.owner,
             social_group,
             appdata.header
         )

@@ -8,10 +8,10 @@ import math
 
 # System Parameters
 DEBUG_MSG_FLAGS = (
-    DebugMsgType.NONE
+    # DebugMsgType.NONE
     # DebugMsgType.NET_PKG_INFO |
     # DebugMsgType.NET_APPDATA_INFO |
-    # DebugMsgType.NET_ALLOC_INFO |
+    DebugMsgType.NET_ALLOC_INFO
     # DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings

@@ -332,7 +332,7 @@ class BaseStationController:
                         float(netstatus.pwr_req_dBm)
                     ),
                     "pwr_ext_dBm":  (
-                        float(0)
+                        float(-100)
                         if GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA else
                         float(netstatus.pwr_ext_dBm)
                     ),
@@ -480,7 +480,7 @@ class BaseStationController:
         self.pkg_in_proc[LinkType.UPLINK].append(package)
 
     # Function called by NetworkController/BaseStationApplication to propagate appdata.
-    def ReceivePropagation(self, social_group: SocialGroup, header: AppDataHeader):
+    def ReceivePropagation(self, sender, social_group: SocialGroup, header: AppDataHeader):
         if(social_group not in self.sg_brdcst_datas[social_group.qos]):
             self.sg_brdcst_datas[social_group.qos][social_group] = []
 
@@ -531,17 +531,41 @@ class BaseStationController:
 class NetworkCoreController:
     def __init__(self):
         self.name = "core"
+        self.umi_approx_uma = {}
         # self.app = NetworkCoreApplication(self)
 
-    # called by UMIs to propagate critical data to UMA.
-    def ReceivePropagation(self, social_group: SocialGroup, header: AppDataHeader):
-        self.StartPropagation(social_group, header)
+    # helper function for UMI to find the nearest UMA for c2g traffic propagations.
+    def MapApproximityUMA(self, umi_bs):
+        if(not umi_bs.type == BaseStationType.UMI):
+            raise Exception("Try to Map Non-UMI to Approximate UMAs")
+        approx_bs = None
+        distance = float("Inf")
+        for uma_bs in GV.NET_STATION_CONTROLLER:
+            if(uma_bs.type == BaseStationType.UMI):
+                continue
+            d = pow((uma_bs.pos[0] - umi_bs.pos[0])**2+(uma_bs.pos[1] - umi_bs.pos[1])**2, 0.5)
+            if(d < distance):
+                approx_bs = uma_bs
+        return approx_bs
+
+    # called by UMIs to propagate critical data to UMA as general data.
+    def ReceivePropagation(self, sender, social_group: SocialGroup, header: AppDataHeader):
+        if(not sender.type == BaseStationType.UMI) or (not social_group == SocialGroup.CRASH):
+            raise Exception("Core receive propagate from Non-UMI base station")
+        # start data propagation
+        self.StartPropagation(sender, social_group, header)
 
     # def PackageDelivered(self, package: NetworkPackage):
     #     for appdata in package.appdatas:
     #         self.app.RecvData(package.social_group, appdata)
 
-    def StartPropagation(self, social_group: SocialGroup, header: AppDataHeader):
-        # Propagate all data to UMA as road consition warning(RCW) data.
-        for bs_ctrlr in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
-            bs_ctrlr.ReceivePropagation(SocialGroup.RCWS, header)
+    def StartPropagation(self, sender, social_group: SocialGroup, header: AppDataHeader):
+        # find the approximity uma for umi
+        if(sender not in self.umi_approx_uma):
+            self.umi_approx_uma[sender] = self.MapApproximityUMA(sender)
+        # propagate only to the uma closest to the sender umi.
+        self.umi_approx_uma[sender].ReceivePropagation(self, SocialGroup.RCWS, header)
+
+        # Propagate all data to UMA as road condition warning(RCW) data.
+        # for bs_ctrlr in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
+        #     bs_ctrlr.ReceivePropagation(SocialGroup.RCWS, header)

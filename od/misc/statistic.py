@@ -134,7 +134,8 @@ class StatisticRecorder:
             for header, record in self.sg_header[SocialGroup.CRASH].items():
                 for bs_ctrlr in umi_bs_ctrlrs:
                     if record.time_bs_serv[bs_ctrlr] > 0:
-                        c2g_flows[header] = self.sg_header[SocialGroup.RCWS][header]
+                        if(header in self.sg_header[SocialGroup.RCWS]):
+                            c2g_flows[header] = self.sg_header[SocialGroup.RCWS][header]
             return c2g_flows
         return {}
 
