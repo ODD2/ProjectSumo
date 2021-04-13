@@ -18,6 +18,7 @@ class NetFlowType(IntEnum):
     CRITICAL = 0
     GENERAL = 1
     C2G = 2
+    NC2G = 3
 
 
 class AppdataStatistic:
@@ -130,13 +131,26 @@ class StatisticRecorder:
             return self.sg_header[SocialGroup.RCWS]
         elif(nft == NetFlowType.C2G):
             umi_bs_ctrlrs = [x for x in GV.NET_STATION_CONTROLLER if x.type == BaseStationType.UMI]
-            c2g_flows = {}
+            flows = {}
             for header, record in self.sg_header[SocialGroup.CRASH].items():
                 for bs_ctrlr in umi_bs_ctrlrs:
                     if record.time_bs_serv[bs_ctrlr] > 0:
                         if(header in self.sg_header[SocialGroup.RCWS]):
-                            c2g_flows[header] = self.sg_header[SocialGroup.RCWS][header]
-            return c2g_flows
+                            flows[header] = self.sg_header[SocialGroup.RCWS][header]
+            return flows
+        elif(nft == NetFlowType.NC2G):
+            umi_bs_ctrlrs = [x for x in GV.NET_STATION_CONTROLLER if x.type == BaseStationType.UMI]
+            nc2g_flows = {}
+            g_set = set(self.sg_header[SocialGroup.RCWS])
+            c2g_set = set()
+            for header, record in self.sg_header[SocialGroup.CRASH].items():
+                for bs_ctrlr in umi_bs_ctrlrs:
+                    if record.time_bs_serv[bs_ctrlr] > 0:
+                        if(header in self.sg_header[SocialGroup.RCWS]):
+                            c2g_set.add(header)
+            for header in (g_set - c2g_set):
+                nc2g_flows[header] = self.sg_header[SocialGroup.RCWS][header]
+            return nc2g_flows
         return {}
 
     # create report for network traffics.
@@ -197,7 +211,7 @@ class StatisticRecorder:
             for nft in NetFlowType:
                 bits = sum_bst_thrput[nft][bst]["bits"]
                 rep_sys_thrput[nft.name] += bits
-                if nft != NetFlowType.C2G:
+                if nft == NetFlowType.CRITICAL or nft == NetFlowType.GENERAL:
                     rep_sys_thrput["total"] += bits
         for nft in NetFlowType:
             rep_sys_thrput_rate[nft.name] = (

@@ -55,7 +55,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
 
     # Directories
     rngdir = "{}/".format(interest_config.rng_seed)
-    datadir = "data/" + rngdir
+    datadir = oc.ROOT_DIR + rngdir
     logdir = datadir + "{}/".format(interest_config)
     statdir = datadir + "{}/".format(interest_config)
 

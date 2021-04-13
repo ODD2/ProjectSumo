@@ -213,3 +213,6 @@ if NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS % 1 != 0:
         "Error: seconds per network simulation step should be totally devided by the value of seconds per network timeslot."
     )
     sys.exit()
+
+# Directory Settings
+ROOT_DIR = "data/nQoS/"

@@ -564,7 +564,7 @@ class NetworkCoreController:
         if(sender not in self.umi_approx_uma):
             self.umi_approx_uma[sender] = self.MapApproximityUMA(sender)
         # propagate only to the uma closest to the sender umi.
-        self.umi_approx_uma[sender].ReceivePropagation(self, SocialGroup.RCWS, header)
+        self.umi_approx_uma[sender].ReceivePropagation(self, social_group, header)
 
         # Propagate all data to UMA as road condition warning(RCW) data.
         # for bs_ctrlr in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
