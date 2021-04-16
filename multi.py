@@ -96,34 +96,21 @@ def ParallelSimulationManager(weight_intconfs, limit):
 if __name__ == "__main__":
     start_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     weight_intconfs = []
-    # for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
-    #     for rsu in [False, True]:
-    #         for traffic_scale in [0.3, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5]:
-    #             for seed in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]:
-    #                 config = InterestConfig(
-    #                     res_alloc_type,
-    #                     rsu,
-    #                     traffic_scale,
-    #                     seed
-    #                 )
-    #                 weight_intconfs.append(
-    #                     WeightInterestConfig(
-    #                         config
-    #                     )
-    #                 )
-
-    weight_intconfs.append(
-        WeightInterestConfig(InterestConfig(ResourceAllocatorType.NOMA_OPT, False, 1.3, 5))
-    )
-    weight_intconfs.append(
-        WeightInterestConfig(InterestConfig(ResourceAllocatorType.NOMA_OPT, True, 1.5, 7))
-    )
-    weight_intconfs.append(
-        WeightInterestConfig(InterestConfig(ResourceAllocatorType.NOMA_OPT, True, 1.1, 13))
-    )
-    weight_intconfs.append(
-        WeightInterestConfig(InterestConfig(ResourceAllocatorType.NOMA_OPT, False, 1.5, 17))
-    )
+    for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
+        for rsu in [False, True]:
+            for traffic_scale in [0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5]:
+                for seed in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]:
+                    config = InterestConfig(
+                        res_alloc_type,
+                        rsu,
+                        traffic_scale,
+                        seed
+                    )
+                    weight_intconfs.append(
+                        WeightInterestConfig(
+                            config
+                        )
+                    )
     ParallelSimulationManager(weight_intconfs, 100)
     end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     print("Start at: " + start_time)

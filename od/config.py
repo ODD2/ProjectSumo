@@ -60,8 +60,8 @@ NET_SG_RND_REQ_SIZE = {
 #   For emergency group, the value is preset to an average of 64Kbps.
 NET_SG_RND_REQ_NUM_TIME_SCALE = 1  # seconds
 NET_SG_RND_REQ_NUM = {
-    SocialGroup.CRASH: int(round(((64)*1024/2) / ((300+1100)*8/2))),
-    SocialGroup.RCWS: int(round(((400+1000)*1024/2) / ((64+2048)*8/2)))
+    SocialGroup.CRASH: int(round((64*1024) / ((300+1100)*8/2))),
+    SocialGroup.RCWS: int(round((500*1024) / ((64+2048)*8/2)))
 }
 
 # Base Station Settings
