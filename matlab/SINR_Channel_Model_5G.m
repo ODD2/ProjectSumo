@@ -34,16 +34,17 @@
 %  interference increase
 
 function [ CQI_out,  Max_SINR_rx_dB_10, min_tx_p_dBm, PL_dB, INTF_dBm, DS_intf_dBm, Min_SINR_rx_dB_10, Min_INTF_dBm, Min_Spare_dBm] = SINR_Channel_Model_5G( D2D_dist, h_BS, h_MS, fc, tx_p_dBm, bandwidth, Intf_h_BS, Intf_h_MS, Intf_dist, Intf_pwr_dBm, DS_Desired, CP, UMA_notUMI_Model, tx_delta_dBm, min_tx_pwr_dBm, SINR_model, NOMA_Dir)
-% if(~exist('SINR_model', 'var'))
-%     SINR_model = 0;
-% end
-% if(~exist('NOMA_Dir', 'var'))
-%     NOMA_Dir = 0;
-% end
-
 %UNTITLED2 Summary of this function goes here
 %   Detailed explanation goes here
-
+CQI_out = 0;
+Max_SINR_rx_dB_10 = -100;
+min_tx_p_dBm = -100;
+PL_dB = -100;
+INTF_dBm = -100;
+DS_intf_dBm = -100;
+Min_SINR_rx_dB_10 = -100;
+Min_INTF_dBm= -100;
+Min_Spare_dBm= -100;
 %Per TR 38.901, table 7.7.2-3 (normalized) (Normalized Delay, power in dB)
 TDL_C = [0     , -4.4 ; ...
          0.2099, -1.2 ; ...
@@ -235,15 +236,17 @@ for cur_tx_p_dBm = tx_p_dBm:-tx_delta_dBm:min_tx_pwr_dBm %Set minimum
         sum_intf_MP_mW = sum_intf_MP_mW_Orig + sum_intf_self_MP_mW;
     end            
 
+    %Calculate the spare power in dBm.
+    cur_spare_pwr_dBm = 10*log10(10.^((tx_p_dBm) /10) - 10.^(cur_tx_p_dBm / 10));
+    %Prevent restrict the lower bound of cur_spare_pwr_dBm 
+    %to -100 to prevent -Inf dBm.
+    cur_spare_pwr_dBm = max(cur_spare_pwr_dBm,-100);
+    
     if(0 == NOMA_Dir)
         %Signal decrease does not cause interference
         sum_intf_MP_mW_2 = sum_intf_MP_mW;
     else
         %Signal decrease causes interference
-        cur_spare_pwr_dBm = 10*log10(10.^((tx_p_dBm) /10) - 10.^(cur_tx_p_dBm / 10));
-        %Prevent restrict the lower bound of cur_spare_pwr_dBm 
-        %to -100 to prevent -Inf dBm.
-        cur_spare_pwr_dBm = max(cur_spare_pwr_dBm,-100);
         [sum_intf_other_MP_mW] = Calc_DS_Inteference(cur_spare_pwr_dBm, TDL_C_SCALED, CP, PL_tot_sig);
         INTF_add_RX_mw_cur =  10.^((cur_spare_pwr_dBm - PL_tot_sig) / 10);
         sum_intf_MP_mW_2 = INTF_add_RX_mw_cur + sum_intf_MP_mW + sum_intf_other_MP_mW;
@@ -258,14 +261,16 @@ for cur_tx_p_dBm = tx_p_dBm:-tx_delta_dBm:min_tx_pwr_dBm %Set minimum
 
     SINR_rx_dB_10_cur = 10*log10( P_RX_mW_cur / (N0_mW + INTF_P_RX_mW ));
     CQI_out_cur = SelectCQI_BLER10P(SINR_rx_dB_10_cur);
-    if(CQI_out_cur == cur_CQI)
-        min_tx_p_dBm = cur_tx_p_dBm;
-        Min_SINR_rx_dB_10 = SINR_rx_dB_10_cur;
-        Min_INTF_dBm = 10*log10(INTF_P_RX_mW);
-        Min_Spare_dBm = cur_spare_pwr_dBm;
-    else
-        break;
+    
+    if(CQI_out_cur ~= cur_CQI)
+       break;
     end
+    
+    min_tx_p_dBm = cur_tx_p_dBm;
+    Min_SINR_rx_dB_10 = SINR_rx_dB_10_cur;
+    Min_INTF_dBm = 10*log10(INTF_P_RX_mW);
+    Min_Spare_dBm = cur_spare_pwr_dBm;
+    
     if(CQI_out_cur == 0)
         break;
     end

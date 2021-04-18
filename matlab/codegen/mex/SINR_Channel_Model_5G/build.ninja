@@ -1,0 +1,60 @@
+# CompilerName=gcc
+# Mode=optim
+ninja_required_version = 1.3
+
+# Basic folders
+root = .
+builddir = $root/build/glnxa64
+matlabdir = /usr/local/MATLAB/R2020b
+startdir = /home/OD/repos/ProjectSumo/matlab
+
+# Toolchain information
+cc = /usr/bin/gcc
+cxx = g++
+linker = /usr/bin/gcc
+linkerxx = g++
+
+cflags =  -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I "$root" -I "$startdir" -I "$root/interface" -I "$matlabdir/extern/include" -I "." -DMODEL=SINR_Channel_Model_5G_mex -c 
+
+cxxflags =  -fexceptions -fPIC -fno-omit-frame-pointer -pthread -std=c++11 -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c++11 -I "$root" -I "$startdir" -I "$root/interface" -I "$matlabdir/extern/include" -I "." -DMODEL=SINR_Channel_Model_5G_mex -c 
+
+ldflags =  -pthread -Wl,--no-undefined -Wl,-rpath-link,$matlabdir/bin/glnxa64 -shared  -L"$matlabdir/bin/glnxa64" -lmx -lmex -lmat -lm -lstdc++  -o SINR_Channel_Model_5G_mex.mexa64 -lemlrt -lcovrt -lut -lmwmathutil  -Wl,--version-script,SINR_Channel_Model_5G_mex.map
+
+# Build Rules
+rule cc
+    command = $cc $cflags $in -o $out
+
+rule cxx
+    command = $cxx $cxxflags $in -o $out
+
+rule link
+    command = $linker $in $ldflags
+
+rule linkxx
+    command = $linkerxx $in $ldflags
+
+# Build
+build $builddir/SINR_Channel_Model_5G_data.o : cc $root/SINR_Channel_Model_5G_data.c
+build $builddir/rt_nonfinite.o : cc $root/rt_nonfinite.c
+build $builddir/SINR_Channel_Model_5G_initialize.o : cc $root/SINR_Channel_Model_5G_initialize.c
+build $builddir/SINR_Channel_Model_5G_terminate.o : cc $root/SINR_Channel_Model_5G_terminate.c
+build $builddir/SINR_Channel_Model_5G.o : cc $root/SINR_Channel_Model_5G.c
+build $builddir/randn.o : cc $root/randn.c
+build $builddir/rand.o : cc $root/rand.c
+build $builddir/eml_int_forloop_overflow_check.o : cc $root/eml_int_forloop_overflow_check.c
+build $builddir/ifWhileCond.o : cc $root/ifWhileCond.c
+build $builddir/power.o : cc $root/power.c
+build $builddir/scalexpAlloc.o : cc $root/scalexpAlloc.c
+build $builddir/sum.o : cc $root/sum.c
+build $builddir/find.o : cc $root/find.c
+build $builddir/_coder_SINR_Channel_Model_5G_api.o : cc $root/interface/_coder_SINR_Channel_Model_5G_api.c
+build $builddir/_coder_SINR_Channel_Model_5G_mex.o : cc $root/interface/_coder_SINR_Channel_Model_5G_mex.c
+build $builddir/sqrt.o : cc $root/sqrt.c
+build $builddir/exp.o : cc $root/exp.c
+build $builddir/log10.o : cc $root/log10.c
+build $builddir/SINR_Channel_Model_5G_emxutil.o : cc $root/SINR_Channel_Model_5G_emxutil.c
+build $builddir/_coder_SINR_Channel_Model_5G_info.o : cc $root/interface/_coder_SINR_Channel_Model_5G_info.c
+build $builddir/c_mexapi_version.o : cc $matlabdir/extern/version/c_mexapi_version.c
+
+# Link
+build $root/SINR_Channel_Model_5G_mex.mexa64 : link $builddir/SINR_Channel_Model_5G_data.o $builddir/rt_nonfinite.o $builddir/SINR_Channel_Model_5G_initialize.o $builddir/SINR_Channel_Model_5G_terminate.o $builddir/SINR_Channel_Model_5G.o $builddir/randn.o $builddir/rand.o $builddir/eml_int_forloop_overflow_check.o $builddir/ifWhileCond.o $builddir/power.o $builddir/scalexpAlloc.o $builddir/sum.o $builddir/find.o $builddir/_coder_SINR_Channel_Model_5G_api.o $builddir/_coder_SINR_Channel_Model_5G_mex.o $builddir/sqrt.o $builddir/exp.o $builddir/log10.o $builddir/SINR_Channel_Model_5G_emxutil.o $builddir/_coder_SINR_Channel_Model_5G_info.o $builddir/c_mexapi_version.o 

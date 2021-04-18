@@ -1,0 +1,128 @@
+[
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  SINR_Channel_Model_5G_data.c -o build/glnxa64/SINR_Channel_Model_5G_data.o",
+    "file": "SINR_Channel_Model_5G_data.c",
+    "output": "build/glnxa64/SINR_Channel_Model_5G_data.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  rt_nonfinite.c -o build/glnxa64/rt_nonfinite.o",
+    "file": "rt_nonfinite.c",
+    "output": "build/glnxa64/rt_nonfinite.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  SINR_Channel_Model_5G_initialize.c -o build/glnxa64/SINR_Channel_Model_5G_initialize.o",
+    "file": "SINR_Channel_Model_5G_initialize.c",
+    "output": "build/glnxa64/SINR_Channel_Model_5G_initialize.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  SINR_Channel_Model_5G_terminate.c -o build/glnxa64/SINR_Channel_Model_5G_terminate.o",
+    "file": "SINR_Channel_Model_5G_terminate.c",
+    "output": "build/glnxa64/SINR_Channel_Model_5G_terminate.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  SINR_Channel_Model_5G.c -o build/glnxa64/SINR_Channel_Model_5G.o",
+    "file": "SINR_Channel_Model_5G.c",
+    "output": "build/glnxa64/SINR_Channel_Model_5G.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  randn.c -o build/glnxa64/randn.o",
+    "file": "randn.c",
+    "output": "build/glnxa64/randn.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  rand.c -o build/glnxa64/rand.o",
+    "file": "rand.c",
+    "output": "build/glnxa64/rand.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  eml_int_forloop_overflow_check.c -o build/glnxa64/eml_int_forloop_overflow_check.o",
+    "file": "eml_int_forloop_overflow_check.c",
+    "output": "build/glnxa64/eml_int_forloop_overflow_check.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  ifWhileCond.c -o build/glnxa64/ifWhileCond.o",
+    "file": "ifWhileCond.c",
+    "output": "build/glnxa64/ifWhileCond.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  power.c -o build/glnxa64/power.o",
+    "file": "power.c",
+    "output": "build/glnxa64/power.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  scalexpAlloc.c -o build/glnxa64/scalexpAlloc.o",
+    "file": "scalexpAlloc.c",
+    "output": "build/glnxa64/scalexpAlloc.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  sum.c -o build/glnxa64/sum.o",
+    "file": "sum.c",
+    "output": "build/glnxa64/sum.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  find.c -o build/glnxa64/find.o",
+    "file": "find.c",
+    "output": "build/glnxa64/find.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  interface/_coder_SINR_Channel_Model_5G_api.c -o build/glnxa64/_coder_SINR_Channel_Model_5G_api.o",
+    "file": "interface/_coder_SINR_Channel_Model_5G_api.c",
+    "output": "build/glnxa64/_coder_SINR_Channel_Model_5G_api.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  interface/_coder_SINR_Channel_Model_5G_mex.c -o build/glnxa64/_coder_SINR_Channel_Model_5G_mex.o",
+    "file": "interface/_coder_SINR_Channel_Model_5G_mex.c",
+    "output": "build/glnxa64/_coder_SINR_Channel_Model_5G_mex.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  sqrt.c -o build/glnxa64/sqrt.o",
+    "file": "sqrt.c",
+    "output": "build/glnxa64/sqrt.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  exp.c -o build/glnxa64/exp.o",
+    "file": "exp.c",
+    "output": "build/glnxa64/exp.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  log10.c -o build/glnxa64/log10.o",
+    "file": "log10.c",
+    "output": "build/glnxa64/log10.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  SINR_Channel_Model_5G_emxutil.c -o build/glnxa64/SINR_Channel_Model_5G_emxutil.o",
+    "file": "SINR_Channel_Model_5G_emxutil.c",
+    "output": "build/glnxa64/SINR_Channel_Model_5G_emxutil.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  interface/_coder_SINR_Channel_Model_5G_info.c -o build/glnxa64/_coder_SINR_Channel_Model_5G_info.o",
+    "file": "interface/_coder_SINR_Channel_Model_5G_info.c",
+    "output": "build/glnxa64/_coder_SINR_Channel_Model_5G_info.o"
+  },
+  {
+    "directory": "/home/OD/repos/ProjectSumo/matlab/codegen/mex/SINR_Channel_Model_5G",
+    "command": "/usr/bin/gcc -fexceptions -fPIC -fno-omit-frame-pointer -pthread -D_GNU_SOURCE -DMATLAB_MEX_FILE  -O2 -fwrapv -DNDEBUG -std=c99 -I \".\" -I \"/home/OD/repos/ProjectSumo/matlab\" -I \"./interface\" -I \"/usr/local/MATLAB/R2020b/extern/include\" -I \".\" -DMODEL=SINR_Channel_Model_5G_mex -c  /usr/local/MATLAB/R2020b/extern/version/c_mexapi_version.c -o build/glnxa64/c_mexapi_version.o",
+    "file": "/usr/local/MATLAB/R2020b/extern/version/c_mexapi_version.c",
+    "output": "build/glnxa64/c_mexapi_version.o"
+  }
+]

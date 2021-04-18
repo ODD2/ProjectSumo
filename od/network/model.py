@@ -34,6 +34,7 @@ class NetStatusCache:
         for query in query_tuples:
             if query[0].name not in self._map:
                 raise Exception("Error! vehicle should be in the map!!")
+
         # fetch none cached result in parellel
         for query in query_tuples:
             netstat = self._map[query[0].name][query[1].serial][query[2]]
@@ -142,7 +143,7 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         )
 
     # result
-    return GE.MATLAB_ENG.SINR_Channel_Model_5G(
+    return GE.MATLAB_ENG.SINR_Channel_Model_5G_mex(
         float(UE_dist),
         float(h_BS),
         float(h_MS),
