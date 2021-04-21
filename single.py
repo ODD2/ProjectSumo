@@ -203,12 +203,15 @@ def main(interest_config):
     # - terminate global variables
     GV.TerminateSimulationVariables()
 
+    # - terminate matlab engine
+    GE.TerminateMatlabEngine()
+
     return report
 
 
 if __name__ == "__main__":
     cProfile.run(
-        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,False,1.6,17))'
+        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,1.5,123456))'
     )
     # main(
     #     InterestConfig(

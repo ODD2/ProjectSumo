@@ -217,7 +217,14 @@ class BaseStationController:
                         key=(
                             lambda req_rbsize_pair: (
                                 math.floor(req_rbsize_pair[0].starv_time*1000) * max_frame_rb +
-                                min(math.ceil(req_rbsize_pair[0].total_bits/req_rbsize_pair[1]), max_frame_rb)
+                                min(
+                                    math.ceil(
+                                        req_rbsize_pair[0].total_bits / max(
+                                            req_rbsize_pair[1], 1
+                                        )
+                                    ),
+                                    max_frame_rb
+                                )
                             )
                         )
                     )

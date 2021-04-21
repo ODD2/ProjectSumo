@@ -20,16 +20,25 @@ class WeightInterestConfig:
 
 
 class WeightProcess:
-    def __init__(self, conf, process: Process):
-        self.conf = conf
+    def __init__(self, weight_conf, process: Process):
+        self.weight_conf = weight_conf
         self.process = process
+
+    def Start(self):
         self.process.start()
+        print(
+            "{} -> {} seed({})".format(
+                self.process.pid,
+                str(self.weight_conf.interest_config),
+                self.weight_conf.interest_config.rng_seed
+            )
+        )
 
     def getPid(self):
         return self.process.pid
 
     def CheckResult(self):
-        interest = self.conf.interest_config
+        interest = self.weight_conf.interest_config
         return path.isfile(ROOT_DIR + "{}/{}/report.pickle".format(interest.rng_seed, str(interest)))
 
 
@@ -40,7 +49,7 @@ def Worker(s: Semaphore, target, args):
 
 def ParallelSimulationManager(weight_intconfs, limit):
     s = Semaphore(0)
-    weight_process = []
+    weight_process_list = []
 
     while(True):
         remain_weight_intconfs = []
@@ -49,21 +58,22 @@ def ParallelSimulationManager(weight_intconfs, limit):
         # arrange resource to interest configs accroding to its weight
         for weight_intconf in weight_intconfs:
             if(weight_intconf.weight < limit):
-                sleep(1)
-                weight_process.append(
-                    WeightProcess(
-                        weight_intconf,
-                        Process(
-                            target=Worker,
-                            args=(
-                                s,
-                                single.main,
-                                (weight_intconf.interest_config,)
-                            )
+                weight_process = WeightProcess(
+                    weight_intconf,
+                    Process(
+                        target=Worker,
+                        args=(
+                            s,
+                            single.main,
+                            (weight_intconf.interest_config,)
                         )
                     )
                 )
-                limit -= weight_intconf.weight
+                if(not RUN_MISS_ONLY or not weight_process.CheckResult()):
+                    weight_process.Start()
+                    weight_process_list.append(weight_process)
+                    limit -= weight_intconf.weight
+                    sleep(2)
             else:
                 remain_weight_intconfs.append(weight_intconf)
         # if there're no remaining interest configs, begin to wait all process to end.
@@ -78,18 +88,21 @@ def ParallelSimulationManager(weight_intconfs, limit):
             # wait for working process to end
             s.acquire()
             # check which process(es) ended
-            remain_weight_process = []
-            for wp in weight_process:
+            remain_weight_process_list = []
+            for wp in weight_process_list:
                 if(not wp.process.is_alive()):
                     # if process is not alive, meaning it has ended, do result check.
                     if(not wp.CheckResult()):
-                        weight_intconfs.append(wp.conf)
-                    limit += wp.conf.weight
+                        weight_intconfs.append(wp.weight_conf)
+                    # release resource limit
+                    limit += wp.weight_conf.weight
+                    # join process to prevent existance of zombie process
+                    wp.process.join()
                 else:
-                    remain_weight_process.append(wp)
-            weight_process = remain_weight_process
+                    remain_weight_process_list.append(wp)
+            weight_process_list = remain_weight_process_list
 
-    for wp in weight_process:
+    for wp in weight_process_list:
         wp.process.join()
 
 
