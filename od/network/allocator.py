@@ -5,6 +5,12 @@ import od.vars as GV
 import sys
 
 
+# allocation parameters provided by external system.
+class ExternAllocParam:
+    def __init__(self, tval):
+        self.tval = tval
+
+
 # Resource Allocator for OMA
 class ResourceAllocatorOMA:
     # like a 2d rectangle:

@@ -5,13 +5,14 @@ from od.network.appdata import AppData, AppDataHeader
 from od.network.package import NetworkPackage
 from od.network.types import BroadcastObject, BaseStationType, ResourceAllocatorType
 from od.vehicle.request import UploadRequest, ResendRequest
-from od.network.allocator import ResourceAllocatorOMA
+from od.network.allocator import ResourceAllocatorOMA, ExternAllocParam
 from od.misc.types import DebugMsgType
 from od.config import (NET_TS_PER_NET_STEP, NET_RB_BW_REQ_TS,
                        NET_RB_SLOT_SYMBOLS, NET_RB_BW_UNIT,
                        BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
                        BS_TOTAL_BAND, BS_RADIUS,
-                       BS_TRANS_PWR)
+                       BS_TRANS_PWR,
+                       ALLOC_TVAL_CONST)
 import od.engine as GE
 import od.vars as GV
 import math
@@ -47,6 +48,9 @@ class BaseStationController:
         self.sg_brdcst_datas = ([{} for x in QoSLevel])
         for sg in SocialGroup:
             self.sg_brdcst_datas[sg.qos][sg] = []
+
+        # store allocation parameters
+        self.sg_alloc_param = [ExternAllocParam(0) for x in SocialGroup]
 
         # TODO: resend requests
         # self.sg_resend_req = ([[] for x in SocialGroup])
@@ -324,6 +328,8 @@ class BaseStationController:
                 #  or else some vehicle will not receive data.
                 if(netstatus.max_cqi == 0):
                     continue
+                # acces external allocation params
+                ext_alloc_param = self.sg_alloc_param[sg]
                 # create group config for allocator
                 grp_config_qos.append({
                     "gid": float(sg.gid),
@@ -342,7 +348,13 @@ class BaseStationController:
                     ),
                     "rem_bits": float(sg_total_bits),
                     "mem_num": float(members),
+                    "tval": float(ext_alloc_param.tval),
                 })
+                # accumulate time value in corresponding ExternAllocParam for the next allocation process.
+                ext_alloc_param.tval = (
+                    (1-1/ALLOC_TVAL_CONST)*ext_alloc_param.tval +
+                    (sg_total_bits/ALLOC_TVAL_CONST)
+                )
             # if this qos has no group requires allocate, remove it.
             if(len(grp_config_qos) > 0):
                 QoS_GP_CONF.append(grp_config_qos)
