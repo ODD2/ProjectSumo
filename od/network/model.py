@@ -1,7 +1,7 @@
 from od.network.types import BaseStationType
 from od.config import (BS_HEIGHT, BS_TRANS_PWR, BS_FREQ,
-                       BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
-                       BS_UMI_CP_SOCIAL, BS_UMA_CP,
+                       BS_UMA_RB_BW, BS_UMI_RB_BW_QoS,
+                       BS_UMI_CP_QoS, BS_UMA_CP,
                        VEH_HEIGHT)
 from od.social import SocialGroup
 import od.engine as GE
@@ -9,9 +9,8 @@ import od.vars as GV
 import matlab
 import math
 
+
 # Container to save network status
-
-
 class NetStatus:
     def __init__(self):
         self.cached = False
@@ -102,9 +101,9 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         CP = BS_UMA_CP
     elif(bs_ctrlr.type == BaseStationType.UMI):
         # resource block bandwidth
-        bandwidth = BS_UMI_RB_BW_SG[social_group]
+        bandwidth = BS_UMI_RB_BW_QoS[social_group.qos]
         # cyclic prefix
-        CP = BS_UMI_CP_SOCIAL[social_group]
+        CP = BS_UMI_CP_QOS[social_group.qos]
 
     # Height of antenna
     h_BS = BS_HEIGHT[bs_ctrlr.type]

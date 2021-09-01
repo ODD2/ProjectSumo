@@ -1,5 +1,6 @@
+from . import *
 from od.network.types import BaseStationType
-from od.social import SocialGroup
+from od.social import SocialGroup, QoSLevel
 from od.misc.types import DebugMsgType
 from od.event.config import SumoSimEventConf
 import os
@@ -67,8 +68,8 @@ NET_SG_RND_REQ_NUM = {
 # Base Station Settings
 # . base station's total bandwidth
 BS_TOTAL_BAND = {
-    BaseStationType.UMA: 20000000,
-    BaseStationType.UMI: 10000000
+    BaseStationType.UMA: 10000000,
+    BaseStationType.UMI:  5000000
 }
 # . base station's frequency
 BS_FREQ = {
@@ -101,76 +102,18 @@ BS_RADIUS = {
 # . uma base station's cyclic prefix(us)
 BS_UMA_CP = 4.69
 # . umi base station's cyclic prefix(us)
-BS_UMI_CP_SOCIAL = {
-    SocialGroup.CRASH: 2.34,
-    SocialGroup.RCWS: 4.69
+BS_UMI_CP_QoS = {
+    QoSLevel.CRITICAL: 2.34,
+    QoSLevel.GENERAL: 4.69
 }
 # . uma base station's resource block bandwidth
 BS_UMA_RB_BW = 1 * NET_RB_BW_UNIT
 # . umi base station's resource block bandwidth
-BS_UMI_RB_BW_SG = {
-    SocialGroup.CRASH: 2 * NET_RB_BW_UNIT,
-    SocialGroup.RCWS: 1 * NET_RB_BW_UNIT
+BS_UMI_RB_BW_QoS = {
+    QoSLevel.CRITICAL: 2 * NET_RB_BW_UNIT,
+    QoSLevel.GENERAL: 1 * NET_RB_BW_UNIT
 }
-# Base Station Presets
-BS_PRESET = {
-    "UMA-1": {
-        "color": (0, 0, 0, 255),
-        "pos": (160, 100),
-        "img": os.getcwd() + "/wifi.png",
-        "width": 5,
-        "height": 3.9,
-        "type": BaseStationType.UMA,
-    },
-    "UMA-2": {
-        "color": (0, 0, 0, 255),
-        "pos": (450, 330),
-        "img": os.getcwd() + "/wifi.png",
-        "width": 5,
-        "height": 3.9,
-        "type": BaseStationType.UMA,
-    },
-    "UMI-1": {
-        "color": (0, 0, 0, 255),
-        "pos": (127, 217),
-        "img": os.getcwd() + "/wifi.png",
-        "width": 5,
-        "height": 3.9,
-        "type": BaseStationType.UMI,
-    },
-    "UMI-2": {
-        "color": (0, 0, 0, 255),
-        "pos": (52, 145),
-        "img": os.getcwd() + "/wifi.png",
-        "width": 5,
-        "height": 3.9,
-        "type": BaseStationType.UMI,
-    },
-    "UMI-3": {
-        "color": (0, 0, 0, 255),
-        "pos": (315, 395),
-        "img": os.getcwd() + "/wifi.png",
-        "width": 5,
-        "height": 3.9,
-        "type": BaseStationType.UMI,
-    },
-    "UMI-4": {
-        "color": (0, 0, 0, 255),
-        "pos": (270, 50),
-        "img": os.getcwd() + "/wifi.png",
-        "width": 5,
-        "height": 3.9,
-        "type": BaseStationType.UMI,
-    },
-    "UMI-5": {
-        "color": (0, 0, 0, 255),
-        "pos": (525, 95),
-        "img": os.getcwd() + "/wifi.png",
-        "width": 5,
-        "height": 3.9,
-        "type": BaseStationType.UMI,
-    },
-}
+
 
 # Vehicle Settings
 # . vehicle base station subscribe move distance
@@ -215,7 +158,7 @@ if NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS % 1 != 0:
     sys.exit()
 
 # Directory Settings
-ROOT_DIR = "data/nQoS/Tval/"
+ROOT_DIR = "data/   /Tval/"
 
 # Resource Allocation Parameters
 ALLOC_TVAL_CONST = 1000
