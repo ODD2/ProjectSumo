@@ -1,6 +1,6 @@
 from od.misc.interest import InterestConfig
 from od.network.types import ResourceAllocatorType
-from od.config import ROOT_DIR
+from od.env.config import ROOT_DIR
 from od.view import DisplayStatistics
 from multiprocessing import Process, Semaphore
 from threading import Thread

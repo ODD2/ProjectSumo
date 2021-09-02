@@ -13,11 +13,11 @@ import re
 from od.network.controller import BaseStationController
 from od.network.types import BaseStationType, ResourceAllocatorType
 from od.vehicle import VehicleRecorder
-from od.config import (SUMO_SECONDS_PER_STEP, SUMO_SIM_GUI,
-                       SUMO_SIM_STEPS, SUMO_SKIP_STEPS,
-                       BS_PRESET,
-                       NET_STEPS_PER_SUMO_STEP, NET_TS_PER_NET_STEP,
-                       BS_RADIUS_COLOR, BS_RADIUS)
+from od.env.config import (SUMO_SECONDS_PER_STEP, SUMO_SIM_GUI,
+                           SUMO_SIM_STEPS, SUMO_SKIP_STEPS,
+                           BS_PRESET,
+                           NET_STEPS_PER_SUMO_STEP, NET_TS_PER_NET_STEP,
+                           BS_RADIUS_COLOR, BS_RADIUS)
 from od.misc.types import DebugMsgType
 from od.layer import NetObjLayer
 from od.misc.interest import InterestConfig

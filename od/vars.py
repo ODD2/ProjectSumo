@@ -5,7 +5,7 @@ import od.network.types as ont
 import od.misc.siminfo as oms
 import od.misc.logger as oml
 import od.misc.statistic as omss
-import od.config as oc
+import od.env.config as oc
 import od.misc.interest as omi
 import od.event.quake as oeq
 # STD

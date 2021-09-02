@@ -1,6 +1,6 @@
 import os
 import od.vars as GV
-from od.config import DEBUG_MSG_FLAGS
+from od.env.config import DEBUG_MSG_FLAGS
 from od.misc.types import DebugMsgType
 
 

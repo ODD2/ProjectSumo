@@ -2,9 +2,9 @@ from __future__ import annotations
 from numpy import random
 from od.network.types import BaseStationType
 from od.network.appdata import AppData, AppDataHeader
-from od.config import (NET_SG_RND_REQ_SIZE, NET_SECONDS_PER_STEP,
-                       NET_SG_RND_REQ_NUM, NET_SG_RND_REQ_NUM_TIME_SCALE,
-                       NET_TIMEOUT_SECONDS)
+from od.env.config import (NET_SG_RND_REQ_SIZE, NET_SECONDS_PER_STEP,
+                           NET_SG_RND_REQ_NUM, NET_SG_RND_REQ_NUM_TIME_SCALE,
+                           NET_TIMEOUT_SECONDS)
 from od.social import SocialGroup, QoSLevel
 from od.misc.types import DebugMsgType
 import od.vars as GV

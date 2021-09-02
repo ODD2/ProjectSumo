@@ -7,12 +7,12 @@ from od.network.types import BroadcastObject, BaseStationType, ResourceAllocator
 from od.vehicle.request import UploadRequest, ResendRequest
 from od.network.allocator import ResourceAllocatorOMA, ExternAllocParam
 from od.misc.types import DebugMsgType
-from od.config import (NET_TS_PER_NET_STEP, NET_RB_BW_REQ_TS,
-                       NET_RB_SLOT_SYMBOLS, NET_RB_BW_UNIT,
-                       BS_UMA_RB_BW, BS_UMI_RB_BW_SG,
-                       BS_TOTAL_BAND, BS_RADIUS,
-                       BS_TRANS_PWR,
-                       ALLOC_TVAL_CONST)
+from od.env.config import (NET_TS_PER_NET_STEP, NET_RB_BW_REQ_TS,
+                           NET_RB_SLOT_SYMBOLS, NET_RB_BW_UNIT,
+                           BS_UMA_RB_BW, BS_UMI_RB_BW_QoS,
+                           BS_TOTAL_BAND, BS_RADIUS,
+                           BS_TRANS_PWR,
+                           ALLOC_TVAL_CONST)
 import od.engine as GE
 import od.vars as GV
 import math
@@ -549,7 +549,7 @@ class BaseStationController:
         if (self.type == BaseStationType.UMA):
             return BS_UMA_RB_BW
         elif (self.type == BaseStationType.UMI):
-            return BS_UMI_RB_BW_SG[social_group]
+            return BS_UMI_RB_BW_QoS[social_group]
 
 
 # The Central controller of the base station network

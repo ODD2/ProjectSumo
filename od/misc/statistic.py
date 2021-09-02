@@ -1,8 +1,8 @@
 # Custom
 from od.social import SocialGroup
-from od.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
-                       NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS, SUMO_SIM_SECONDS,
-                       SUMO_SKIP_SECONDS, SUMO_NET_WARMUP_SECONDS, EVENT_CONFIGS, NET_TIMEOUT_SECONDS)
+from od.env.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
+                           NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS, SUMO_SIM_SECONDS,
+                           SUMO_SKIP_SECONDS, SUMO_NET_WARMUP_SECONDS, EVENT_CONFIGS, NET_TIMEOUT_SECONDS)
 from od.network.types import BaseStationType
 from od.misc.interest import InterestConfig
 from od.network.appdata import AppDataHeader

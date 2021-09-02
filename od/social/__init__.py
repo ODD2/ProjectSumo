@@ -2,7 +2,7 @@
 from enum import IntEnum
 from od.social.metaclass import SocialGroupMeta, SocialGroupConfig
 from od.network.types import BaseStationType
-from od.config.station import BS_PRESET
+from od.env.station import BS_PRESET
 
 
 class QoSLevel(IntEnum):

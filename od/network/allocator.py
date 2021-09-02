@@ -1,5 +1,5 @@
 # Custom
-from od.config import NET_TS_PER_NET_STEP, NET_RB_BW_UNIT
+from od.env.config import NET_TS_PER_NET_STEP, NET_RB_BW_UNIT
 import od.vars as GV
 # STD
 import sys

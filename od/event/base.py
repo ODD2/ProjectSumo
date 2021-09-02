@@ -1,5 +1,5 @@
 from od.event.config import SumoSimEventConf
-from od.config import SUMO_SECONDS_PER_STEP, SUMO_SKIP_STEPS, SUMO_NET_WARMUP_STEPS
+from od.env.config import SUMO_SECONDS_PER_STEP, SUMO_SKIP_STEPS, SUMO_NET_WARMUP_STEPS
 import od.vars as GV
 
 

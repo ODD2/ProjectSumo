@@ -5,7 +5,7 @@ from od.network.package import NetworkPackage
 from od.network.application import VehicleApplication
 from od.network.appdata import AppData
 from od.social import SocialGroup
-from od.config import VEH_MOVE_BS_CHECK, SUMO_SIM_GUI
+from od.env.config import VEH_MOVE_BS_CHECK, SUMO_SIM_GUI
 from od.misc.types import DebugMsgType
 from traci import vehicle
 import od.vars as GV
