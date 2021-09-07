@@ -5,7 +5,8 @@ import od.network.types as ont
 import od.misc.siminfo as oms
 import od.misc.logger as oml
 import od.misc.statistic as omss
-import od.env.config as oc
+import od.env.config as oec
+import od.env.station as oes
 import od.misc.interest as omi
 import od.event.quake as oeq
 # STD
@@ -55,7 +56,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
 
     # Directories
     rngdir = "{}/".format(interest_config.rng_seed)
-    datadir = oc.ROOT_DIR + rngdir
+    datadir = oec.ROOT_DIR + rngdir
     logdir = datadir + "{}/".format(interest_config)
     statdir = datadir + "{}/".format(interest_config)
 
@@ -88,7 +89,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
 
     # Sumo Simulation Info
     SUMO_SIM_INFO = oms.SumoSimInfo()
-    SUMO_SIM_EVENTS = list(map(lambda x: oeq.EarthQuake(x), oc.EVENT_CONFIGS))
+    SUMO_SIM_EVENTS = list(map(lambda x: oeq.EarthQuake(x), oec.EVENT_CONFIGS))
 
     # Statistsic
     STATISTIC_RECORDER = omss.StatisticRecorder(statdir, interest_config)
@@ -98,7 +99,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
 
     # Base Station Setting
     BS_SETTING = {}
-    for name, setting in oc.BS_PRESET.items():
+    for name, setting in oes.BS_PRESET.items():
         if (setting["type"] == ont.BaseStationType.UMA or
                 (interest_config.req_rsu and
                  setting["type"] == ont.BaseStationType.UMI)):

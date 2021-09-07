@@ -103,7 +103,7 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         # resource block bandwidth
         bandwidth = BS_UMI_RB_BW_QoS[social_group.qos]
         # cyclic prefix
-        CP = BS_UMI_CP_QOS[social_group.qos]
+        CP = BS_UMI_CP_QoS[social_group.qos]
 
     # Height of antenna
     h_BS = BS_HEIGHT[bs_ctrlr.type]

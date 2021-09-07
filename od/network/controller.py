@@ -273,7 +273,6 @@ class BaseStationController:
 
     # arrange downlink resource
     def ArrangeDownlinkResource(self):
-        GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA
         # TODO: Serve Resend Requests
         # Simulation config for matlab optimizer
         SIM_CONF = {
@@ -549,7 +548,7 @@ class BaseStationController:
         if (self.type == BaseStationType.UMA):
             return BS_UMA_RB_BW
         elif (self.type == BaseStationType.UMI):
-            return BS_UMI_RB_BW_QoS[social_group]
+            return BS_UMI_RB_BW_QoS[social_group.qos]
 
 
 # The Central controller of the base station network
