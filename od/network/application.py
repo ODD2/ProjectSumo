@@ -86,9 +86,9 @@ class VehicleApplication(Application):
     def __init__(self, vehicle):
         super().__init__(vehicle)
         # The last time when this vehicle recorder generates upload request
-        self.data_stack = [0 for i in SocialGroup]
+        self.data_stack = [0 for _ in SocialGroup]
         # The social group upload data list
-        self.sg_data_queue = [[] for i in SocialGroup]
+        self.sg_data_queue = [[] for _ in SocialGroup]
         # Package counter for upload req
         self.data_counter = 0
 
@@ -122,7 +122,7 @@ class VehicleApplication(Application):
     def SpawnData(self):
         current_time = GV.SUMO_SIM_INFO.getTime()
         for sg in SocialGroup:
-            # TODO: Make the random poisson be social group dependent
+            # stack data request for data generation.
             self.data_stack[sg] += random.poisson(NET_SG_RND_REQ_NUM[sg] * GV.NET_SG_RND_REQ_MOD[sg]) * \
                 NET_SECONDS_PER_STEP / NET_SG_RND_REQ_NUM_TIME_SCALE
             # generate network app data if the stack has sufficient data.
