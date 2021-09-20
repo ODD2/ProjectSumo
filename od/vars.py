@@ -10,7 +10,7 @@ import od.env.station as oes
 import od.misc.interest as omi
 import od.event.quake as oeq
 # STD
-from od.social import SocialGroup
+from od.social import QoSLevel, SocialGroup
 from numpy import random
 from datetime import datetime
 from threading import Lock
@@ -23,7 +23,7 @@ NET_STATION_CONTROLLER = None
 # - downlink resource allocation method.
 NET_RES_ALLOC_TYPE = None
 # - applcation social group random request modifier.(scale by emergency events)
-NET_SG_RND_REQ_MOD = None
+NET_QoS_RND_REQ_MOD = None
 
 # Logger
 DEBUG = None
@@ -52,7 +52,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     global STATISTIC_RECORDER
     global TRACI_LOCK
     global BS_SETTING
-    global NET_RES_ALLOC_TYPE, NET_SG_RND_REQ_MOD
+    global NET_RES_ALLOC_TYPE, NET_QoS_RND_REQ_MOD
 
     # Directories
     rngdir = "{}/".format(interest_config.rng_seed)
@@ -109,7 +109,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     NET_RES_ALLOC_TYPE = interest_config.res_alloc_type
 
     # modifier
-    NET_SG_RND_REQ_MOD = [1 for _ in SocialGroup]
+    NET_QoS_RND_REQ_MOD = [1 for _ in QoSLevel]
 
 
 def TerminateSimulationVariables():

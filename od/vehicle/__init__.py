@@ -1,10 +1,11 @@
+from random import randint
 from .connection import ConnectionState, ConnectionRecorder, SharedConnection
 from .monitor import NetworkStatusMonitor
 from od.network.types import BaseStationType, LinkType
 from od.network.package import NetworkPackage
 from od.network.application import VehicleApplication
 from od.network.appdata import AppData
-from od.social import SocialGroup
+from od.social import SocialGroup, SocialGroupManager, QoSLevel
 from od.env.config import VEH_MOVE_BS_CHECK, SUMO_SIM_GUI
 from od.misc.types import DebugMsgType
 from traci import vehicle
@@ -27,9 +28,31 @@ class VehicleRecorder():
         # Vehicle Position of Latest Base Station Subscribe Process
         self.chk_pos = (float('Inf'), float('Inf'))
 
+        # Dynamic Vehicle SocialGroups
+        self.social_groups = SocialGroupManager.NewVehicleSocialGroupList()
+
+        # Workaround Method for Visualization of GENERAL SocialGroup
+        if SUMO_SIM_GUI:
+            import random
+            random.seed(hash(self.social_groups[-1]))
+            vehicle.setColor(
+                self.name,
+                (
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                    random.randint(0, 255),
+                    random.randint(0, 255)
+                )
+            )
+
         # Best connectivity base station for each social group, categorized by base station type
-        self.sub_sg_bs = [[None for j in SocialGroup]
-                          for i in BaseStationType]
+        self.sub_sg_bs = [
+            {
+                sg: None
+                for sg in self.social_groups
+            }
+            for i in BaseStationType
+        ]
 
         # Create the vehicle application
         self.app = VehicleApplication(self)
@@ -70,7 +93,7 @@ class VehicleRecorder():
     def CheckSubscribeBSValidity(self):
         invalid_bs = []
         for bs_type in BaseStationType:
-            for social_group in SocialGroup:
+            for social_group in self.social_groups:
                 if (self.sub_sg_bs[bs_type][social_group] == None):
                     continue
                 else:
@@ -125,14 +148,14 @@ class VehicleRecorder():
         # cache net status
         GV.NET_STATUS_CACHE.GetMultiNetStatus([
             (self, ctrl_range[0], sg)
-            for sg in SocialGroup
+            for sg in self.social_groups
             for ctrl_range in bs_near
             if ctrl_range[0] != None
         ])
 
         # update subscription base stations
         for bs_type in BaseStationType:
-            for sg in SocialGroup:
+            for sg in self.social_groups:
                 # get the base station controller
                 bs_ctrl = bs_near[bs_type][0]
                 # there's no base station of this type
@@ -179,7 +202,7 @@ class VehicleRecorder():
 
     # Submit upload requests
     def RequestUploadResource(self):
-        for social_group in SocialGroup:
+        for social_group in self.social_groups:
             if (len(self.app.sg_data_queue[social_group]) > 0):
                 bs_ctrl = self.SelectSocialBS(social_group)
                 if (bs_ctrl != None):
@@ -353,19 +376,12 @@ class VehicleRecorder():
         # 2021/1/11 Scenario:
         # UMIs are spcificly for time critical data, only critical datas select UMI
         # as a type of upload destination. Any other social datas never select a UMI.
-        if (social_group == SocialGroup.CRASH):
+        if (social_group.qos == QoSLevel.CRITICAL):
             return (
                 self.sub_sg_bs[BaseStationType.UMI][social_group] if
                 self.sub_sg_bs[BaseStationType.UMI][social_group] != None
                 else self.sub_sg_bs[BaseStationType.UMA][social_group]
             )
-        # elif (social_group == SocialGroup.RCWS):
-        #     return (
-        #         self.sub_sg_bs[BaseStationType.UMI][social_group] if
-        #         (self.sub_sg_bs[BaseStationType.UMI][social_group] !=
-        #          None and len(self.app.sg_data_queue[SocialGroup.CRASH]) == 0)
-        #         else self.sub_sg_bs[BaseStationType.UMA][social_group]
-        #     )
         else:
             return self.sub_sg_bs[BaseStationType.UMA][social_group]
 
@@ -407,7 +423,7 @@ class VehicleRecorder():
     def Leave(self):
         # UnSubscribe Any Base Station
         for i in BaseStationType:
-            for j in SocialGroup:
+            for j in self.social_groups:
                 self.UnsubscribeBS(i, j)
         # Clear connection recorders
         for name in self.con_state:

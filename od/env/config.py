@@ -10,16 +10,16 @@ import math
 # System Parameters
 DEBUG_MSG_FLAGS = (
     # DebugMsgType.NONE
-    # DebugMsgType.NET_PKG_INFO |
-    # DebugMsgType.NET_APPDATA_INFO |
-    DebugMsgType.NET_ALLOC_INFO
-    # DebugMsgType.SUMO_VEH_INFO
+    DebugMsgType.NET_PKG_INFO |
+    DebugMsgType.NET_APPDATA_INFO |
+    DebugMsgType.NET_ALLOC_INFO |
+    DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = False
+SUMO_SIM_GUI = True
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 1
+SUMO_SIM_TIME_SCALER = 100
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . total traffic running seconds before network simulation start
@@ -49,9 +49,9 @@ NET_RB_BW_UNIT = 180000
 NET_RB_BW_REQ_TS = {2 * NET_RB_BW_UNIT: 1,
                     1 * NET_RB_BW_UNIT: 2}
 # . social group random request size(bytes).
-NET_SG_RND_REQ_SIZE = {
-    SocialGroup.CRASH: [300, 1100],
-    SocialGroup.RCWS: [64, 2048],
+NET_QoS_RND_REQ_SIZE = {
+    QoSLevel.CRITICAL: [300, 1100],
+    QoSLevel.GENERAL: [64, 2048],
 }
 # . social group random request amount(Packages/second)
 #   For general, referencing the recommened birate for streaming at 720p 60fps.(2200Kbps~6000Kbps)
@@ -59,11 +59,17 @@ NET_SG_RND_REQ_SIZE = {
 #   the calculation would be: ((2250+6000)*1024/2) / ((64+2048)*8/2)
 #
 #   For emergency group, the value is preset to an average of 64Kbps.
-NET_SG_RND_REQ_NUM_TIME_SCALE = 1  # seconds
-NET_SG_RND_REQ_NUM = {
-    SocialGroup.CRASH: int(round((64*1024) / ((300+1100)*8/2))),
-    SocialGroup.RCWS: int(round((500*1024) / ((64+2048)*8/2)))
+NET_QoS_RND_REQ_NUM_TIME_SCALE = 1  # seconds
+NET_QoS_RND_REQ_NUM = {
+    QoSLevel.CRITICAL: int(round((64*1024) / ((300+1100)*8/2))),
+    QoSLevel.GENERAL: int(round((500*1024) / ((64+2048)*8/2)))
 }
+# . maximum number of members that belongs to the same social group of QoS level.
+NET_QoS_SG_MAX_MEMBER = {
+    QoSLevel.CRITICAL: 0,
+    QoSLevel.GENERAL: 3,
+}
+
 
 # Base Station Settings
 # . base station's total bandwidth
@@ -158,7 +164,7 @@ if NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS % 1 != 0:
     sys.exit()
 
 # Directory Settings
-ROOT_DIR = "data/   /Tval/"
+ROOT_DIR = "data/DSG/"
 
 # Resource Allocation Parameters
 ALLOC_TVAL_CONST = 1000

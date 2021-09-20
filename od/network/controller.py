@@ -1,9 +1,11 @@
+from od import social
 from od.social import SocialGroup, QoSLevel
 from od.network.types import LinkType
-from od.network.application import NetworkCoreApplication, BaseStationApplication
+from od.network.application import BaseStationApplication
 from od.network.appdata import AppData, AppDataHeader
 from od.network.package import NetworkPackage
-from od.network.types import BroadcastObject, BaseStationType, ResourceAllocatorType
+from od.network.types import BaseStationType, ResourceAllocatorType
+from od.network.misc import CastObject
 from od.vehicle.request import UploadRequest, ResendRequest
 from od.network.allocator import ResourceAllocatorOMA, ExternAllocParam
 from od.misc.types import DebugMsgType
@@ -34,23 +36,20 @@ class BaseStationController:
         self.app = BaseStationApplication(self)
 
         # Vehicles that've subscribed to specific social groups
-        self.sg_sub_vehs = [[] for i in SocialGroup]
+        # Map(SocialGroup:List(VehicleRecorders))
+        self.sg_sub_vehs = {}
 
         # Upload/Download packages that're currently transmitting
         self.pkg_in_proc = [[] for i in LinkType]
 
         # upload requests
-        self.sg_upload_req = ([{} for x in QoSLevel])
-        for sg in SocialGroup:
-            self.sg_upload_req[sg.qos][sg] = []
+        self.sg_upload_req = {}
 
         # broadcast reqeusts
-        self.sg_brdcst_datas = ([{} for x in QoSLevel])
-        for sg in SocialGroup:
-            self.sg_brdcst_datas[sg.qos][sg] = []
+        self.sg_send_req = {}
 
         # store allocation parameters
-        self.sg_alloc_param = [ExternAllocParam(0) for x in SocialGroup]
+        self.sg_alloc_param = {}
 
         # TODO: resend requests
         # self.sg_resend_req = ([[] for x in SocialGroup])
@@ -105,14 +104,16 @@ class BaseStationController:
         if(len(self.pkg_in_proc[LinkType.DOWNLINK]) == 0):
             return
         # Define variables
-        stats_appdata_trans_beg = [set() for _ in SocialGroup]  # statistic
-        stats_appdata_trans_end = [set() for _ in SocialGroup]  # statistic
+        stats_appdata_trans_beg = {}  # statistic
+        stats_appdata_trans_end = {}  # statistic
         pkg_in_proc = []
         # Download
         for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
             # package end transmission
             if(timeslot == pkg.end_ts):
                 # record the application data that ended transmission at current timeslot
+                if(pkg.social_group not in stats_appdata_trans_end):
+                    stats_appdata_trans_end[pkg.social_group] = set()
                 stats_appdata_trans_end[pkg.social_group].update(
                     list(map(
                         lambda x: x.header,
@@ -130,6 +131,8 @@ class BaseStationController:
                     DebugMsgType.NET_PKG_INFO
                 )
                 # record the application data that ended transmission at current timeslot
+                if(pkg.social_group not in stats_appdata_trans_beg):
+                    stats_appdata_trans_beg[pkg.social_group] = set()
                 stats_appdata_trans_beg[pkg.social_group].update(
                     list(map(
                         lambda x: x.header,
@@ -142,23 +145,25 @@ class BaseStationController:
                 pkg_in_proc.append(pkg)
         # Remove packages sent
         self.pkg_in_proc[LinkType.DOWNLINK] = pkg_in_proc
+
         # Statistic
-        for sg in SocialGroup:
-            # record transmission begin after recording transmission end,
-            # the sequence matters!!
-            if(len(stats_appdata_trans_end[sg]) > 0):
+        # record transmission begin after recording transmission end,
+        # the sequence matters!!
+        for sg, appdatas in stats_appdata_trans_end.items():
+            if(len(appdatas) > 0):
                 GV.STATISTIC_RECORDER.BaseStationAppdataEndTX(
-                    sg, self, stats_appdata_trans_end[sg]
+                    sg, self, appdatas
                 )
                 GV.STATISTIC_RECORDER.BaseStationAppdataEnterTXQ(
-                    sg, self, stats_appdata_trans_end[sg]
+                    sg, self, appdatas
                 )
-            if(len(stats_appdata_trans_beg[sg]) > 0):
+        for sg, appdatas in stats_appdata_trans_beg.items():
+            if(len(appdatas) > 0):
                 GV.STATISTIC_RECORDER.BaseStationAppdataExitTXQ(
-                    sg, self, stats_appdata_trans_beg[sg]
+                    sg, self, appdatas
                 )
                 GV.STATISTIC_RECORDER.BaseStationAppdataStartTX(
-                    sg, self, stats_appdata_trans_beg[sg]
+                    sg, self, appdatas
                 )
 
     # process delivered packages
@@ -168,7 +173,9 @@ class BaseStationController:
 
     # Function called by VehicleRecorder to submit upload requests to this base station
     def ReceiveUploadRequest(self, sender, social_group: SocialGroup, total_bits: int, starv_time: float):
-        self.sg_upload_req[social_group.qos][social_group].append(
+        if(social_group not in self.sg_upload_req):
+            self.sg_upload_req[social_group] = []
+        self.sg_upload_req[social_group].append(
             UploadRequest(sender, total_bits, starv_time)
         )
 
@@ -183,9 +190,9 @@ class BaseStationController:
         time_ms = GV.SUMO_SIM_INFO.getTime()
         # Serve requests
         for qos in QoSLevel:
-            for sg in self.sg_upload_req[qos].keys():
+            for sg in [sg for sg in self.sg_upload_req.keys() if sg.qos == qos]:
                 # Check if there exists pending requests
-                if(len(self.sg_upload_req[qos][sg]) == 0):
+                if(len(self.sg_upload_req[sg]) == 0):
                     continue
                 # required resource block bandwidth for social group msg
                 req_bw_per_rb = self.RequiredBandwidth(sg)
@@ -201,7 +208,7 @@ class BaseStationController:
                     # fetch resource block trans size for every request
                     req_rbsize_pairs = []
                     # collect the resource block size for all requests
-                    for req in self.sg_upload_req[qos][sg]:
+                    for req in self.sg_upload_req[sg]:
                         rbsize = GE.MATLAB_ENG.GetThroughputPerRB(
                             float(
                                 GV.NET_STATUS_CACHE.GetNetStatus(
@@ -269,7 +276,7 @@ class BaseStationController:
                         if rb_res_lack:
                             break
                 # Clear requests
-                self.sg_upload_req[qos][sg].clear()
+                self.sg_upload_req[sg].clear()
 
     # arrange downlink resource
     def ArrangeDownlinkResource(self):
@@ -287,19 +294,19 @@ class BaseStationController:
             # a group config type in python
             grp_config_qos = []
             # create group config for this qos
-            for sg in self.sg_brdcst_datas[qos].keys():
+            for sg in [sg for sg in self.sg_send_req.keys() if sg.qos == qos]:
                 # ignore if nothing in queue
-                if(len(self.sg_brdcst_datas[qos][sg]) == 0):
+                if(len(self.sg_send_req[sg]) == 0):
                     continue
                 # the members of the social group
-                members = len(self.sg_sub_vehs[sg])
+                members = len(self.sg_sub_vehs[sg]) if sg in self.sg_sub_vehs else 0
                 # required resource block bandwidth for this social group msg
                 sg_rb_bw = self.RequiredBandwidth(sg)
                 # required timeslots for using this bandwidth
                 sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
                 # calculate the total bits for this social group to send all its broadcast appdatas
                 sg_total_bits = sum(
-                    data.bits for data in self.sg_brdcst_datas[qos][sg]
+                    data.bits for data in self.sg_send_req[sg]
                 )
                 # if this base station has no subscribers or data to broadcast in this social group
                 if(members == 0 or sg_total_bits == 0):
@@ -309,12 +316,12 @@ class BaseStationController:
                         self,
                         list(map(
                             lambda x: x.header,
-                            self.sg_brdcst_datas[qos][sg]
+                            self.sg_send_req[sg]
                         ))
                     )
                     # clear all broadcast appdatas of this social group
                     # cause there's no receiver
-                    self.sg_brdcst_datas[qos][sg].clear()
+                    self.sg_send_req[sg].clear()
                     continue
 
                 # find the lowest cqi in the social group subscribers
@@ -388,7 +395,7 @@ class BaseStationController:
                 (BS_TOTAL_BAND[self.type]*0.9 / sg_rb_bw)*933 *
                 (NET_TS_PER_NET_STEP/sg_rb_ts)
             )
-            self.sg_brdcst_datas[sg.qos][sg].sort(
+            self.sg_send_req[sg].sort(
                 key=lambda appdata: (
                     (math.floor(appdata.header.at * 1000) * max_frame_bits) +
                     min(appdata.bits, max_frame_bits)
@@ -416,7 +423,7 @@ class BaseStationController:
                 deliver_index = 0
                 # the total number of appdatas waiting to deliver
                 appdata_num = len(
-                    self.sg_brdcst_datas[sg.qos][sg]
+                    self.sg_send_req[sg]
                 )
                 # ignore if no appdata allocate resource.
                 if(appdata_num == 0):
@@ -424,7 +431,7 @@ class BaseStationController:
                 # the appdatas this group cast package is going to deliver
                 package_appdatas = []
                 while(deliver_index < appdata_num and remain_bits > 0):
-                    appdata = self.sg_brdcst_datas[sg.qos][sg][deliver_index]
+                    appdata = self.sg_send_req[sg][deliver_index]
                     # calculate the total bits that could actually transmit
                     trans_bits = appdata.bits if appdata.bits < remain_bits else remain_bits
                     # add data into package
@@ -451,14 +458,14 @@ class BaseStationController:
                             [appdata.header]
                         )
                 # collection done, remove appdatas that have been delivered
-                self.sg_brdcst_datas[sg.qos][sg] = self.sg_brdcst_datas[sg.qos][sg][deliver_index:]
+                self.sg_send_req[sg] = self.sg_send_req[sg][deliver_index:]
                 # ignore if no appdata data to package.
                 if(len(package_appdatas) == 0):
                     continue
                 # create package
                 package = self.CreatePackage(
                     self,
-                    BroadcastObject,
+                    CastObject(sg),
                     sg,
                     total_bits-remain_bits,
                     package_appdatas,
@@ -504,11 +511,12 @@ class BaseStationController:
         self.pkg_in_proc[LinkType.UPLINK].append(package)
 
     # Function called by NetworkController/BaseStationApplication to propagate appdata.
-    def ReceivePropagation(self, sender, social_group: SocialGroup, header: AppDataHeader):
-        if(social_group not in self.sg_brdcst_datas[social_group.qos]):
-            self.sg_brdcst_datas[social_group.qos][social_group] = []
+    def Propagate(self, sender, social_group: SocialGroup, header: AppDataHeader):
+        if(social_group not in self.sg_send_req):
+            self.sg_send_req[social_group] = []
+            self.sg_alloc_param[social_group] = ExternAllocParam(0)
 
-        self.sg_brdcst_datas[social_group.qos][social_group].append(
+        self.sg_send_req[social_group].append(
             AppData(
                 header,
                 header.total_bits,
@@ -522,6 +530,8 @@ class BaseStationController:
 
     # Function called by VehicleRecorder to subscribe to a specific social group on this base station
     def VehicleSubscribe(self, vehicle, social_group: SocialGroup):
+        if(social_group not in self.sg_sub_vehs):
+            self.sg_sub_vehs[social_group] = []
         if (vehicle not in self.sg_sub_vehs[social_group]):
             self.sg_sub_vehs[social_group].append(vehicle)
         else:
@@ -534,6 +544,9 @@ class BaseStationController:
 
     # Function called by VehicleRecorder to unsubscribe to a specific social group on this base station
     def VehicleUnsubscribe(self, vehicle, social_group: SocialGroup):
+        if(social_group not in self.sg_sub_vehs):
+            # vehicle should create social group during subscription.
+            raise Exception("VehicleUnsubscribe: SocialGroup not found.")
         if (vehicle in self.sg_sub_vehs[social_group]):
             self.sg_sub_vehs[social_group].remove(vehicle)
         else:
@@ -564,32 +577,31 @@ class NetworkCoreController:
             raise Exception("Try to Map Non-UMI to Approximate UMAs")
         approx_bs = None
         distance = float("Inf")
-        for uma_bs in GV.NET_STATION_CONTROLLER:
-            if(uma_bs.type == BaseStationType.UMI):
-                continue
+        for uma_bs in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
             d = pow((uma_bs.pos[0] - umi_bs.pos[0])**2+(uma_bs.pos[1] - umi_bs.pos[1])**2, 0.5)
             if(d < distance):
                 approx_bs = uma_bs
         return approx_bs
 
     # called by UMIs to propagate critical data to UMA as general data.
-    def ReceivePropagation(self, sender, social_group: SocialGroup, header: AppDataHeader):
-        if(not sender.type == BaseStationType.UMI) or (not social_group == SocialGroup.CRASH):
+    def Propagate(self, sender, social_group: SocialGroup, header: AppDataHeader):
+        if(sender.type == BaseStationType.UMI and social_group.qos == QoSLevel.CRITICAL):
+            # find the approximity uma for umi
+            if(sender not in self.umi_approx_uma):
+                self.umi_approx_uma[sender] = self.MapApproximityUMA(sender)
+            # propagate only to the uma closest to the sender umi.
+            self.umi_approx_uma[sender].Propagate(self, social_group, header)
+        elif(sender.type == BaseStationType.UMA and social_group.qos == QoSLevel.GENERAL):
+            for uma_bs in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
+                uma_bs.Propagate(self, social_group, header)
+        else:
             raise Exception("Core receive propagate from Non-UMI base station")
-        # start data propagation
-        self.StartPropagation(sender, social_group, header)
 
     # def PackageDelivered(self, package: NetworkPackage):
     #     for appdata in package.appdatas:
     #         self.app.RecvData(package.social_group, appdata)
 
-    def StartPropagation(self, sender, social_group: SocialGroup, header: AppDataHeader):
-        # find the approximity uma for umi
-        if(sender not in self.umi_approx_uma):
-            self.umi_approx_uma[sender] = self.MapApproximityUMA(sender)
-        # propagate only to the uma closest to the sender umi.
-        self.umi_approx_uma[sender].ReceivePropagation(self, social_group, header)
-
-        # Propagate all data to UMA as road condition warning(RCW) data.
-        # for bs_ctrlr in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
-        #     bs_ctrlr.ReceivePropagation(SocialGroup.RCWS, header)
+    # def StartPropagation(self, sender, social_group: SocialGroup, header: AppDataHeader):
+    #     # Propagate all data to UMA as road condition warning(RCW) data.
+    #     for bs_ctrlr in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
+    #         bs_ctrlr.Propagate(SocialGroup.RCWS, header)

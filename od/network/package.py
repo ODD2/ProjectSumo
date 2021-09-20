@@ -1,3 +1,4 @@
+from typing import List
 from od.social import SocialGroup
 from od.network.appdata import AppData
 
@@ -7,7 +8,7 @@ class NetworkPackage:
                  src, dest,
                  social_group: SocialGroup,
                  bits: int,
-                 appdatas: [AppData],
+                 appdatas: List[AppData],
                  trans_ts: int,
                  offset_ts: int):
         self.src = src

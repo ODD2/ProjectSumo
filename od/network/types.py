@@ -17,8 +17,3 @@ class BaseStationType(IntEnum):
 class ResourceAllocatorType(IntEnum):
     OMA = 0,
     NOMA_OPT = 1,
-
-
-# Dummy Broadcast object class
-class BroadcastObject():
-    name = 'broadcast'

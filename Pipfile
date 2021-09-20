@@ -9,6 +9,7 @@ importlib = "*"
 traci = "*"
 jupyter = "*"
 matplotlib = "*"
+pandas = "*"
 
 [dev-packages]
 pylint = "*"

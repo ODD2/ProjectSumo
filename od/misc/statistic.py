@@ -1,5 +1,5 @@
 # Custom
-from od.social import SocialGroup
+from od.social import QoSLevel, SocialGroup
 from od.env.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
                            NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS, SUMO_SIM_SECONDS,
                            SUMO_SKIP_SECONDS, SUMO_NET_WARMUP_SECONDS, EVENT_CONFIGS, NET_TIMEOUT_SECONDS)
@@ -40,7 +40,8 @@ class StatisticRecorder:
             os.makedirs(dirpath)
         self.dirpath = dirpath
         self.interest_config = interest_config
-        self.sg_header = [{} for _ in SocialGroup]
+        self.sg_header = {}
+        self.social_group = []
         self.interval = (
             SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + min(map(lambda x: x.ofs_sec, EVENT_CONFIGS)),
             SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + max(map(lambda x: x.ofs_sec+x.dur_sec, EVENT_CONFIGS))
@@ -51,6 +52,8 @@ class StatisticRecorder:
         return self.sg_header[sg][header.id]
 
     def CreateIfAbsent(self, sg, header):
+        if(sg not in self.sg_header):
+            self.sg_header[sg] = {}
         if(header.id not in self.sg_header[sg]):
             self.sg_header[sg][header.id] = AppdataStatistic(header)
 
@@ -126,31 +129,49 @@ class StatisticRecorder:
     # extract specific network traffic from self.sg_headers
     def ExtractNetworkTraffic(self, nft):
         if(nft == NetFlowType.CRITICAL):
-            return self.sg_header[SocialGroup.CRASH]
+            int_records = {}
+            for sg in [
+                sg for sg in self.sg_header.keys()
+                if sg.qos == QoSLevel.CRITICAL
+            ]:
+                for header, value in self.sg_header[sg].items():
+                    if(header in int_records):
+                        raise Exception("Appdata Duplicate in different Critical SocialGroups")
+                    int_records[header] = value
+
+            return int_records
         elif(nft == NetFlowType.GENERAL):
-            return self.sg_header[SocialGroup.RCWS]
+            int_records = {}
+            for sg in [
+                sg for sg in self.sg_header.keys()
+                if sg.qos == QoSLevel.GENERAL
+            ]:
+                for header, value in self.sg_header[sg].items():
+                    if(header in int_records):
+                        raise Exception("Appdata Duplicate in different General SocialGroups")
+                    int_records[header] = value
+
+            return int_records
         elif(nft == NetFlowType.C2G):
-            umi_bs_ctrlrs = [x for x in GV.NET_STATION_CONTROLLER if x.type == BaseStationType.UMI]
-            flows = {}
-            for header, record in self.sg_header[SocialGroup.CRASH].items():
-                for bs_ctrlr in umi_bs_ctrlrs:
-                    if record.time_bs_serv[bs_ctrlr] > 0:
-                        if(header in self.sg_header[SocialGroup.RCWS]):
-                            flows[header] = self.sg_header[SocialGroup.RCWS][header]
-            return flows
+            crt_records = self.ExtractNetworkTraffic(NetFlowType.CRITICAL)
+            gen_records = self.ExtractNetworkTraffic(NetFlowType.GENERAL)
+            c2g_records = crt_records.copy()
+
+            for header in crt_records.keys():
+                if(header not in gen_records):
+                    c2g_records.pop(header)
+
+            return c2g_records
         elif(nft == NetFlowType.NC2G):
-            umi_bs_ctrlrs = [x for x in GV.NET_STATION_CONTROLLER if x.type == BaseStationType.UMI]
-            nc2g_flows = {}
-            g_set = set(self.sg_header[SocialGroup.RCWS])
-            c2g_set = set()
-            for header, record in self.sg_header[SocialGroup.CRASH].items():
-                for bs_ctrlr in umi_bs_ctrlrs:
-                    if record.time_bs_serv[bs_ctrlr] > 0:
-                        if(header in self.sg_header[SocialGroup.RCWS]):
-                            c2g_set.add(header)
-            for header in (g_set - c2g_set):
-                nc2g_flows[header] = self.sg_header[SocialGroup.RCWS][header]
-            return nc2g_flows
+            gen_records = self.ExtractNetworkTraffic(NetFlowType.GENERAL)
+            crt_records = self.ExtractNetworkTraffic(NetFlowType.CRITICAL)
+            nc2g_records = gen_records.copy()
+
+            for header in gen_records.keys():
+                if(header in crt_records):
+                    nc2g_records.pop(header)
+
+            return nc2g_records
         return {}
 
     # create report for network traffics.
@@ -534,9 +555,9 @@ class StatisticRecorder:
 
     def BaseStationSocialGroupResourceUsageReport(self):
         sg_stats = {}
-        sg_bs_type_data = [[0 for _ in SocialGroup]
+        sg_bs_type_data = [[0 for _ in self.social_group]
                            for _ in BaseStationType]
-        for sg in SocialGroup:
+        for sg in self.social_group:
             for record in self.sg_header[sg].values():
                 for bs in GV.NET_STATION_CONTROLLER:
                     if(record.time_bs_serv[bs] > 0):
@@ -544,9 +565,9 @@ class StatisticRecorder:
 
         for bs_type in BaseStationType:
             bs_type_total_data = max(sum(sg_bs_type_data[bs_type]), 1)
-            bs_type_sg_res_rate = [0 for _ in SocialGroup]
+            bs_type_sg_res_rate = [0 for _ in self.social_group]
             GV.RESULT.Doc("====={}=====".format(bs_type.name))
-            for sg in SocialGroup:
+            for sg in self.social_group:
                 bs_type_sg_res_rate[sg] = (
                     sg_bs_type_data[bs_type][sg]/bs_type_total_data
                 )
@@ -562,12 +583,12 @@ class StatisticRecorder:
 
     def BaseStationSocailGroupDataDropRateReport(self):
         sg_stats = {}
-        sg_bs_type_recv = [[0 for _ in SocialGroup]
+        sg_bs_type_recv = [[0 for _ in self.social_group]
                            for _ in BaseStationType]
-        sg_bs_type_drop = [[0 for _ in SocialGroup]
+        sg_bs_type_drop = [[0 for _ in self.social_group]
                            for _ in BaseStationType]
         GV.STATISTIC.Doc("=====BaseStationSocailGroupDataDropRateReport=====")
-        for sg in SocialGroup:
+        for sg in self.social_group:
             for record in self.sg_header[sg].values():
                 for bs in GV.NET_STATION_CONTROLLER:
                     if(len(record.time_bs_txq[bs]) > 0):
@@ -577,8 +598,8 @@ class StatisticRecorder:
 
         for bs_type in BaseStationType:
             GV.RESULT.Doc("====={}=====".format(bs_type.name))
-            bs_type_sg_drop_rate = [0 for _ in SocialGroup]
-            for sg in SocialGroup:
+            bs_type_sg_drop_rate = [0 for _ in self.social_group]
+            for sg in self.social_group:
                 bs_type_sg_drop_rate[sg] = (
                     sg_bs_type_drop[bs_type][sg] /
                     max(sg_bs_type_recv[bs_type][sg], 1)
@@ -593,8 +614,16 @@ class StatisticRecorder:
         return sg_stats
 
     def Preprocess(self):
+        # save the whole social group generated during simulation
+        self.social_group = [sg for sg in SocialGroup]
+
+        # create empty dataset for social groups without data during simulation.
+        for sg in self.social_group:
+            if(sg not in self.sg_header):
+                self.sg_header[sg] = {}
+
         # extract only appdata that're in interest intervals.
-        for sg in SocialGroup:
+        for sg in self.social_group:
             self.sg_header[sg] = {
                 header: record
                 for header, record in self.sg_header[sg].items()
@@ -603,7 +632,7 @@ class StatisticRecorder:
             }
 
         # preprocess txq timing adjustments
-        for sg in SocialGroup:
+        for sg in self.social_group:
             for record in self.sg_header[sg].values():
                 for serial in GV.NET_STATION_CONTROLLER:
                     if(len(record.time_bs_txq[serial]) > 0):
@@ -628,7 +657,7 @@ class StatisticRecorder:
                                 record.time_bs_txq[serial][-1][1] = SUMO_TOTAL_SECONDS
 
         # preprocess overtimes
-        for sg in SocialGroup:
+        for sg in self.social_group:
             for record in self.sg_header[sg].values():
                 # ignore appdata that're flagged overtime.
                 if(record.is_src_ot):

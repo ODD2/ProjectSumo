@@ -199,6 +199,7 @@ def main(interest_config):
 
     # - statistic report
     report = GV.STATISTIC_RECORDER.Report(interest_config)
+    # report = {}
 
     # - terminate global variables
     GV.TerminateSimulationVariables()
@@ -211,7 +212,7 @@ def main(interest_config):
 
 if __name__ == "__main__":
     cProfile.run(
-        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,1.0,123456))'
+        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,0.1,123456))'
     )
     # main(
     #     InterestConfig(

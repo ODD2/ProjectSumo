@@ -36,6 +36,9 @@ class NetStatusCache:
 
         # fetch none cached result in parellel
         for query in query_tuples:
+            # dynamically allocate NetStatus for difference vehicle social groups.
+            if(query[2] not in self._map[query[0].name][query[1].serial]):
+                self._map[query[0].name][query[1].serial][query[2]] = NetStatus()
             netstat = self._map[query[0].name][query[1].serial][query[2]]
             if (not netstat.cached):
                 netstat_futures.append(
@@ -76,13 +79,12 @@ class NetStatusCache:
             self._map.pop(veh_id)
         # add new vehicles
         for veh_id in GV.SUMO_SIM_INFO.new_veh_ids:
-            self._map[veh_id] = [[NetStatus() for sg in SocialGroup]
-                                 for i in range(len(GV.NET_STATION_CONTROLLER))]
+            self._map[veh_id] = [{} for _ in GV.NET_STATION_CONTROLLER]
         # initialize
-        for veh_status in self._map.values():
-            for bs in GV.NET_STATION_CONTROLLER:
-                for sg in SocialGroup:
-                    veh_status[bs][sg].cached = False
+        for veh_total_status in self._map.values():
+            for veh_bs_status in veh_total_status:
+                for veh_bs_sg_status in veh_bs_status.values():
+                    veh_bs_sg_status.cached = False
 
 
 # (VehicleRecorder, BaseStationController, SocialGroup)

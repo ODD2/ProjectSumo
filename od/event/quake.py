@@ -1,4 +1,4 @@
-from od.social import SocialGroup
+from od.social import QoSLevel, SocialGroup
 from od.event.base import SumoSimEvent
 from od.event.config import SumoSimEventConf
 import od.vars as GV
@@ -11,7 +11,7 @@ class EarthQuake(SumoSimEvent):
         self.sg_crit_net_req_mod = 5
 
     def Begin(self):
-        GV.NET_SG_RND_REQ_MOD[SocialGroup.CRASH] *= self.sg_crit_net_req_mod
+        GV.NET_QoS_RND_REQ_MOD[QoSLevel.CRITICAL] *= self.sg_crit_net_req_mod
 
     def End(self):
-        GV.NET_SG_RND_REQ_MOD[SocialGroup.CRASH] /= self.sg_crit_net_req_mod
+        GV.NET_QoS_RND_REQ_MOD[QoSLevel.CRITICAL] /= self.sg_crit_net_req_mod
