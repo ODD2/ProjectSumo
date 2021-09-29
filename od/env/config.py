@@ -10,16 +10,16 @@ import math
 # System Parameters
 DEBUG_MSG_FLAGS = (
     # DebugMsgType.NONE
-    DebugMsgType.NET_PKG_INFO |
-    DebugMsgType.NET_APPDATA_INFO |
-    DebugMsgType.NET_ALLOC_INFO |
-    DebugMsgType.SUMO_VEH_INFO
+    # DebugMsgType.NET_PKG_INFO |
+    # DebugMsgType.NET_APPDATA_INFO |
+    DebugMsgType.NET_ALLOC_INFO
+    # DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings
 # . simulation sumo type
-SUMO_SIM_GUI = True
+SUMO_SIM_GUI = False
 # . simulation scaler
-SUMO_SIM_TIME_SCALER = 100
+SUMO_SIM_TIME_SCALER = 1
 # . seconds per sumo simulation step
 SUMO_SECONDS_PER_STEP = 0.1
 # . total traffic running seconds before network simulation start
@@ -67,7 +67,7 @@ NET_QoS_RND_REQ_NUM = {
 # . maximum number of members that belongs to the same social group of QoS level.
 NET_QoS_SG_MAX_MEMBER = {
     QoSLevel.CRITICAL: 0,
-    QoSLevel.GENERAL: 3,
+    QoSLevel.GENERAL: 20,
 }
 
 
@@ -164,7 +164,7 @@ if NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS % 1 != 0:
     sys.exit()
 
 # Directory Settings
-ROOT_DIR = "data/DSG/"
+ROOT_DIR = "data/Tval/"
 
 # Resource Allocation Parameters
 ALLOC_TVAL_CONST = 1000

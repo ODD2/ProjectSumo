@@ -38,6 +38,7 @@ class StatisticRecorder:
     def __init__(self, dirpath, interest_config: InterestConfig):
         if not os.path.isdir(dirpath):
             os.makedirs(dirpath)
+        self.sys_veh_num = 0
         self.dirpath = dirpath
         self.interest_config = interest_config
         self.sg_header = {}
@@ -46,6 +47,10 @@ class StatisticRecorder:
             SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + min(map(lambda x: x.ofs_sec, EVENT_CONFIGS)),
             SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + max(map(lambda x: x.ofs_sec+x.dur_sec, EVENT_CONFIGS))
         )
+
+    # record the amount of vehicles in the system throughout the whole simulation
+    def VehiclesJoin(self, veh_num):
+        self.sys_veh_num += veh_num
 
     def GetAppdataRecord(self, sg, header):
         self.CreateIfAbsent(sg, header)
@@ -182,6 +187,12 @@ class StatisticRecorder:
         sum_tx_time = [None for x in NetFlowType]
         sum_bst_thrput = [[None for x in BaseStationType] for x in NetFlowType]
         sum_timeout_ratio = [None for x in NetFlowType]
+        sum_veh_avg_arv_rate = [None for _ in NetFlowType]
+        sum_veh_avg_arv_size = [None for _ in NetFlowType]
+        sum_veh_avg_dep_rate = [None for _ in NetFlowType]
+        sum_bs_avg_arv_rate = [None for _ in NetFlowType]
+        sum_bs_avg_arv_size = [None for _ in NetFlowType]
+        sum_bs_avg_dep_rate = [None for _ in NetFlowType]
         # summarize
         for nft in NetFlowType:
             GV.STATISTIC.Doc("<{}>".format(nft.name.upper()))
@@ -190,6 +201,12 @@ class StatisticRecorder:
             sum_wait_time[nft] = self.BaseStationAppdataTXQReport(app_stats)
             sum_tx_time[nft] = self.BaseStationAppdataTXReport(app_stats)
             sum_timeout_ratio[nft] = self.AppdataSourceTimeoutRatioReport(app_stats)
+            sum_veh_avg_arv_rate[nft] = self.VehicleAppdataArrivalRateReport(app_stats)
+            sum_veh_avg_arv_size[nft] = self.VehicleAppdataArrivalSizeReport(app_stats)
+            sum_veh_avg_dep_rate[nft] = self.VehicleAppdataDepartRateReport(app_stats)
+            sum_bs_avg_arv_rate[nft] = self.BaseStationAppdataArrivalRateReport(app_stats)
+            sum_bs_avg_arv_size[nft] = self.BaseStationAppdataArrivalSizeReport(app_stats)
+            sum_bs_avg_dep_rate[nft] = self.BaseStationAppdataDepartRateReport(app_stats)
             for bst in BaseStationType:
                 sum_bst_thrput[nft][bst] = self.BaseStationTypeThroughPutReport(app_stats, bst)
             GV.STATISTIC.Doc("</{}>".format(nft.name.upper()))
@@ -281,6 +298,38 @@ class StatisticRecorder:
             for x in NetFlowType
         }
 
+        # little's law variables
+        # . base station
+        rep_veh_arv_rate = {
+            x.name: sum_veh_avg_arv_rate[x]
+            for x in NetFlowType
+        }
+        rep_veh_arv_size = {
+            x.name: sum_veh_avg_arv_size[x]
+            for x in NetFlowType
+        }
+        rep_veh_dep_rate = {
+            x.name: sum_veh_avg_dep_rate[x]
+            for x in NetFlowType
+        }
+        rep_bs_arv_rate = {
+            x.name: {
+                bs.name: sum_bs_avg_arv_rate[x][bs]
+                for bs in GV.NET_STATION_CONTROLLER
+            } for x in NetFlowType
+        }
+        rep_bs_arv_size = {
+            x.name: {
+                bs.name: sum_bs_avg_arv_size[x][bs]
+                for bs in GV.NET_STATION_CONTROLLER
+            } for x in NetFlowType
+        }
+        rep_bs_dep_rate = {
+            x.name: {
+                bs.name: sum_bs_avg_dep_rate[x][bs]
+                for bs in GV.NET_STATION_CONTROLLER
+            } for x in NetFlowType
+        }
         # create report
         report = {
             "end-to-end": rep_e2e_time,
@@ -292,6 +341,12 @@ class StatisticRecorder:
             "sys-thrput-rate": rep_sys_thrput_rate,
             "bst-sg-rate": rep_bst_sg_rate,
             "to-ratio": rep_timeout_ratio,
+            "veh-arv-rate": rep_veh_arv_rate,
+            "veh-arv-size": rep_veh_arv_size,
+            "veh-dep-rate": rep_veh_dep_rate,
+            "bs-arv-rate": rep_bs_arv_rate,
+            "bs-arv-size": rep_bs_arv_size,
+            "bs-dep-rate": rep_bs_dep_rate,
         }
 
         # print report
@@ -530,9 +585,6 @@ class StatisticRecorder:
                 ot_bits += record.bits
         return ot_bits/max(total_bits, 1)
 
-    # def BaseStationAppdataTimeoutRatioReport(self, app_stats):
-    #    pass
-
     def BaseStationTypeThroughPutReport(self, app_stats, bs_type):
         # size of data.
         bits = 0
@@ -613,6 +665,80 @@ class StatisticRecorder:
             sg_stats[bs_type] = bs_type_sg_drop_rate
         return sg_stats
 
+    # Analysis Variables for the Little's Law.
+    def VehicleAppdataArrivalRateReport(self, app_stats):
+        return (
+            len(app_stats) /
+            SUMO_SIM_SECONDS /
+            self.sys_veh_num
+        )
+
+    def VehicleAppdataArrivalSizeReport(self, app_stats):
+        return (
+            sum(map(lambda x: x.bits, app_stats.values())) /
+            max(len(app_stats), 1) /
+            max(self.sys_veh_num, 1)
+        )
+
+    def VehicleAppdataDepartRateReport(self, app_stats):
+        appdata_depart_amount = 0
+        for record in app_stats.values():
+            for time_per_bs_txq in record.time_bs_txq:
+                if(len(time_per_bs_txq) > 0):
+                    appdata_depart_amount += 1
+                    break
+
+        return (
+            appdata_depart_amount /
+            SUMO_SIM_SECONDS /
+            max(self.sys_veh_num, 1)
+        )
+
+    def BaseStationAppdataArrivalRateReport(self, app_stats):
+        tot_bs_arv_data = [0 for _ in GV.NET_STATION_CONTROLLER]
+
+        for record in app_stats.values():
+            for bs in GV.NET_STATION_CONTROLLER:
+                if(len(record.time_bs_txq[bs]) > 0):
+                    tot_bs_arv_data[bs] += 1
+
+        return list(
+            map(
+                lambda x: x / SUMO_SIM_SECONDS,
+                tot_bs_arv_data
+            )
+        )
+
+    def BaseStationAppdataArrivalSizeReport(self, app_stats):
+        tot_bs_arv_data = [0 for _ in GV.NET_STATION_CONTROLLER]
+        tot_bs_arv_bits = [0 for _ in GV.NET_STATION_CONTROLLER]
+
+        for record in app_stats.values():
+            for bs in GV.NET_STATION_CONTROLLER:
+                if(len(record.time_bs_txq[bs]) > 0):
+                    tot_bs_arv_data[bs] += 1
+                    tot_bs_arv_bits[bs] += record.bits
+
+        return [
+            tot_bs_arv_bits[bs]/max(tot_bs_arv_data[bs], 1)
+            for bs in GV.NET_STATION_CONTROLLER
+        ]
+
+    def BaseStationAppdataDepartRateReport(self, app_stats):
+        tot_bs_dep_data = [0 for _ in GV.NET_STATION_CONTROLLER]
+
+        for record in app_stats.values():
+            for bs in GV.NET_STATION_CONTROLLER:
+                if(record.time_bs_serv[bs] > -1 or record.time_bs_drop[bs] > -1):
+                    tot_bs_dep_data[bs] += 1
+
+        return list(
+            map(
+                lambda x: x / SUMO_SIM_SECONDS,
+                tot_bs_dep_data
+            )
+        )
+
     def Preprocess(self):
         # save the whole social group generated during simulation
         self.social_group = [sg for sg in SocialGroup]
@@ -662,14 +788,23 @@ class StatisticRecorder:
                 # ignore appdata that're flagged overtime.
                 if(record.is_src_ot):
                     continue
-                # Check data source overtime condition.
-                elif(max(map(lambda x: len(x), record.time_bs_txq)) == 0):
-                    record.is_src_ot = True
-                # Check base station overtime condition.
                 else:
-                    for bs in GV.NET_STATION_CONTROLLER:
-                        if(record.time_bs_serv[bs] - record.at >= NET_TIMEOUT_SECONDS):
-                            record.is_bs_ot[bs] = True
+                    # Check data source overtime condition.
+                    in_txq_time = list(filter(lambda x: len(x) > 0, record.time_bs_txq))
+                    min_enter_txq_time = min(
+                        list(map(
+                            lambda x: x[0][0],
+                            in_txq_time
+                        )) + [NET_TIMEOUT_SECONDS+record.at]
+                    )
+                    if(len(in_txq_time) == 0 or
+                       min_enter_txq_time - record.at >= NET_TIMEOUT_SECONDS):
+                        record.is_src_ot = True
+                    else:
+                        # Check base station overtime condition.
+                        for bs in GV.NET_STATION_CONTROLLER:
+                            if(record.time_bs_serv[bs] - record.at >= NET_TIMEOUT_SECONDS):
+                                record.is_bs_ot[bs] = True
 
     def Report(self, save=True):
         # preprocess the raw statistics

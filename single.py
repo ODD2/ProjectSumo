@@ -163,6 +163,7 @@ def main(interest_config):
                 DebugMsgType.SUMO_VEH_INFO
             )
             vehicle_recorders[vid] = VehicleRecorder(vid)
+        GV.STATISTIC_RECORDER.VehiclesJoin(len(GV.SUMO_SIM_INFO.new_veh_ids))
 
         # reset network status cache because vehicle positions have updated,
         # which means the cqi/sinr should be re-estimated.
@@ -198,7 +199,7 @@ def main(interest_config):
     traci.close(wait=False)
 
     # - statistic report
-    report = GV.STATISTIC_RECORDER.Report(interest_config)
+    report = GV.STATISTIC_RECORDER.Report(True)
     # report = {}
 
     # - terminate global variables
@@ -212,7 +213,7 @@ def main(interest_config):
 
 if __name__ == "__main__":
     cProfile.run(
-        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,0.1,123456))'
+        'main(InterestConfig(ResourceAllocatorType.NOMA_OPT,True,0.3,66666))'
     )
     # main(
     #     InterestConfig(
