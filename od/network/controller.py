@@ -336,6 +336,11 @@ class BaseStationController:
                     continue
                 # acces external allocation params
                 ext_alloc_param = self.sg_alloc_param[sg]
+                # accumulate time value in corresponding ExternAllocParam for the next allocation process.
+                ext_alloc_param.tval = (
+                    (1-1/ALLOC_TVAL_CONST)*ext_alloc_param.tval +
+                    (sg_total_bits/ALLOC_TVAL_CONST)
+                )
                 # create group config for allocator
                 grp_config_qos.append({
                     "gid": float(sg.gid),
@@ -356,11 +361,7 @@ class BaseStationController:
                     "mem_num": float(members),
                     "tval": float(ext_alloc_param.tval),
                 })
-                # accumulate time value in corresponding ExternAllocParam for the next allocation process.
-                ext_alloc_param.tval = (
-                    (1-1/ALLOC_TVAL_CONST)*ext_alloc_param.tval +
-                    (sg_total_bits/ALLOC_TVAL_CONST)
-                )
+
             # if this qos has no group requires allocate, remove it.
             if(len(grp_config_qos) > 0):
                 QoS_GP_CONF.append(grp_config_qos)

@@ -131,8 +131,8 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
             
 %           newly joined groups will try to allocate both in oma&noma layer
             new_gp_conf.is_fix = false;
-            new_gp_conf.eager_rate = qos_gp_conf.mem_num /...
-                                    max(qos_gp_conf.rem_bits * qos_gp_conf.tval,1);
+            new_gp_conf.eager_rate = qos_gp_conf.mem_num  * qos_gp_conf.tval /...
+                                    max(qos_gp_conf.rem_bits,1);
             
 %           number of possible RB positions
             new_gp_conf.y_max = y_max;
