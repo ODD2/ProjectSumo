@@ -269,7 +269,7 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
     max_qos = max([OPT_GP_CONF.qos]);
 
     %translate the real number eager rate to integer number eager priority.
-    for qos = 1 : max_qos
+    for qos = 0 : max_qos
         grp_qos_logi = ([OPT_GP_CONF.qos] == qos);
         grp_qos_list = OPT_GP_CONF(grp_qos_logi);
         [~ , sort_index] = sort([grp_qos_list.eager_rate]);

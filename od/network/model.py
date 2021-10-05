@@ -3,7 +3,7 @@ from od.env.config import (BS_HEIGHT, BS_TRANS_PWR, BS_FREQ,
                            BS_UMA_RB_BW, BS_UMI_RB_BW_QoS,
                            BS_UMI_CP_QoS, BS_UMA_CP,
                            VEH_HEIGHT)
-from od.social import SocialGroup
+from od.social.group import SocialGroup
 import od.engine as GE
 import od.vars as GV
 import matlab

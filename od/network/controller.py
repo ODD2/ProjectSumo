@@ -1,5 +1,5 @@
 from od import social
-from od.social import SocialGroup, QoSLevel
+from od.social.group import SocialGroup, QoSLevel
 from od.network.types import LinkType
 from od.network.application import BaseStationApplication
 from od.network.appdata import AppData, AppDataHeader
@@ -7,7 +7,9 @@ from od.network.package import NetworkPackage
 from od.network.types import BaseStationType, ResourceAllocatorType
 from od.network.misc import CastObject
 from od.vehicle.request import UploadRequest, ResendRequest
-from od.network.allocator import ResourceAllocatorOMA, ExternAllocParam
+from od.network.allocator import (ResourceAllocatorNomaApprox,
+                                  ResourceAllocatorOMA,
+                                  ExternAllocParam)
 from od.misc.types import DebugMsgType
 from od.env.config import (NET_TS_PER_NET_STEP, NET_RB_BW_REQ_TS,
                            NET_RB_SLOT_SYMBOLS, NET_RB_BW_UNIT,
@@ -278,16 +280,64 @@ class BaseStationController:
                 # Clear requests
                 self.sg_upload_req[sg].clear()
 
-    # arrange downlink resource
     def ArrangeDownlinkResource(self):
+        # arrange downlink resource
         # TODO: Serve Resend Requests
-        # Simulation config for matlab optimizer
-        SIM_CONF = {
+        if(GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.NOMA_APR):
+            self.ArrangeDownlinkNomaApprox()
+        else:
+            self.ArrangeDownlinkNomaOptimal()
+
+    def ArrangeDownlinkNomaApprox(self):
+        # acquire resource and qos group configuration
+        RES_CONF, QoS_GP_CONF = self.PreprocessDownlinkRequest()
+
+        # if none of the groups need resource allocation, end allocation  process.
+        if(len(QoS_GP_CONF) == 0):
+            return
+
+        # create approximation resource allocator
+        APPRX_ALLOCATOR = ResourceAllocatorNomaApprox(RES_CONF, QoS_GP_CONF)
+
+        # run allocation process
+        alloc_report = APPRX_ALLOCATOR()
+        # create packages.
+        self.DeployAllocationReport(alloc_report)
+
+    def ArrangeDownlinkNomaOptimal(self):
+        # acquire resource and qos group configuration
+        RES_CONF, QoS_GP_CONF = self.PreprocessDownlinkRequest()
+
+        # if none of the groups need resource allocation, end allocation  process.
+        if(len(QoS_GP_CONF) == 0):
+            return
+
+        # create stdout receiver, save output for debug
+        out = io.StringIO()
+        # optimize allocation request
+        alloc_report, exitflag = GE.MATLAB_ENG.PlannerV1(
+            RES_CONF, QoS_GP_CONF, nargout=2, stdout=out
+        )
+        #  save output for debug
+        GV.DEBUG.Log(
+            "[{}][alloc]:report.\n{}".format(
+                self.name,
+                out.getvalue()
+            ),
+            DebugMsgType.NET_ALLOC_INFO
+        )
+        # create packages.
+        self.DeployAllocationReport(alloc_report)
+
+    # organize informations for downlink allocation process
+    def PreprocessDownlinkRequest(self):
+        # Radio resource configuration
+        RES_CONF = {
             "rbf_h": float(round(BS_TOTAL_BAND[self.type]/NET_RB_BW_UNIT*0.9)),
             "rbf_w": float(2),
             "max_pwr_dBm": float(BS_TRANS_PWR[self.type]),
         }
-        # Qos group config for optimizer
+        # Qos group configuration
         QoS_GP_CONF = []
         # Collect group configs
         for qos in QoSLevel:
@@ -295,9 +345,6 @@ class BaseStationController:
             grp_config_qos = []
             # create group config for this qos
             for sg in [sg for sg in self.sg_send_req.keys() if sg.qos == qos]:
-                # ignore if nothing in queue
-                if(len(self.sg_send_req[sg]) == 0):
-                    continue
                 # the members of the social group
                 members = len(self.sg_sub_vehs[sg]) if sg in self.sg_sub_vehs else 0
                 # required resource block bandwidth for this social group msg
@@ -308,8 +355,18 @@ class BaseStationController:
                 sg_total_bits = sum(
                     data.bits for data in self.sg_send_req[sg]
                 )
+                # acces external allocation params
+                ext_alloc_param = self.sg_alloc_param[sg]
+                # accumulate time value in ExternAllocParam for the next allocation process.
+                ext_alloc_param.tval = (
+                    (1-1/ALLOC_TVAL_CONST)*ext_alloc_param.tval +
+                    (sg_total_bits/ALLOC_TVAL_CONST)
+                )
+                # ignore if nothing in queue
+                if(len(self.sg_send_req[sg]) == 0):
+                    continue
                 # if this base station has no subscribers or data to broadcast in this social group
-                if(members == 0 or sg_total_bits == 0):
+                elif(members == 0 or sg_total_bits == 0):
                     # Statistic
                     GV.STATISTIC_RECORDER.BaseStationAppdataDrop(
                         sg,
@@ -322,6 +379,7 @@ class BaseStationController:
                     # clear all broadcast appdatas of this social group
                     # cause there's no receiver
                     self.sg_send_req[sg].clear()
+                    # reset time value in ExterAllocParam for the next allocation process
                     continue
 
                 # find the lowest cqi in the social group subscribers
@@ -334,16 +392,10 @@ class BaseStationController:
                 #  or else some vehicle will not receive data.
                 if(netstatus.max_cqi == 0):
                     continue
-                # acces external allocation params
-                ext_alloc_param = self.sg_alloc_param[sg]
-                # accumulate time value in corresponding ExternAllocParam for the next allocation process.
-                ext_alloc_param.tval = (
-                    (1-1/ALLOC_TVAL_CONST)*ext_alloc_param.tval +
-                    (sg_total_bits/ALLOC_TVAL_CONST)
-                )
                 # create group config for allocator
                 grp_config_qos.append({
                     "gid": float(sg.gid),
+                    "qos": float(sg.qos),
                     "rbf_w": float(sg_rb_ts),
                     "rbf_h": float(sg_rb_bw/NET_RB_BW_UNIT),
                     "sinr_max": float(netstatus.max_sinr),
@@ -359,34 +411,20 @@ class BaseStationController:
                     ),
                     "rem_bits": float(sg_total_bits),
                     "mem_num": float(members),
-                    "tval": float(ext_alloc_param.tval),
+                    "eager_rate": (members*ext_alloc_param.tval)/max(sg_total_bits, 1),
                 })
 
-            # if this qos has no group requires allocate, remove it.
+            # if this qos has no group requires allocate, ignore it.
             if(len(grp_config_qos) > 0):
                 QoS_GP_CONF.append(grp_config_qos)
 
-        # if none of the groups need resource allocation, end allocation  process.
-        if(len(QoS_GP_CONF) == 0):
-            return
+        return RES_CONF, QoS_GP_CONF
 
-        # create stdout receiver, save output for debug
-        out = io.StringIO()
-        # optimize allocation request
-        gid_req_res, exitflag = GE.MATLAB_ENG.PlannerV1(
-            SIM_CONF, QoS_GP_CONF, nargout=2, stdout=out
-        )
-        #  save output for debug
-        GV.DEBUG.Log(
-            "[{}][alloc]:report.\n{}".format(
-                self.name,
-                out.getvalue()
-            ),
-            DebugMsgType.NET_ALLOC_INFO
-        )
-
+    # create packages according to the given allocation report
+    def DeployAllocationReport(self, alloc_report):
+        self.PrintAllocationReport(alloc_report)
         # deliver package according to optimized allocate resource
-        for gid_key, gid_items in gid_req_res.items():
+        for gid_key, gid_items in alloc_report.items():
             sg = SocialGroup(int(gid_key[1:]))
             # required resource block bandwidth for this social group msg
             sg_rb_bw = self.RequiredBandwidth(sg)
@@ -481,6 +519,27 @@ class BaseStationController:
                     package
                 )
 
+    # record allocation result
+    def PrintAllocationReport(self, alloc_report):
+        # Construct Formatted Report
+        report = "{\n"
+        for gid_key, gid_items in alloc_report.items():
+            sg = SocialGroup(int(gid_key[1:]))
+            report += " ===== {}({}) =====\n".format(sg.fname.upper(), sg.gid)
+            for ts_key, ts_items in gid_items.items():
+                for cqi_key, rb_num in ts_items.items():
+                    report += "  cqi:{}, num:{}\n".format(cqi_key[1:], rb_num)
+
+        report += "}\n"
+        # Log
+        GV.DEBUG.Log(
+            "[{}][alloc]:report.\n{}".format(
+                self.name,
+                report
+            ),
+            DebugMsgType.NET_ALLOC_INFO
+        )
+
     # Create package
     def CreatePackage(self, src, dest, social_group: SocialGroup, total_bits, appdatas, trans_ts, offset_ts):
         # create package
@@ -515,7 +574,7 @@ class BaseStationController:
     def Propagate(self, sender, social_group: SocialGroup, header: AppDataHeader):
         if(social_group not in self.sg_send_req):
             self.sg_send_req[social_group] = []
-            self.sg_alloc_param[social_group] = ExternAllocParam(0)
+            self.sg_alloc_param[social_group] = ExternAllocParam()
 
         self.sg_send_req[social_group].append(
             AppData(
@@ -594,6 +653,8 @@ class NetworkCoreController:
             self.umi_approx_uma[sender].Propagate(self, social_group, header)
         elif(sender.type == BaseStationType.UMA and social_group.qos == QoSLevel.GENERAL):
             for uma_bs in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
+                if(uma_bs == sender):
+                    continue
                 uma_bs.Propagate(self, social_group, header)
         else:
             raise Exception("Core receive propagate from Non-UMI base station")

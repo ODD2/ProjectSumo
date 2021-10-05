@@ -1,5 +1,5 @@
 from typing import List
-from od.social import SocialGroup
+from od.social.group import SocialGroup
 from od.network.appdata import AppData
 
 

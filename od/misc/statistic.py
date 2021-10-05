@@ -1,5 +1,5 @@
 # Custom
-from od.social import QoSLevel, SocialGroup
+from od.social.group import QoSLevel, SocialGroup
 from od.env.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
                            NET_SECONDS_PER_TS, SUMO_TOTAL_SECONDS, SUMO_SIM_SECONDS,
                            SUMO_SKIP_SECONDS, SUMO_NET_WARMUP_SECONDS, EVENT_CONFIGS, NET_TIMEOUT_SECONDS)
@@ -805,6 +805,14 @@ class StatisticRecorder:
                         for bs in GV.NET_STATION_CONTROLLER:
                             if(record.time_bs_serv[bs] - record.at >= NET_TIMEOUT_SECONDS):
                                 record.is_bs_ot[bs] = True
+
+        # preprocess wait time adjustment(0.5ms -> 1ms)
+        for sg in self.social_group:
+            for record in self.sg_header[sg].values():
+                for bs in GV.NET_STATION_CONTROLLER:
+                    for pair in record.time_bs_txq[bs]:
+                        pair[0] = math.ceil(round(pair[0], 4)*1000)/1000
+                        pair[1] = math.ceil(round(pair[1], 4)*1000)/1000
 
     def Report(self, save=True):
         # preprocess the raw statistics

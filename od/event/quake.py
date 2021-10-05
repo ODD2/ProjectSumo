@@ -1,4 +1,4 @@
-from od.social import QoSLevel, SocialGroup
+from od.social.group import QoSLevel, SocialGroup
 from od.event.base import SumoSimEvent
 from od.event.config import SumoSimEventConf
 import od.vars as GV

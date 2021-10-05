@@ -5,7 +5,8 @@ from od.network.types import BaseStationType, LinkType
 from od.network.package import NetworkPackage
 from od.network.application import VehicleApplication
 from od.network.appdata import AppData
-from od.social import SocialGroup, SocialGroupManager, QoSLevel
+from od.social.group import SocialGroup, QoSLevel
+from od.social.manager import SocialGroupManager
 from od.env.config import VEH_MOVE_BS_CHECK, SUMO_SIM_GUI
 from od.misc.types import DebugMsgType
 from traci import vehicle

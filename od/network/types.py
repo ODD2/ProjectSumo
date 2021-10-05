@@ -17,3 +17,4 @@ class BaseStationType(IntEnum):
 class ResourceAllocatorType(IntEnum):
     OMA = 0,
     NOMA_OPT = 1,
+    NOMA_APR = 2,

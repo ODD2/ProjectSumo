@@ -10,7 +10,7 @@ import od.env.station as oes
 import od.misc.interest as omi
 import od.event.quake as oeq
 # STD
-from od.social import QoSLevel, SocialGroup
+from od.social.group import QoSLevel, SocialGroup
 from numpy import random
 from datetime import datetime
 from threading import Lock

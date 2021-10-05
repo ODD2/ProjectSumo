@@ -1,6 +1,6 @@
 function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
-    for qos = 1:length(QoS_GP_CONF)
-        QoS_GP_CONF{qos} = [QoS_GP_CONF{qos}{:}];
+    for qos_i = 1:length(QoS_GP_CONF)
+        QoS_GP_CONF{qos_i} = [QoS_GP_CONF{qos_i}{:}];
     end
 
 %The entry point for optimization
@@ -96,13 +96,13 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
     exitflag = -2;
     
 %   optimization
-    for qos = 1:length(QoS_GP_CONF)
-        if(isempty(QoS_GP_CONF{qos}))
+    for qos_i = 1:length(QoS_GP_CONF)
+        if(isempty(QoS_GP_CONF{qos_i}))
             continue;
         end
         
 %       configure and add basic group settings from new QoS level.
-        for qos_gp_conf = QoS_GP_CONF{qos}
+        for qos_gp_conf = QoS_GP_CONF{qos_i}
 %           calculate the maximum possible resource block in x/y axis
             y_max = SIM_CONF.rbf_h - (qos_gp_conf.rbf_h - 1);
             x_max = SIM_CONF.rbf_w - (qos_gp_conf.rbf_w - 1);  
@@ -118,7 +118,7 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
             
 %           data copy from origin
             new_gp_conf.gid = qos_gp_conf.gid;
-            new_gp_conf.qos = qos;
+            new_gp_conf.qos = qos_gp_conf.qos;
             new_gp_conf.rbf_w = qos_gp_conf.rbf_w;
             new_gp_conf.rbf_h = qos_gp_conf.rbf_h;
             new_gp_conf.rem_bits = qos_gp_conf.rem_bits;
@@ -131,8 +131,7 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
             
 %           newly joined groups will try to allocate both in oma&noma layer
             new_gp_conf.is_fix = false;
-            new_gp_conf.eager_rate = qos_gp_conf.mem_num  * qos_gp_conf.tval /...
-                                    max(qos_gp_conf.rem_bits,1);
+            new_gp_conf.eager_rate = qos_gp_conf.eager_rate;
             
 %           number of possible RB positions
             new_gp_conf.y_max = y_max;

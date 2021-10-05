@@ -1,6 +1,6 @@
 from . import *
 from od.network.types import BaseStationType
-from od.social import SocialGroup, QoSLevel
+from od.social.group import SocialGroup, QoSLevel
 from od.misc.types import DebugMsgType
 from od.event.config import SumoSimEventConf
 import os

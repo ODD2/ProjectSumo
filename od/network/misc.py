@@ -1,4 +1,4 @@
-from od.social import SocialGroup
+from od.social.group import SocialGroup
 from od.env.config import NET_QoS_SG_MAX_MEMBER
 
 

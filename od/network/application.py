@@ -6,7 +6,7 @@ from od.network.appdata import AppData, AppDataHeader
 from od.env.config import (NET_QoS_RND_REQ_SIZE, NET_SECONDS_PER_STEP,
                            NET_QoS_RND_REQ_NUM, NET_QoS_RND_REQ_NUM_TIME_SCALE,
                            NET_TIMEOUT_SECONDS)
-from od.social import SocialGroup, QoSLevel
+from od.social.group import SocialGroup, QoSLevel
 from od.misc.types import DebugMsgType
 import od.vars as GV
 
