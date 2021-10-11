@@ -1,8 +1,19 @@
 function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
+    x = QoS_GP_CONF{1}{1};
+    disp(class(x.gid));
+    disp(class(x.qos));
+    disp(class(x.rbf_w));
+    disp(class(x.rbf_h));
+    disp(class(x.sinr_max));
+    disp(class(x.pwr_req_dBm));
+    disp(class(x.pwr_ext_dBm));
+    disp(class(x.rem_bits));
+    disp(class(x.mem_num));
+    disp(class(x.eager_rate));
     for qos_i = 1:length(QoS_GP_CONF)
         QoS_GP_CONF{qos_i} = [QoS_GP_CONF{qos_i}{:}];
     end
-
+    
 %The entry point for optimization
 %     SIM_CONF = struct("rbf_h",4,...
 %                       "rbf_w",2,...
@@ -225,8 +236,20 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
     end
     
     if(isempty(x))
+        fprintf("End with empty solution, finding feasible solution...\n")
 %       find feasible solution
-        [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,false);
+        [x,~,exitflag,~] = Optimize(SIM_CONF,OPT_GP_CONF,false);
+        fprintf("feasible solution found!\n")
+        
+        
+%       save solution config for result display
+        SOL_GP_CONF = OPT_GP_CONF;
+        
+%       update information from the last optimize allocation.
+        OPT_GP_CONF = UpdateOptimizeResult(alloc_grp_index,OPT_GP_CONF,x,exitflag,false);
+        
+%       calculate position and offset info
+        OPT_GP_CONF = CalcOptGpConfPosOfs(OPT_GP_CONF);
     end
     
 %   result info

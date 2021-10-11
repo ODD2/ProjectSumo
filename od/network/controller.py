@@ -324,7 +324,7 @@ class BaseStationController:
                 self.name,
                 out.getvalue()
             ),
-            DebugMsgType.NET_ALLOC_INFO
+            DebugMsgType.MATLAB_INFO
         )
         # create packages.
         self.DeployAllocationReport(alloc_report)
