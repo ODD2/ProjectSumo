@@ -224,10 +224,9 @@ class ResourceAllocatorOMA:
     # width - the total timeslots
     def __init__(self, max_bandwidth, max_timeslots):
         if(NET_TS_PER_NET_STEP != 2):
-            GV.ERROR.Log(
-                "Error!! This allocator only works on 2 timeslots per network step condition."
-            )
-            sys.exit()
+            msg = "Error!! This allocator only works on 2 timeslots per network step condition."
+            GV.ERROR.Log(msg)
+            raise Exception(msg)
 
         self.max_bandwidth = max_bandwidth
         self.max_timeslots = max_timeslots
@@ -262,10 +261,11 @@ class ResourceAllocatorOMA:
             #     offset_timeslot = higer_bandwidth_ts
 
         else:
+            msg = "Error!! This allocator only works on 2x1 or 1x2 resource block allocation"
             GV.ERROR.Log(
-                "Error!! This allocator only works on 2x1 or 1x2 resource block allocation"
+                msg
             )
-            sys.exit()
+            raise Exception(msg)
         return offset_timeslot
 
     # Whether there's spare space for allocation

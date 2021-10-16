@@ -149,20 +149,17 @@ SUMO_TOTAL_STEPS = SUMO_SKIP_STEPS + SUMO_SIM_STEPS
 
 # Basic Requirement Check
 if SUMO_SECONDS_PER_STEP < NET_SECONDS_PER_STEP:
-    print(
-        "Error: seconds per simulation step should be larger than the value of seconds per network step."
-    )
-    sys.exit()
+    msg = "Error: seconds per simulation step should be larger than the value of seconds per network step."
+    print(msg)
+    raise Exception(msg)
 if SUMO_SECONDS_PER_STEP / NET_SECONDS_PER_STEP % 1 != 0:
-    print(
-        "Error: seconds per simulation step should be totally devided by the value of seconds per network step."
-    )
-    sys.exit()
+    msg = "Error: seconds per simulation step should be totally devided by the value of seconds per network step."
+    print(msg)
+    raise Exception(msg)
 if NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS % 1 != 0:
-    print(
-        "Error: seconds per network simulation step should be totally devided by the value of seconds per network timeslot."
-    )
-    sys.exit()
+    msg = "Error: seconds per network simulation step should be totally devided by the value of seconds per network timeslot."
+    print(msg)
+    raise Exception(msg)
 
 # Directory Settings
 ROOT_DIR = "data/V1/"

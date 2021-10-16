@@ -3,12 +3,10 @@ from od.network.types import ResourceAllocatorType
 from od.env.config import ROOT_DIR
 from od.view import DisplayStatistics
 from multiprocessing import Process, Semaphore
-from threading import Thread
 from datetime import datetime
 from time import sleep
 from os import path
 import single
-import numpy as np
 
 RUN_MISS_ONLY = True
 
@@ -43,69 +41,86 @@ class WeightProcess:
         interest = self.weight_conf.interest_config
         return path.isfile(ROOT_DIR + "{}/{}/report.pickle".format(interest.rng_seed, str(interest)))
 
+    def __repr__(self):
+        return "seed{}:{}".format(
+            self.weight_conf.interest_config.rng_seed,
+            str(self.weight_conf.interest_config)
+        )
+
+    def __str__(self):
+        return "seed{}:{}".format(
+            self.weight_conf.interest_config.rng_seed,
+            str(self.weight_conf.interest_config)
+        )
+
 
 def Worker(s: Semaphore, target, args):
-    target(*args)
+    try:
+        target(*args)
+    except Exception as e:
+        print("Worker Exception:{}".format(e))
     s.release()
 
 
 def ParallelSimulationManager(weight_intconfs, limit):
     s = Semaphore(0)
     weight_process_list = []
-
-    while(True):
-        remain_weight_intconfs = []
-        # arrange weighted interest configs to let heavier ones to have higher precedence.
-        weight_intconfs.sort(key=lambda x: x.weight, reverse=True)
-        # arrange resource to interest configs accroding to its weight
-        for weight_intconf in weight_intconfs:
-            if(weight_intconf.weight < limit):
-                weight_process = WeightProcess(
-                    weight_intconf,
-                    Process(
-                        target=Worker,
-                        args=(
-                            s,
-                            single.main,
-                            (weight_intconf.interest_config,)
+    with open("scheme_fail_report.txt", "w") as scheme_fail_report:
+        while(True):
+            remain_weight_intconfs = []
+            # arrange weighted interest configs to let heavier ones to have higher precedence.
+            weight_intconfs.sort(key=lambda x: x.weight, reverse=True)
+            # arrange resource to interest configs accroding to its weight
+            for weight_intconf in weight_intconfs:
+                if(weight_intconf.weight < limit):
+                    weight_process = WeightProcess(
+                        weight_intconf,
+                        Process(
+                            target=Worker,
+                            args=(
+                                s,
+                                single.main,
+                                (weight_intconf.interest_config,)
+                            )
                         )
                     )
-                )
-                if(not RUN_MISS_ONLY or not weight_process.CheckResult()):
-                    weight_process.Start()
-                    weight_process_list.append(weight_process)
-                    limit -= weight_intconf.weight
-                    sleep(2)
-            else:
-                remain_weight_intconfs.append(weight_intconf)
-        # if there're no remaining interest configs, begin to wait all process to end.
-        if(len(remain_weight_intconfs) == 0):
-            break
-
-        # remove allocated configs.
-        weight_intconfs = remain_weight_intconfs
-
-        # wait untill enough resource for the most required config.
-        while(limit < weight_intconfs[0].weight):
-            # wait for working process to end
-            s.acquire()
-            # check which process(es) ended
-            remain_weight_process_list = []
-            for wp in weight_process_list:
-                if(not wp.process.is_alive()):
-                    # if process is not alive, meaning it has ended, do result check.
-                    if(not wp.CheckResult()):
-                        weight_intconfs.append(wp.weight_conf)
-                    # release resource limit
-                    limit += wp.weight_conf.weight
-                    # join process to prevent existance of zombie process
-                    wp.process.join()
+                    if(not RUN_MISS_ONLY or not weight_process.CheckResult()):
+                        weight_process.Start()
+                        weight_process_list.append(weight_process)
+                        limit -= weight_intconf.weight
+                        sleep(2)
                 else:
-                    remain_weight_process_list.append(wp)
-            weight_process_list = remain_weight_process_list
+                    remain_weight_intconfs.append(weight_intconf)
+            # if there're no remaining interest configs, begin to wait all process to end.
+            if(len(remain_weight_intconfs) == 0):
+                break
 
-    for wp in weight_process_list:
-        wp.process.join()
+            # remove allocated configs.
+            weight_intconfs = remain_weight_intconfs
+
+            # wait untill enough resource for the most required config.
+            while(limit < weight_intconfs[0].weight):
+                # wait for working process to end
+                s.acquire()
+                # check which process(es) ended
+                remain_weight_process_list = []
+                for wp in weight_process_list:
+                    if(not wp.process.is_alive()):
+                        # if process is not alive, meaning it has ended, do result check.
+                        if(not wp.CheckResult()):
+                            # weight_intconfs.append(wp.weight_conf)
+                            time_text = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+                            scheme_fail_report.write("[{}]{}\n".format(time_text, wp))
+                            # release resource limit
+                        limit += wp.weight_conf.weight
+                        # join process to prevent existance of zombie process
+                        wp.process.join()
+                    else:
+                        remain_weight_process_list.append(wp)
+                weight_process_list = remain_weight_process_list
+
+        for wp in weight_process_list:
+            wp.process.join()
 
 
 if __name__ == "__main__":
@@ -126,7 +141,7 @@ if __name__ == "__main__":
                             config
                         )
                     )
-    ParallelSimulationManager(weight_intconfs, 100)
+    ParallelSimulationManager(weight_intconfs, 120)
     end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     print("Start at: " + start_time)
     print("End at: " + end_time)

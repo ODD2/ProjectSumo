@@ -83,7 +83,6 @@ class Application:
                 self.sg_data_inbox[social_group][header.owner.name][header.serial]
             )
         )
-        # sys.exit()
 
 
 class VehicleApplication(Application):
