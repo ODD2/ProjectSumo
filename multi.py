@@ -27,10 +27,9 @@ class WeightProcess:
     def Start(self):
         self.process.start()
         print(
-            "{} -> {} seed({})".format(
+            "{} -> {}".format(
                 self.process.pid,
-                str(self.weight_conf.interest_config),
-                self.weight_conf.interest_config.rng_seed
+                self.weight_conf.interest_config
             )
         )
 
@@ -38,20 +37,13 @@ class WeightProcess:
         return self.process.pid
 
     def CheckResult(self):
-        interest = self.weight_conf.interest_config
-        return path.isfile(ROOT_DIR + "{}/{}/report.pickle".format(interest.rng_seed, str(interest)))
+        return path.isfile(ROOT_DIR + self.weight_conf.interest_config.folder())
 
     def __repr__(self):
-        return "seed{}:{}".format(
-            self.weight_conf.interest_config.rng_seed,
-            str(self.weight_conf.interest_config)
-        )
+        return str(self.weight_conf.interest_config)
 
     def __str__(self):
-        return "seed{}:{}".format(
-            self.weight_conf.interest_config.rng_seed,
-            str(self.weight_conf.interest_config)
-        )
+        return str(self.weight_conf.interest_config)
 
 
 def Worker(s: Semaphore, target, args):
@@ -124,24 +116,26 @@ def ParallelSimulationManager(weight_intconfs, limit):
 
 
 if __name__ == "__main__":
-    start_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    beg_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     weight_intconfs = []
-    for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
-        for rsu in [False, True]:
-            for traffic_scale in [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4]:
-                for seed in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]:
-                    config = InterestConfig(
-                        res_alloc_type,
-                        rsu,
-                        traffic_scale,
-                        seed
-                    )
-                    weight_intconfs.append(
-                        WeightInterestConfig(
-                            config
+    for qos_re_class in [True, False]:
+        for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
+            for rsu in [False, True]:
+                for traffic_scale in [i/10 for i in range(7, 13, 1)]:
+                    for seed in range(10):
+                        config = InterestConfig(
+                            qos_re_class,
+                            res_alloc_type,
+                            rsu,
+                            traffic_scale,
+                            seed
                         )
-                    )
-    ParallelSimulationManager(weight_intconfs, 120)
+                        weight_intconfs.append(
+                            WeightInterestConfig(
+                                config
+                            )
+                        )
+    ParallelSimulationManager(weight_intconfs, 100)
     end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    print("Start at: " + start_time)
+    print("Start at: " + beg_time)
     print("End at: " + end_time)

@@ -162,7 +162,7 @@ if NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS % 1 != 0:
     raise Exception(msg)
 
 # Directory Settings
-ROOT_DIR = "data/V1/"
+ROOT_DIR = "data/TVAL/"
 
 # Resource Allocation Parameters
 ALLOC_TVAL_CONST = 1000

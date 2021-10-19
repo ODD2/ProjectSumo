@@ -650,7 +650,11 @@ class NetworkCoreController:
             if(sender not in self.umi_approx_uma):
                 self.umi_approx_uma[sender] = self.MapApproximityUMA(sender)
             # propagate only to the uma closest to the sender umi.
-            self.umi_approx_uma[sender].Propagate(self, social_group, header)
+            self.umi_approx_uma[sender].Propagate(
+                self,
+                SocialGroup.RCWS if GV.NET_QoS_RE_CLS else social_group,
+                header
+            )
         elif(sender.type == BaseStationType.UMA and social_group.qos == QoSLevel.GENERAL):
             for uma_bs in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
                 if(uma_bs == sender):

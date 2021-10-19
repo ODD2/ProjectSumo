@@ -212,14 +212,15 @@ def main(interest_config):
 
 
 if __name__ == "__main__":
-    main(InterestConfig(ResourceAllocatorType.NOMA_APR, False, 0.6, 666))
-    # cProfile.run(
-    #     'main(InterestConfig(ResourceAllocatorType.NOMA_APR,False,0.6,666))'
-    # )
     # main(
     #     InterestConfig(
-    #         ResourceAllocatorType.NOMA_OPT,
-    #         True,
-    #         1
+    #         False,
+    #         ResourceAllocatorType.NOMA_APR,
+    #         False,
+    #         0.6,
+    #         666
     #     )
     # )
+    cProfile.run(
+        """main(InterestConfig(True,ResourceAllocatorType.NOMA_APR,False,0.6,666))"""
+    )

@@ -10,11 +10,15 @@ class QoSLevel(IntEnum):
     GENERAL = 1
 
 
-SocialGroup = SocialGroupMeta(
-    "SocialGroup",
-    (),
-    {
-        "CRASH": SocialGroupConfig(QoSLevel.CRITICAL, [BaseStationType.UMI, BaseStationType.UMA], False),
-        "RCWS": SocialGroupConfig(QoSLevel.GENERAL, [BaseStationType.UMA, BaseStationType.UMI], False)
-    }
-)
+class SocialGroup(metaclass=SocialGroupMeta):
+    CRASH = SocialGroupConfig(QoSLevel.CRITICAL, [BaseStationType.UMI, BaseStationType.UMA], False)
+    RCWS = SocialGroupConfig(QoSLevel.GENERAL, [BaseStationType.UMA, BaseStationType.UMI], False)
+
+# SocialGroup = SocialGroupMeta(
+#     "SocialGroup",
+#     (),
+#     {
+#         "CRASH": SocialGroupConfig(QoSLevel.CRITICAL, [BaseStationType.UMI, BaseStationType.UMA], False),
+#         "RCWS": SocialGroupConfig(QoSLevel.GENERAL, [BaseStationType.UMA, BaseStationType.UMI], False)
+#     }
+# )

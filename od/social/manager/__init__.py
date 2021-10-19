@@ -32,7 +32,7 @@ class SocialGroupManagerClass:
         )
         dyn_gen_sg = random.choice(spare_dyn_gen_sg_list)
         self.dyn_gen_sg_vehs[dyn_gen_sg] += 1
-        return [SocialGroup.CRASH, dyn_gen_sg]
+        return [SocialGroup.CRASH, SocialGroup.RCWS, dyn_gen_sg]
         # return [SocialGroup.CRASH, SocialGroup.RCWS]
 
     def CreateGeneralSocialGroup(self):
