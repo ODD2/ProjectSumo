@@ -21,3 +21,14 @@ class InterestConfig:
 
     def folder(self):
         return "/".join(self.path_repr) + "/"
+
+    def folder_legacy(self):
+        return "/".join([
+            "yQoS" if self.qos_re_class else "nQoS",
+            str(self.rng_seed),
+            "res_alloc_type({}) req_rsu({}) traffic_scale({})".format(
+                self.res_alloc_type.name,
+                self.req_rsu,
+                self.traffic_scale
+            )
+        ]) + "/"

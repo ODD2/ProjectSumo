@@ -41,7 +41,7 @@ class SocialGroupManagerClass:
         self.dyn_gen_sg_serial += 1
         SocialGroup.Create(
             sg_name,
-            SocialGroupConfig(QoSLevel.GENERAL, [BaseStationType.UMA, BaseStationType.UMI], True)
+            SocialGroupConfig(QoSLevel.GENERAL, [BaseStationType.UMA, BaseStationType.UMI], False, True)
         )
         self.dyn_gen_sg_vehs[getattr(SocialGroup, sg_name)] = 0
 

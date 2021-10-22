@@ -21,10 +21,11 @@ from os import confstr_names
 #         raise StopIteration
 
 class SocialGroupConfig:
-    def __init__(self, qos, pref, dyn):
+    def __init__(self, qos, pref, unify, dyn):
         self.qos = qos
         self.pref = pref
         self.dyn = dyn
+        self.unify = unify
 
 
 class SocialGroupAttr:
@@ -34,6 +35,7 @@ class SocialGroupAttr:
         self.gid = gid
         self.qos = config.qos
         self.pref = config.pref
+        self.unify = config.unify
         self.dyn = config.dyn
 
     def __repr__(self):

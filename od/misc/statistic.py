@@ -41,12 +41,18 @@ class StatisticRecorder:
         self.sys_veh_num = 0
         self.dirpath = dirpath
         self.interest_config = interest_config
+        self.raw_sg_header = {}
         self.sg_header = {}
         self.social_group = []
         self.interval = (
             SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + min(map(lambda x: x.ofs_sec, EVENT_CONFIGS)),
             SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + max(map(lambda x: x.ofs_sec+x.dur_sec, EVENT_CONFIGS))
         )
+        self.nft_traffic = {}
+
+    # the total amount of time for the recorder in seconds.
+    def RecordDuration(self):
+        return self.interval[1] - self.interval[0]
 
     # record the amount of vehicles in the system throughout the whole simulation
     def VehiclesJoin(self, veh_num):
@@ -54,13 +60,13 @@ class StatisticRecorder:
 
     def GetAppdataRecord(self, sg, header):
         self.CreateIfAbsent(sg, header)
-        return self.sg_header[sg][header.id]
+        return self.raw_sg_header[sg][header.id]
 
     def CreateIfAbsent(self, sg, header):
-        if(sg not in self.sg_header):
-            self.sg_header[sg] = {}
-        if(header.id not in self.sg_header[sg]):
-            self.sg_header[sg][header.id] = AppdataStatistic(header)
+        if(sg not in self.raw_sg_header):
+            self.raw_sg_header[sg] = {}
+        if(header.id not in self.raw_sg_header[sg]):
+            self.raw_sg_header[sg][header.id] = AppdataStatistic(header)
 
     # call by vehicle while createing new data.
     def VehicleCreateAppdata(self, sg, header):
@@ -132,52 +138,54 @@ class StatisticRecorder:
             record.time_bs_serv[bs] = current_time
 
     # extract specific network traffic from self.sg_headers
-    def ExtractNetworkTraffic(self, nft):
-        if(nft == NetFlowType.CRITICAL):
-            int_records = {}
-            for sg in [
-                sg for sg in self.sg_header.keys()
-                if sg.qos == QoSLevel.CRITICAL
-            ]:
-                for header, value in self.sg_header[sg].items():
-                    if(header in int_records):
-                        raise Exception("Appdata Duplicate in different Critical SocialGroups")
-                    int_records[header] = value
+    def ExtractNetworkTraffic(self, nft, fresh=False):
+        if(fresh or not nft in self.nft_traffic):
+            traffic = {}
 
-            return int_records
-        elif(nft == NetFlowType.GENERAL):
-            int_records = {}
-            for sg in [
-                sg for sg in self.sg_header.keys()
-                if sg.qos == QoSLevel.GENERAL
-            ]:
-                for header, value in self.sg_header[sg].items():
-                    if(header in int_records):
-                        raise Exception("Appdata Duplicate in different General SocialGroups")
-                    int_records[header] = value
+            if(nft == NetFlowType.CRITICAL):
+                int_records = {}
+                for sg in [
+                    sg for sg in self.sg_header.keys()
+                    if sg.qos == QoSLevel.CRITICAL
+                ]:
+                    for header, value in self.sg_header[sg].items():
+                        if(header in int_records):
+                            raise Exception("Appdata Duplicate in different Critical SocialGroups")
+                        int_records[header] = value
+                traffic = int_records
+            elif(nft == NetFlowType.GENERAL):
+                int_records = {}
+                for sg in [
+                    sg for sg in self.sg_header.keys()
+                    if sg.qos == QoSLevel.GENERAL
+                ]:
+                    for header, value in self.sg_header[sg].items():
+                        if(header in int_records):
+                            raise Exception("Appdata Duplicate in different General SocialGroups")
+                        int_records[header] = value
+                traffic = int_records
+            elif(nft == NetFlowType.C2G):
+                crt_records = self.ExtractNetworkTraffic(NetFlowType.CRITICAL)
+                gen_records = self.ExtractNetworkTraffic(NetFlowType.GENERAL)
+                c2g_records = crt_records.copy()
 
-            return int_records
-        elif(nft == NetFlowType.C2G):
-            crt_records = self.ExtractNetworkTraffic(NetFlowType.CRITICAL)
-            gen_records = self.ExtractNetworkTraffic(NetFlowType.GENERAL)
-            c2g_records = crt_records.copy()
+                for header in crt_records.keys():
+                    if(header not in gen_records):
+                        c2g_records.pop(header)
+                traffic = c2g_records
+            elif(nft == NetFlowType.NC2G):
+                gen_records = self.ExtractNetworkTraffic(NetFlowType.GENERAL)
+                crt_records = self.ExtractNetworkTraffic(NetFlowType.CRITICAL)
+                nc2g_records = gen_records.copy()
 
-            for header in crt_records.keys():
-                if(header not in gen_records):
-                    c2g_records.pop(header)
+                for header in gen_records.keys():
+                    if(header in crt_records):
+                        nc2g_records.pop(header)
+                traffic = nc2g_records
 
-            return c2g_records
-        elif(nft == NetFlowType.NC2G):
-            gen_records = self.ExtractNetworkTraffic(NetFlowType.GENERAL)
-            crt_records = self.ExtractNetworkTraffic(NetFlowType.CRITICAL)
-            nc2g_records = gen_records.copy()
+            self.nft_traffic[nft] = traffic
 
-            for header in gen_records.keys():
-                if(header in crt_records):
-                    nc2g_records.pop(header)
-
-            return nc2g_records
-        return {}
+        return self.nft_traffic[nft]
 
     # create report for network traffics.
     def CreateReport(self):
@@ -581,7 +589,7 @@ class StatisticRecorder:
         ot_bits = 0
         for record in app_stats.values():
             total_bits += record.bits
-            if(record.is_src_ot):
+            if(record.is_src_ot or len([x for x in record.is_bs_ot if x])):
                 ot_bits += record.bits
         return ot_bits/max(total_bits, 1)
 
@@ -665,81 +673,217 @@ class StatisticRecorder:
             sg_stats[bs_type] = bs_type_sg_drop_rate
         return sg_stats
 
-    # Analysis Variables for the Little's Law.
     def VehicleAppdataArrivalRateReport(self, app_stats):
-        return (
-            len(app_stats) /
-            SUMO_SIM_SECONDS /
-            self.sys_veh_num
-        )
+        time_orgnz_record = {}
+        _max = 0
+        _min = 0
+        _avg = 0
+        _num = 0
+        if(len(app_stats) > 0):
+            for record in app_stats.values():
+                time = record.at
+                if(time not in time_orgnz_record):
+                    time_orgnz_record[time] = 1
+                else:
+                    time_orgnz_record[time] += 1
+            _max = max(time_orgnz_record.values())
+            _min = min(time_orgnz_record.values())
+            _avg = sum(time_orgnz_record.values())/(self.RecordDuration()*1000)
+            _num = sum(time_orgnz_record.values())
+        # print(time_orgnz_record)
+        return {
+            "max": _max,
+            "avg": _avg,
+            "min": _min,
+            "num": _num
+        }
 
     def VehicleAppdataArrivalSizeReport(self, app_stats):
-        return (
-            sum(map(lambda x: x.bits, app_stats.values())) /
-            max(len(app_stats), 1) /
-            max(self.sys_veh_num, 1)
-        )
+        time_orgnz_record = {}
+        _max = 0
+        _min = 0
+        _avg = 0
+        _num = 0
+        if(len(app_stats) > 0):
+            for record in app_stats.values():
+                time = record.at
+                if(time not in time_orgnz_record):
+                    time_orgnz_record[time] = []
+                time_orgnz_record[time].append(record.bits)
+            per_ms_avg_data_size = [sum(x)/len(x) for x in time_orgnz_record.values()]
+            all_data_size = [v for x in time_orgnz_record.values() for v in x]
+            _max = max(per_ms_avg_data_size)
+            _min = min(per_ms_avg_data_size)
+            _avg = sum(all_data_size)/len(all_data_size)
+            _num = len(all_data_size)
+        return {
+            "max": _max,
+            "avg": _avg,
+            "min": _min,
+            "num": _num
+        }
 
     def VehicleAppdataDepartRateReport(self, app_stats):
-        appdata_depart_amount = 0
-        for record in app_stats.values():
-            for time_per_bs_txq in record.time_bs_txq:
-                if(len(time_per_bs_txq) > 0):
-                    appdata_depart_amount += 1
-                    break
-
-        return (
-            appdata_depart_amount /
-            SUMO_SIM_SECONDS /
-            max(self.sys_veh_num, 1)
-        )
+        time_orgnz_record = {}
+        _max = 0
+        _min = 0
+        _avg = 0
+        _num = 0
+        if(len(app_stats) > 0):
+            for record in app_stats.values():
+                time_enter_bs_txq = [
+                    time_per_bs_txq[0][0]
+                    for time_per_bs_txq in record.time_bs_txq
+                    if len(time_per_bs_txq) > 0
+                ]
+                if(len(time_enter_bs_txq) > 0):
+                    time = min(time_enter_bs_txq)
+                    if(time not in time_orgnz_record):
+                        time_orgnz_record[time] = 1
+                    else:
+                        time_orgnz_record[time] += 1
+            _max = max(time_orgnz_record.values())
+            _min = min(time_orgnz_record.values())
+            _avg = sum(time_orgnz_record.values())/(self.RecordDuration()*1000)
+            _num = sum(time_orgnz_record.values())
+        # print(time_orgnz_record)
+        return {
+            "max": _max,
+            "avg": _avg,
+            "min": _min,
+            "num": _num
+        }
 
     def BaseStationAppdataArrivalRateReport(self, app_stats):
-        tot_bs_arv_data = [0 for _ in GV.NET_STATION_CONTROLLER]
-
-        for record in app_stats.values():
+        bs_report = []
+        if(len(app_stats) > 0):
             for bs in GV.NET_STATION_CONTROLLER:
-                if(len(record.time_bs_txq[bs]) > 0):
-                    tot_bs_arv_data[bs] += 1
-
-        return list(
-            map(
-                lambda x: x / SUMO_SIM_SECONDS,
-                tot_bs_arv_data
-            )
-        )
+                time_orgnz_record = {}
+                _max = 0
+                _min = 0
+                _avg = 0
+                _num = 0
+                for record in app_stats.values():
+                    if(len(record.time_bs_txq[bs]) > 0):
+                        time = record.time_bs_txq[bs][0][0]
+                        if(not time in time_orgnz_record):
+                            time_orgnz_record[time] = 1
+                        else:
+                            time_orgnz_record[time] += 1
+                if(len(time_orgnz_record) > 0):
+                    _max = max(time_orgnz_record.values())
+                    _min = min(time_orgnz_record.values())
+                    _avg = sum(time_orgnz_record.values())/self.RecordDuration()/1000
+                    _num = sum(time_orgnz_record.values())
+                bs_report.append(
+                    {
+                        "max": _max,
+                        "avg": _avg,
+                        "min": _min,
+                        "num": _num
+                    }
+                )
+        else:
+            bs_report = [
+                {
+                    "max": 0,
+                    "avg": 0,
+                    "min": 0,
+                    "num": 0
+                }
+                for _ in GV.NET_STATION_CONTROLLER
+            ]
+        return bs_report
 
     def BaseStationAppdataArrivalSizeReport(self, app_stats):
-        tot_bs_arv_data = [0 for _ in GV.NET_STATION_CONTROLLER]
-        tot_bs_arv_bits = [0 for _ in GV.NET_STATION_CONTROLLER]
-
-        for record in app_stats.values():
+        bs_report = []
+        if(len(app_stats) > 0):
             for bs in GV.NET_STATION_CONTROLLER:
-                if(len(record.time_bs_txq[bs]) > 0):
-                    tot_bs_arv_data[bs] += 1
-                    tot_bs_arv_bits[bs] += record.bits
-
-        return [
-            tot_bs_arv_bits[bs]/max(tot_bs_arv_data[bs], 1)
-            for bs in GV.NET_STATION_CONTROLLER
-        ]
+                time_orgnz_record = {}
+                _max = 0
+                _min = 0
+                _avg = 0
+                _num = 0
+                for record in app_stats.values():
+                    if(len(record.time_bs_txq[bs]) > 0):
+                        time = record.time_bs_txq[bs][0][0]
+                        if(not time in time_orgnz_record):
+                            time_orgnz_record[time] = []
+                        time_orgnz_record[time].append(record.bits)
+                if(len(time_orgnz_record) > 0):
+                    per_ms_avg_data_size = [sum(x)/len(x) for x in time_orgnz_record.values()]
+                    total_data_size = [x for i in time_orgnz_record.values() for x in i]
+                    _max = max(per_ms_avg_data_size)
+                    _min = min(per_ms_avg_data_size)
+                    _avg = sum(total_data_size)/len(total_data_size)
+                    _num = len(total_data_size)
+                bs_report.append(
+                    {
+                        "max": _max,
+                        "avg": _avg,
+                        "min": _min,
+                        "num": _num
+                    }
+                )
+        else:
+            bs_report = [
+                {
+                    "max": 0,
+                    "avg": 0,
+                    "min": 0,
+                    "num": 0
+                }
+                for _ in GV.NET_STATION_CONTROLLER
+            ]
+        return bs_report
 
     def BaseStationAppdataDepartRateReport(self, app_stats):
-        tot_bs_dep_data = [0 for _ in GV.NET_STATION_CONTROLLER]
-
-        for record in app_stats.values():
+        bs_report = []
+        if(len(app_stats) > 0):
             for bs in GV.NET_STATION_CONTROLLER:
-                if(record.time_bs_serv[bs] > -1 or record.time_bs_drop[bs] > -1):
-                    tot_bs_dep_data[bs] += 1
-
-        return list(
-            map(
-                lambda x: x / SUMO_SIM_SECONDS,
-                tot_bs_dep_data
-            )
-        )
+                time_orgnz_record = {}
+                _max = 0
+                _min = 0
+                _avg = 0
+                _num = 0
+                for record in app_stats.values():
+                    time = record.time_bs_serv[bs]
+                    if(time > 0):
+                        if(not time in time_orgnz_record):
+                            time_orgnz_record[time] = 1
+                        else:
+                            time_orgnz_record[time] += 1
+                if(len(time_orgnz_record) > 0):
+                    _max = max(time_orgnz_record.values())
+                    _min = min(time_orgnz_record.values())
+                    _avg = sum(time_orgnz_record.values())/self.RecordDuration()/1000
+                    _num = sum(time_orgnz_record.values())
+                bs_report.append(
+                    {
+                        "max": _max,
+                        "avg": _avg,
+                        "min": _min,
+                        "num": _num
+                    }
+                )
+        else:
+            bs_report = [
+                {
+                    "max": 0,
+                    "avg": 0,
+                    "min": 0,
+                    "num": 0
+                }
+                for _ in GV.NET_STATION_CONTROLLER
+            ]
+        return bs_report
 
     def Preprocess(self):
+        # preprocess only raw statistic data, if it has been processed, skip process.
+        if(not self.raw_sg_header):
+            print("Skipping Preprocess, Since there's no Raw Data.")
+            return
+
         # save the whole social group generated during simulation
         self.social_group = [sg for sg in SocialGroup]
 
@@ -752,10 +896,13 @@ class StatisticRecorder:
         for sg in self.social_group:
             self.sg_header[sg] = {
                 header: record
-                for header, record in self.sg_header[sg].items()
+                for header, record in self.raw_sg_header[sg].items()
                 if (record.at >= self.interval[0] and
-                    record.at <= self.interval[1])
+                    record.at < self.interval[1])
             }
+
+        # clean raw appdata since we have our interest intervals.
+        self.raw_sg_header = None
 
         # preprocess txq timing adjustments
         for sg in self.social_group:
@@ -823,7 +970,7 @@ class StatisticRecorder:
         # save the statistic to file for further estimation
         if save:
             if not os.path.isdir(self.dirpath):
-                os.mkdir(self.dirpath)
+                os.makedirs(self.dirpath)
             report_filename = 'report.pickle'
             object_filename = 'object.pickle'
             with open(self.dirpath + report_filename, 'wb') as interest_statistic_report_file:

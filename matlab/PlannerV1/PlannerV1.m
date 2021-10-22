@@ -187,7 +187,7 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
         
 	if(oma_min_rem_pwr_mw > oma_max_rem_pwr_mw)
             oma_min_rem_pwr_mw = oma_max_rem_pwr_mw;
-        end
+    end
         
 	for index = alloc_grp_index
 %           sufficient resource groups are ignored from noma layer

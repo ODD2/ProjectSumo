@@ -11,8 +11,8 @@ class QoSLevel(IntEnum):
 
 
 class SocialGroup(metaclass=SocialGroupMeta):
-    CRASH = SocialGroupConfig(QoSLevel.CRITICAL, [BaseStationType.UMI, BaseStationType.UMA], False)
-    RCWS = SocialGroupConfig(QoSLevel.GENERAL, [BaseStationType.UMA, BaseStationType.UMI], False)
+    CRASH = SocialGroupConfig(QoSLevel.CRITICAL, [BaseStationType.UMI, BaseStationType.UMA], False, False)
+    RCWS = SocialGroupConfig(QoSLevel.GENERAL, [BaseStationType.UMA, BaseStationType.UMI], True, False)
 
 # SocialGroup = SocialGroupMeta(
 #     "SocialGroup",
