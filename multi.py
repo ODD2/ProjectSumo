@@ -6,6 +6,7 @@ from multiprocessing import Process, Semaphore
 from datetime import datetime
 from time import sleep
 from os import path
+from psutil import virtual_memory as vm
 import single
 
 RUN_MISS_ONLY = True
@@ -14,7 +15,7 @@ RUN_MISS_ONLY = True
 class WeightInterestConfig:
     def __init__(self,  interest_config):
         self.interest_config = interest_config
-        self.weight = (3 ** interest_config.traffic_scale)
+        self.weight = (3 / 1.4 * interest_config.traffic_scale)
         self.weight *= 1.2 if interest_config.req_rsu else 1
         self.weight *= 1.5 if interest_config.res_alloc_type == ResourceAllocatorType.NOMA_OPT else 1
 
@@ -55,6 +56,7 @@ def Worker(s: Semaphore, target, args):
 
 
 def ParallelSimulationManager(weight_intconfs, limit):
+    valid_memory = limit - vm().percent
     s = Semaphore(0)
     weight_process_list = []
     with open("scheme_fail_report.txt", "w") as scheme_fail_report:
@@ -64,7 +66,7 @@ def ParallelSimulationManager(weight_intconfs, limit):
             weight_intconfs.sort(key=lambda x: x.weight, reverse=True)
             # arrange resource to interest configs accroding to its weight
             for weight_intconf in weight_intconfs:
-                if(weight_intconf.weight < limit):
+                if(weight_intconf.weight < valid_memory):
                     weight_process = WeightProcess(
                         weight_intconf,
                         Process(
@@ -79,7 +81,7 @@ def ParallelSimulationManager(weight_intconfs, limit):
                     if(not RUN_MISS_ONLY or not weight_process.CheckResult()):
                         weight_process.Start()
                         weight_process_list.append(weight_process)
-                        limit -= weight_intconf.weight
+                        valid_memory -= weight_intconf.weight
                         sleep(2)
                 else:
                     remain_weight_intconfs.append(weight_intconf)
@@ -91,7 +93,7 @@ def ParallelSimulationManager(weight_intconfs, limit):
             weight_intconfs = remain_weight_intconfs
 
             # wait untill enough resource for the most required config.
-            while(limit < weight_intconfs[0].weight):
+            while(valid_memory < weight_intconfs[0].weight):
                 # wait for working process to end
                 s.acquire()
                 # check which process(es) ended
@@ -104,7 +106,7 @@ def ParallelSimulationManager(weight_intconfs, limit):
                             time_text = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
                             scheme_fail_report.write("[{}]{}\n".format(time_text, wp))
                             # release resource limit
-                        limit += wp.weight_conf.weight
+                        valid_memory += wp.weight_conf.weight
                         # join process to prevent existance of zombie process
                         wp.process.join()
                     else:
@@ -115,27 +117,45 @@ def ParallelSimulationManager(weight_intconfs, limit):
             wp.process.join()
 
 
+def SimulationSettings(fn):
+    def wrapper(**args):
+        result = []
+        for qos_re_class in [True]:
+            for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
+                for rsu in [False, True]:
+                    for traffic_scale in [i/10 for i in range(7, 15, 1)]:
+                        for seed in [i+1 for i in range(10)]:
+                            result.append(
+                                fn(
+                                    **args,
+                                    qos_re_class=qos_re_class,
+                                    res_alloc_type=res_alloc_type,
+                                    rsu=rsu,
+                                    traffic_scale=traffic_scale,
+                                    seed=seed
+                                )
+                            )
+        return result
+    return wrapper
+
+
+@ SimulationSettings
+def CreateWeightIntConfs(qos_re_class, res_alloc_type, rsu, traffic_scale, seed):
+    return WeightInterestConfig(
+        InterestConfig(
+            qos_re_class,
+            res_alloc_type,
+            rsu,
+            traffic_scale,
+            seed
+        )
+    )
+
+
 if __name__ == "__main__":
     beg_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    weight_intconfs = []
-    for qos_re_class in [True, False]:
-        for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
-            for rsu in [False, True]:
-                for traffic_scale in [i/10 for i in range(7, 13, 1)]:
-                    for seed in range(10):
-                        config = InterestConfig(
-                            qos_re_class,
-                            res_alloc_type,
-                            rsu,
-                            traffic_scale,
-                            seed
-                        )
-                        weight_intconfs.append(
-                            WeightInterestConfig(
-                                config
-                            )
-                        )
-    ParallelSimulationManager(weight_intconfs, 100)
+    weight_intconfs = CreateWeightIntConfs()
+    ParallelSimulationManager(weight_intconfs, 70)
     end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     print("Start at: " + beg_time)
     print("End at: " + end_time)

@@ -10,6 +10,7 @@ traci = "*"
 jupyter = "*"
 matplotlib = "*"
 pandas = "*"
+psutil = "*"
 
 [dev-packages]
 pylint = "*"

@@ -167,10 +167,10 @@ class StatisticRecorder:
             elif(nft == NetFlowType.C2G):
                 crt_records = self.ExtractNetworkTraffic(NetFlowType.CRITICAL)
                 gen_records = self.ExtractNetworkTraffic(NetFlowType.GENERAL)
-                c2g_records = crt_records.copy()
+                c2g_records = gen_records.copy()
 
-                for header in crt_records.keys():
-                    if(header not in gen_records):
+                for header in gen_records.keys():
+                    if(header not in crt_records):
                         c2g_records.pop(header)
                 traffic = c2g_records
             elif(nft == NetFlowType.NC2G):
@@ -889,8 +889,8 @@ class StatisticRecorder:
 
         # create empty dataset for social groups without data during simulation.
         for sg in self.social_group:
-            if(sg not in self.sg_header):
-                self.sg_header[sg] = {}
+            if(sg not in self.raw_sg_header):
+                self.raw_sg_header[sg] = {}
 
         # extract only appdata that're in interest intervals.
         for sg in self.social_group:

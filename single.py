@@ -1,3 +1,4 @@
+from time import sleep
 import od.engine as GE
 import od.vars as GV
 # STD
@@ -98,8 +99,8 @@ def InitTraci(interest_config):
         "sumo-gui" if SUMO_SIM_GUI else "sumo",
         "-c",
         os.getcwd() + "/ntust.sumocfg",
-        "--quit-on-end",
         "--start",
+        "--quit-on-end",
         "--step-length",
         str(SUMO_SECONDS_PER_STEP),
         "--scale",
@@ -222,5 +223,5 @@ if __name__ == "__main__":
     #     )
     # )
     cProfile.run(
-        """main(InterestConfig(True,ResourceAllocatorType.NOMA_OPT,False,0.6,666))"""
+        """main(InterestConfig(True,ResourceAllocatorType.NOMA_OPT,True,0.6,666))"""
     )
