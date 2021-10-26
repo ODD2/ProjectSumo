@@ -5,11 +5,8 @@ import od.vars as GV
 from threading import Thread
 import numpy as np
 import os
-import gc
-import sys
-import traci
+from od import traci
 import cProfile
-import re
 # Custom
 from od.network.controller import BaseStationController
 from od.network.types import BaseStationType, ResourceAllocatorType
@@ -223,5 +220,5 @@ if __name__ == "__main__":
     #     )
     # )
     cProfile.run(
-        """main(InterestConfig(True,ResourceAllocatorType.NOMA_OPT,True,0.6,666))"""
+        """main(InterestConfig(True,ResourceAllocatorType.NOMA_APR,True,1.4,5))"""
     )

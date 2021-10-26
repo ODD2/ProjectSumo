@@ -1,5 +1,5 @@
 from od.env.config import SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP, NET_SECONDS_PER_TS
-import traci
+from od import traci
 import math
 
 # Numeric Precision Settings

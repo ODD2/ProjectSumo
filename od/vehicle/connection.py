@@ -2,7 +2,7 @@ from enum import IntEnum
 from od.layer import NetObjLayer
 from od.env.config import SUMO_SIM_GUI
 import od.vars as GV
-import traci
+from od import traci
 
 
 class ConnectionState(IntEnum):

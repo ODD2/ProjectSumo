@@ -2,14 +2,15 @@ from od.misc.interest import InterestConfig
 from od.network.types import ResourceAllocatorType
 from od.env.config import ROOT_DIR
 from od.view import DisplayStatistics
-from multiprocessing import Process, Semaphore
 from datetime import datetime
 from time import sleep
 from os import path
 from psutil import virtual_memory as vm
+import multiprocessing as mp
 import single
 
 RUN_MISS_ONLY = True
+SYS_TOTAL_MEM = vm().total/(1024**3)
 
 
 class WeightInterestConfig:
@@ -18,10 +19,12 @@ class WeightInterestConfig:
         self.weight = (3 / 1.4 * interest_config.traffic_scale)
         self.weight *= 1.2 if interest_config.req_rsu else 1
         self.weight *= 1.5 if interest_config.res_alloc_type == ResourceAllocatorType.NOMA_OPT else 1
+        self.weight /= SYS_TOTAL_MEM
+        self.weight *= 100
 
 
 class WeightProcess:
-    def __init__(self, weight_conf, process: Process):
+    def __init__(self, weight_conf, process: mp.Process):
         self.weight_conf = weight_conf
         self.process = process
 
@@ -38,7 +41,7 @@ class WeightProcess:
         return self.process.pid
 
     def CheckResult(self):
-        return path.isfile(ROOT_DIR + self.weight_conf.interest_config.folder())
+        return path.isfile(ROOT_DIR + self.weight_conf.interest_config.folder() + "report.pickle")
 
     def __repr__(self):
         return str(self.weight_conf.interest_config)
@@ -47,7 +50,7 @@ class WeightProcess:
         return str(self.weight_conf.interest_config)
 
 
-def Worker(s: Semaphore, target, args):
+def Worker(s: mp.Semaphore, target, args):
     try:
         target(*args)
     except Exception as e:
@@ -57,7 +60,7 @@ def Worker(s: Semaphore, target, args):
 
 def ParallelSimulationManager(weight_intconfs, limit):
     valid_memory = limit - vm().percent
-    s = Semaphore(0)
+    s = mp.Semaphore(0)
     weight_process_list = []
     with open("scheme_fail_report.txt", "w") as scheme_fail_report:
         while(True):
@@ -69,7 +72,7 @@ def ParallelSimulationManager(weight_intconfs, limit):
                 if(weight_intconf.weight < valid_memory):
                     weight_process = WeightProcess(
                         weight_intconf,
-                        Process(
+                        mp.Process(
                             target=Worker,
                             args=(
                                 s,
@@ -82,7 +85,6 @@ def ParallelSimulationManager(weight_intconfs, limit):
                         weight_process.Start()
                         weight_process_list.append(weight_process)
                         valid_memory -= weight_intconf.weight
-                        sleep(2)
                 else:
                     remain_weight_intconfs.append(weight_intconf)
             # if there're no remaining interest configs, begin to wait all process to end.
@@ -153,6 +155,7 @@ def CreateWeightIntConfs(qos_re_class, res_alloc_type, rsu, traffic_scale, seed)
 
 
 if __name__ == "__main__":
+    mp.set_start_method("forkserver")
     beg_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     weight_intconfs = CreateWeightIntConfs()
     ParallelSimulationManager(weight_intconfs, 70)

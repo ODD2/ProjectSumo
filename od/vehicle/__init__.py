@@ -9,9 +9,10 @@ from od.social.group import SocialGroup, QoSLevel
 from od.social.manager import SocialGroupManager
 from od.env.config import VEH_MOVE_BS_CHECK, SUMO_SIM_GUI
 from od.misc.types import DebugMsgType
-from traci import vehicle
 import od.vars as GV
-import traci.constants as tc
+from od import traci
+vehicle = traci.vehicle
+tc = traci.constants
 
 
 class VehicleRecorder():

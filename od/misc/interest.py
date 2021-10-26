@@ -8,7 +8,9 @@ class InterestConfig:
         self.traffic_scale = traffic_scale
         self.rng_seed = rng_seed
         self.qos_re_class = qos_re_class
-        self.path_repr = [
+
+    def path_repr(self):
+        return [
             "yQoS" if self.qos_re_class else "nQoS",
             "yRSU" if self.req_rsu else "nRSU",
             self.res_alloc_type.name,
@@ -17,10 +19,10 @@ class InterestConfig:
         ]
 
     def __str__(self):
-        return "-".join(self.path_repr)
+        return "-".join(self.path_repr())
 
     def folder(self):
-        return "/".join(self.path_repr) + "/"
+        return "/".join(self.path_repr()) + "/"
 
     def folder_legacy(self):
         return "/".join([

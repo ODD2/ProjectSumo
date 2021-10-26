@@ -19,7 +19,7 @@ class ExternAllocParam:
 
 
 # Approximation Allocator Specifically for 1x2 and 2x1 geometric resource blocks in a 2 timeslot
-# def ResourceAllocatorNomaApprox(RES_CONF, QoS_GP_CONF):
+# def ResourceAllocatorNomaApprox(RES_CONF , QoS_GP_CONF):
 #     # initialization
 
 #     for qos in QoSLevel:
@@ -29,23 +29,34 @@ class ExternAllocParam:
 #         for gp in sort_gp_conf:
 #             pass
 
+class AsymNomaRbConfig:
+    def __init__(self, inner_rbs, outer_rbs, outer_pwr_mW):
+        self.inner_rbs = inner_rbs
+        self.outer_rbs = outer_rbs
+        self.outer_pwr_mW = outer_pwr_mW
+
+
+class SymNomaRbConfig:
+    def __init__(self, inner_rb, outer_rb):
+        self.inner_rb = inner_rb
+        self.outer_rb = outer_rb
+
+
 class NomaRbConfig:
     def __init__(self, owner, cqi):
         self.cqi = cqi
-        self.rbfc = []
         self.owner = owner
 
 
-class NomaRbfConfig:
-    def __init__(self, rem_pwr_mW):
+class InnerRbConfig(NomaRbConfig):
+    def __init__(self, owner, cqi, rem_pwr_mW):
         self.rem_pwr_mW = rem_pwr_mW
-        self.layer_rb = [None for _ in range(2)]
+        super().__init__(owner, cqi)
 
-    def __getitem__(self, key):
-        return self.layer_rb[key]
 
-    def __setitem__(self, key, value):
-        self.layer_rb[key] = value
+class OuterRbConfig(NomaRbConfig):
+    def __init__(self, owner, cqi):
+        super().__init__(owner, cqi)
 
 
 class ResourceAllocatorNomaApprox:
@@ -55,82 +66,163 @@ class ResourceAllocatorNomaApprox:
         self.frbf_h = round(RES_CONF["rbf_h"])
         self.frbf_w = round(RES_CONF["rbf_w"])
         self.max_pwr_mW = pow(10, RES_CONF["max_pwr_dBm"]/10)
-        self.grid = [
-            [
-                NomaRbfConfig(self.max_pwr_mW) for _ in range(self.frbf_w)
-            ] for _ in range(self.frbf_h)
-        ]
-        self.spare_inner_rb = {
-            2: {1: []},
-            1: {2: []}
-        }
-        self.validations = [
+
+        self.spare_inner_rb = {2: {1: []}, 1: {2: []}}
+        self.hybrid_rb = {2: {1: []}, 1: {2: []}}
+        self.solid_rb = {2: {1: []}, 1: {2: []}}
+
+        self.procedures = [
             self.CheckValidSymetricGeo,
-            self.CheckValidSpareOuter,
-            self.CheckValidSpareInner
+            self.CheckValidSpareInner,
+            self.CheckValidSpareOuter
         ]
 
-    def CheckValidSymetricGeo(self, gp_conf, min_req_pwr, rbf_h, rbf_w):
-        frbf_h, frbf_w = self.frbf_h, self.frbf_w
+    def CheckValidSymetricGeo(self, gp_conf, rbf_h, rbf_w, gp_pwr_conf):
         if(len(self.spare_inner_rb[rbf_h][rbf_w]) == 0):
-            return -1, -1, -1
-        # sort the resource blocks in a descedent order.
-        self.spare_inner_rb[rbf_h][rbf_w].sort(key=lambda x: x.rbfc[0].rem_pwr_mW, reverse=True)
-        # check if the maximum valid resource block provides a valid power
-        if(self.spare_inner_rb[rbf_h][rbf_w][0].rbfc[0].rem_pwr_mW < min_req_pwr):
-            return -1, -1, -1
-        target_rb = self.spare_inner_rb[rbf_h][rbf_w][0]
-        # remove rb from list, it's no longer a spare rb
-        self.spare_inner_rb[rbf_h][rbf_w] = self.spare_inner_rb[rbf_h][rbf_w][1:]
-        for x in range(frbf_w):
-            for y in range(frbf_h):
-                if(self.grid[y][x][0] == target_rb):
-                    return y, x, 1
-        else:
-            raise Exception("Unknown Error! Cannot Find Target RB in inner layer grid.")
+            return False
+        # classify valid/defect spare inner resource block for specify group.
+        valid_spare_inner_rb = []
+        defect_spare_inner_rb = []
+        for inner_rb in self.spare_inner_rb[rbf_h][rbf_w]:
+            if (not inner_rb.owner == gp_conf) and (inner_rb.rem_pwr_mW > gp_pwr_conf["min_sinr_req_pwr_mW"]):
+                valid_spare_inner_rb.append(inner_rb)
+            else:
+                defect_spare_inner_rb.append(inner_rb)
+        # checking for existence of valid spare inner resource block
+        if(len(valid_spare_inner_rb) == 0):
+            return False
+        # sort all valid spare inner resource block according to its remaining power
+        valid_spare_inner_rb.sort(key=lambda x: x.rem_pwr_mW, reverse=True)
+        # get the target spare inner resource block
+        target_rb = valid_spare_inner_rb[0]
 
-    def CheckValidSpareOuter(self,  gp_conf, min_req_pwr, rbf_h, rbf_w):
-        frbf_h, frbf_w = self.frbf_h, self.frbf_w
-        for x in range(frbf_w-rbf_w+1):
-            for y in range(frbf_h-rbf_h+1):
-                for _x in range(rbf_w):
-                    for _y in range(rbf_h):
-                        rbfc = self.grid[y+_y][x+_x]
-                        if(rbfc[0] == None or rbfc[0].owner == gp_conf or
-                           not rbfc[1] == None or rbfc.rem_pwr_mW < min_req_pwr):
-                            break
-                    else:
-                        continue
-                    break
-                else:
-                    return y, x, 1
-                continue
-        return -1, -1, -1
+        # remove target RB from spare inner resource block list, it's no longer a spare RB.
+        self.spare_inner_rb[rbf_h][rbf_w] = valid_spare_inner_rb[1:] + defect_spare_inner_rb
+        # add target RB to solid inner resource block list.
+        rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
+            10*log10(target_rb.rem_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"])
+        )
+        self.solid_rb[rbf_h][rbf_w].append(
+            SymNomaRbConfig(
+                target_rb,
+                OuterRbConfig(
+                    gp_conf,
+                    rb_cqi
+                )
+            )
+        )
+        gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
+            float(rb_cqi),
+            int(NET_RB_SLOT_SYMBOLS)
+        )
+        return True
 
-    def CheckValidSpareInner(self, gp_conf, min_req_pwr, rbf_h, rbf_w):
-        frbf_h, frbf_w = self.frbf_h, self.frbf_w
-        for x in range(frbf_w-rbf_w+1):
-            for y in range(frbf_h-rbf_h+1):
-                # 1x2 resource block search in a reverse direction
-                # for better resource arrangment
-                if(y == 2 and x == 1):
-                    y = frbf_h - 2 - y
-                for _y in range(rbf_h):
-                    for _x in range(rbf_w):
-                        if(not self.grid[y+_y][x+_x][0] == None):
-                            break
-                    else:
-                        continue
+    def CheckValidSpareOuter(self, gp_conf, rbf_h, rbf_w, gp_pwr_conf):
+        # check for hybrid resource blocks to convert into a solid one.
+        if(len(self.hybrid_rb[rbf_w][rbf_h]) > 0):
+            # find resource block providing best power condition
+            self.hybrid_rb[rbf_w][rbf_h].sort(key=lambda x: x.outer_pwr_mW, reverse=True)
+            target_rb = self.hybrid_rb[rbf_w][rbf_h]
+            # add outer resource block configuration
+            rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
+                10*log10(
+                    target_rb.outer_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"]
+                )
+            )
+            target_rb.outer_rbs.append(
+                OuterRbConfig(
+                    gp_conf,
+                    rb_cqi
+                )
+            )
+            gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
+                float(rb_cqi),
+                int(NET_RB_SLOT_SYMBOLS)
+            )
+            # remove from hybrid RB list, due to it has become a solid RB.
+            self.hybrid_rb[rbf_w][rbf_h] = self.hybrid_rb[rbf_w][rbf_h][1:]
+            # add into solid RB list.
+            self.solid_rb[rbf_w][rbf_h].append(target_rb)
+            return True
+
+        # check for spare resource blocks to construct into a hybrid one.
+        if(len(self.spare_inner_rb[rbf_w][rbf_h]) >= 2):
+            # find the best power condition spare inner resource block
+            self.spare_inner_rb[rbf_w][rbf_h].sort(key=lambda x: x.rem_pwr_mW, reverse=True)
+            # fetch the required inner RB
+            inner_rbs = self.spare_inner_rb[rbf_w][rbf_h][:2]
+            # calculate maximum valid power
+            valid_pwr_mW = min([x.rem_pwr_mW for x in inner_rbs])
+            # no valid power in current condition, end procedure.
+            if(valid_pwr_mW < gp_pwr_conf["min_sinr_req_pwr_mW"]):
+                return False
+            # remove from spare inner RB list, due to they have become a hybrid RB
+            self.spare_inner_rb[rbf_w][rbf_h] = self.spare_inner_rb[rbf_w][rbf_h][2:]
+            # add into hybrid RB list
+            rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
+                10*log10(
+                    valid_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"]
+                )
+            )
+            self.hybrid_rb[rbf_w][rbf_h].append(
+                AsymNomaRbConfig(
+                    inner_rbs,
+                    [OuterRbConfig(
+                        gp_conf,
+                        rb_cqi
+                    )]
+                )
+            )
+            gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
+                float(rb_cqi),
+                int(NET_RB_SLOT_SYMBOLS)
+            )
+            return True
+        return False
+
+    def CheckValidSpareInner(self, gp_conf, rbf_h, rbf_w, gp_pwr_conf):
+        # calculate resource occupation
+        num_2_1_rb = (
+            len(self.spare_inner_rb[2][1]) +
+            len(self.hybrid_rb[2][1]) +
+            len(self.solid_rb[2][1])
+        )
+        num_1_2_rb = (
+            len(self.spare_inner_rb[1][2]) +
+            len(self.hybrid_rb[1][2]) +
+            len(self.solid_rb[1][2])
+        )
+        # construct valid remaining resource block fractions per timeslot.
+        rem_rbf_ts = [
+            self.frbf_h - num_1_2_rb - int(num_2_1_rb/2) - num_2_1_rb % 2,
+            self.frbf_h - num_1_2_rb - int(num_2_1_rb/2)
+        ]
+
+        # examine valid resource space
+        for x in range(self.frbf_w):
+            for _x in range(rbf_w):
+                if(rem_rbf_ts[x+_x] < rbf_h):
                     break
-                else:
-                    return y, x, 0
-        return -1, -1, -1
+            else:
+                # create if resource sufficient.
+                self.spare_inner_rb[rbf_h][rbf_w].append(
+                    InnerRbConfig(
+                        gp_conf,
+                        gp_pwr_conf["max_cqi"],
+                        gp_pwr_conf["max_sinr_ext_pwr_mW"]
+                    )
+                )
+                gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
+                    float(gp_pwr_conf["max_cqi"]),
+                    int(NET_RB_SLOT_SYMBOLS)
+                )
+                return True
+        return False
 
     def __call__(self):
-        return self.ArrangeResource()
+        return self.AllocateResource()
 
-    def ArrangeResource(self):
-        alloc_report = {}
+    def AllocateResource(self):
         # allocate resource
         for gp_confs in self.QoS_GP_CONF:
             if(len(gp_confs) == 0):
@@ -140,81 +232,84 @@ class ResourceAllocatorNomaApprox:
             for gp_conf in sort_gp_confs:
                 # preparation
                 rbf_w, rbf_h = round(gp_conf["rbf_w"]), round(gp_conf["rbf_h"])
-                gp_spare_inner_rb = []
                 max_sinr = gp_conf["sinr_max"]
-                max_sinr_noise_reciprocal = (
-                    pow(10, max_sinr/10) / self.max_pwr_mW
-                )
-                max_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(max_sinr)
-                max_sinr_req_pwr_mW = pow(10, gp_conf["pwr_req_dBm"]/10)
-                max_sinr_ext_pwr_mW = pow(10, gp_conf["pwr_ext_dBm"]/10)
-                min_sinr_req_pwr_mW = pow(10, -6.9/10)/max_sinr_noise_reciprocal
+                max_sinr_noise_reciprocal = pow(10, max_sinr/10) / self.max_pwr_mW
+                pwr_conf = {
+                    "max_sinr_noise_reciprocal": max_sinr_noise_reciprocal,
+                    "max_cqi": GE.MATLAB_ENG.SelectCQI_BLER10P(max_sinr),
+                    "max_sinr_req_pwr_mW": pow(10, gp_conf["pwr_req_dBm"]/10),
+                    "max_sinr_ext_pwr_mW": pow(10, gp_conf["pwr_ext_dBm"]/10),
+                    "min_sinr_req_pwr_mW": pow(10, -6.9/10)/max_sinr_noise_reciprocal
+                }
                 # allocate resource
                 while(gp_conf["rem_bits"] > 0):
-                    x, y, z = -1, -1, -1
-                    v = 0
                     # run through validation list for valid RB allocation.
-                    for validation in self.validations:
-                        v += 1
-                        y, x, z = validation(gp_conf, min_sinr_req_pwr_mW, rbf_h, rbf_w)
-                        if(x > -1 and y > -1 and z > -1):
+                    for procedure in self.procedures:
+                        if(procedure(gp_conf, rbf_h, rbf_w, pwr_conf)):
                             break
                     else:
                         # if all validation fails, the allocation fails.
                         break
-
-                    # calculate acquire power and cqi settings
-                    rb_cqi = 0
-                    req_pwr_mW = 0
-                    rem_pwr_mW = self.max_pwr_mW
-                    if(z == 0):
-                        req_pwr_mW = max_sinr_req_pwr_mW
-                        rem_pwr_mW = max_sinr_ext_pwr_mW
-                        rb_cqi = max_cqi
-                    else:
-                        rem_pwr_mW_list = [
-                            self.grid[y+_y][x+_x].rem_pwr_mW
-                            for _x in range(rbf_w) for _y in range(rbf_h)
-                        ]
-                        req_pwr_mW = min(rem_pwr_mW_list)
-                        rem_pwr_mW = 0
-                        rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
-                            10*log10(req_pwr_mW*max_sinr_noise_reciprocal)
-                        )
-                    # if maximum valid cqi is 0, the allocation fails.
-                    if(rb_cqi == 0):
-                        raise Exception("Error!RBF selection has been filtered, resource block CQI should not be 0.")
-                    # create resource block
-                    rb = NomaRbConfig(gp_conf, rb_cqi)
-                    # assign resource block to the grid
-                    for _x in range(rbf_w):
-                        for _y in range(rbf_h):
-                            rbfc = self.grid[y+_y][x+_x]
-                            rbfc[z] = rb
-                            rb.rbfc.append(rbfc)
-                            rbfc.rem_pwr_mW = rem_pwr_mW
-                    # reduce claimed resource
-                    gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
-                        float(rb_cqi),
-                        int(NET_RB_SLOT_SYMBOLS)
-                    )
-                    # record newly created inner resource block as spare resource block.
-                    if(z == 0):
-                        gp_spare_inner_rb.append(rb)
-                    # record the resource assignment
-                    key_gid = "g{}".format(int(gp_conf["gid"]))
-                    key_ofs_ts = "t{}".format(int(x))
-                    key_cqi = "c{}".format(int(rb_cqi))
-                    if(key_gid not in alloc_report):
-                        alloc_report[key_gid] = {}
-                    if(key_ofs_ts not in alloc_report[key_gid]):
-                        alloc_report[key_gid][key_ofs_ts] = {}
-                    if(key_cqi not in alloc_report[key_gid][key_ofs_ts]):
-                        alloc_report[key_gid][key_ofs_ts][key_cqi] = 0
-                    alloc_report[key_gid][key_ofs_ts][key_cqi] += 1
-                # record newly added inner rb according to its geometry
-                self.spare_inner_rb[rbf_h][rbf_w] += gp_spare_inner_rb
+        # create report
+        alloc_report = self.CreateAllocationReport()
         return alloc_report
+
+    def CreateAllocationReport(self):
+        alloc_report = {}
+        # allocation assignment report for all 1x2 geo resource blocks
+        all_1_2_rbs = (
+            [rb for rb in self.spare_inner_rb[1][2]] +
+            [sym_rb.inner_rb for sym_rb in self.solid_rb[1][2]] +
+            [sym_rb.outer_rb for sym_rb in self.solid_rb[1][2]] +
+            [rb for asym_rb in self.hybrid_rb[1][2] for rb in asym_rb.inner_rbs] +
+            [rb for asym_rb in self.hybrid_rb[2][1] for rb in asym_rb.outer_rbs]
+        )
+        # add 1x2 geo resource blocks into report
+        for rb in all_1_2_rbs:
+            # record the resource assignment
+            self.ConstructReportEntity(alloc_report, rb.owner["gid"], 0, rb.cqi)
+
+        # allocation assignment report for all 2x1 geo resource blocks
+        all_2_1_rbs = [[] for _ in range(2)]
+        independ_2_1_rbs = (
+            [SymNomaRbConfig(rb, None) for rb in self.spare_inner_rb[2][1]] +
+            [sym_rb for sym_rb in self.solid_rb[2][1]]
+        )
+        depend_2_1_rbs = (
+            [asym_rb.inner_rbs for asym_rb in self.hybrid_rb[2][1]] +
+            [asym_rb.outer_rbs for asym_rb in self.hybrid_rb[1][2]]
+        )
+        # arrange independent 2x1 resource blocks(higher qos priority has earlier timeslot offset advantage.)
+        independ_2_1_rbs.sort(key=lambda x: x.inner_rb.owner["gid"])
+        max_2_1_rb_per_col = int(len(independ_2_1_rbs)/2) + len(independ_2_1_rbs) % 2
+        for i, sym_rb in enumerate(independ_2_1_rbs):
+            ofs_ts = int(i / max_2_1_rb_per_col)
+            all_2_1_rbs[ofs_ts].append(sym_rb.inner_rb)
+            if(sym_rb.outer_rb):
+                all_2_1_rbs[ofs_ts].append(sym_rb.outer_rb)
+        # arrange dependent 2x1 resource blocks(higher qos priority has earlier timeslot offset advantage.)
+        for rbs in depend_2_1_rbs:
+            rbs.sort(key=lambda x: x.owner["gid"])
+            for ofs_ts, rb in enumerate(rbs):
+                all_2_1_rbs[ofs_ts].append(rb)
+        # add 1x2 geo resource blocks into report
+        for ofs_ts, rbs in enumerate(all_2_1_rbs):
+            for rb in rbs:
+                # record the resource assignment
+                self.ConstructReportEntity(alloc_report, rb.owner["gid"], ofs_ts, rb.cqi)
+        return alloc_report
+
+    def ConstructReportEntity(self, alloc_report, gid, ofs_ts, cqi):
+        key_gid = "g{}".format(int(gid))
+        key_ofs_ts = "t{}".format(int(ofs_ts))
+        key_cqi = "c{}".format(int(cqi))
+        if(key_gid not in alloc_report):
+            alloc_report[key_gid] = {}
+        if(key_ofs_ts not in alloc_report[key_gid]):
+            alloc_report[key_gid][key_ofs_ts] = {}
+        if(key_cqi not in alloc_report[key_gid][key_ofs_ts]):
+            alloc_report[key_gid][key_ofs_ts][key_cqi] = 0
+        alloc_report[key_gid][key_ofs_ts][key_cqi] += 1
 
 
 # Resource Allocator for OMA

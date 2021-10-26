@@ -114,12 +114,14 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     TRACI_LOCK = Lock()
 
     # Base Station Setting
-    BS_SETTING = {}
-    for name, setting in oes.BS_PRESET.items():
-        if (setting["type"] == ont.BaseStationType.UMA or
-                (interest_config.req_rsu and
-                 setting["type"] == ont.BaseStationType.UMI)):
-            BS_SETTING[name] = setting
+    BS_SETTING = {
+        name: setting
+        for name, setting in oes.BS_PRESET.items()
+        if (
+            (setting["type"] == ont.BaseStationType.UMA) or
+            (setting["type"] == ont.BaseStationType.UMI and interest_config.req_rsu)
+        )
+    }
 
 
 def TerminateSimulationVariables():

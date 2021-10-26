@@ -28,6 +28,5 @@
             "request": "launch",
             "module": "test"
         }
-
     ]
 }
