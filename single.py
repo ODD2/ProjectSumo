@@ -7,6 +7,8 @@ import numpy as np
 import os
 from od import traci
 import cProfile
+import faulthandler
+faulthandler.enable()
 # Custom
 from od.network.controller import BaseStationController
 from od.network.types import BaseStationType, ResourceAllocatorType
@@ -101,7 +103,8 @@ def InitTraci(interest_config):
         "--step-length",
         str(SUMO_SECONDS_PER_STEP),
         "--scale",
-        str(interest_config.traffic_scale)
+        str(interest_config.traffic_scale),
+        "--no-step-log"
     ])
 
 
@@ -113,7 +116,6 @@ def main(interest_config):
     # - skipping until desire vehicle network condition.
     for _ in range(SUMO_SKIP_STEPS):
         traci.simulationStep()
-
     # - initialize matlab context for simulation
     GE.InitializeSimulationContext(interest_config)
     # - initialize simulation dependent global variables
@@ -181,7 +183,7 @@ def main(interest_config):
             UpdateNS(GV.NET_STATION_CONTROLLER, ns)
 
             # Time slots per network simulation step
-            for ts in range(NET_TS_PER_NET_STEP+1):
+            for ts in range(NET_TS_PER_NET_STEP + 1):
                 # Update sumo simulation info for each network timeslot step
                 GV.SUMO_SIM_INFO.UpdateTS(ts)
 
@@ -220,5 +222,5 @@ if __name__ == "__main__":
     #     )
     # )
     cProfile.run(
-        """main(InterestConfig(True,ResourceAllocatorType.NOMA_APR,True,1.4,5))"""
+        """main(InterestConfig(True,ResourceAllocatorType.NOMA_APR,True,1.3,4))"""
     )

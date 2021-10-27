@@ -10,11 +10,11 @@ import multiprocessing as mp
 import single
 
 RUN_MISS_ONLY = True
-SYS_TOTAL_MEM = vm().total/(1024**3)
+SYS_TOTAL_MEM = vm().total / (1024**3)
 
 
 class WeightInterestConfig:
-    def __init__(self,  interest_config):
+    def __init__(self, interest_config):
         self.interest_config = interest_config
         self.weight = (3 / 1.4 * interest_config.traffic_scale)
         self.weight *= 1.2 if interest_config.req_rsu else 1
@@ -29,6 +29,7 @@ class WeightProcess:
         self.process = process
 
     def Start(self):
+        print("87878787")
         self.process.start()
         print(
             "{} -> {}".format(
@@ -60,6 +61,9 @@ def Worker(s: mp.Semaphore, target, args):
 
 def ParallelSimulationManager(weight_intconfs, limit):
     valid_memory = limit - vm().percent
+    if(valid_memory < 0):
+        print("Insufficinet Memory: {} - {} = {}".format(limit, vm().percent, valid_memory))
+        return
     s = mp.Semaphore(0)
     weight_process_list = []
     with open("scheme_fail_report.txt", "w") as scheme_fail_report:
@@ -125,8 +129,8 @@ def SimulationSettings(fn):
         for qos_re_class in [True]:
             for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
                 for rsu in [False, True]:
-                    for traffic_scale in [i/10 for i in range(7, 15, 1)]:
-                        for seed in [i+1 for i in range(10)]:
+                    for traffic_scale in [i / 10 for i in range(7, 15, 1)]:
+                        for seed in [i + 1 for i in range(10)]:
                             result.append(
                                 fn(
                                     **args,

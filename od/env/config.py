@@ -162,7 +162,7 @@ if NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS % 1 != 0:
     raise Exception(msg)
 
 # Directory Settings
-ROOT_DIR = "data/Tval/"
+ROOT_DIR = "data/GS20/"
 
 # Resource Allocation Parameters
 ALLOC_TVAL_CONST = 1000
