@@ -65,7 +65,7 @@ class ResourceAllocatorNomaApprox:
         self.QoS_GP_CONF = QoS_GP_CONF
         self.frbf_h = round(RES_CONF["rbf_h"])
         self.frbf_w = round(RES_CONF["rbf_w"])
-        self.max_pwr_mW = pow(10, RES_CONF["max_pwr_dBm"]/10)
+        self.max_pwr_mW = pow(10, RES_CONF["max_pwr_dBm"] / 10)
 
         self.spare_inner_rb = {2: {1: []}, 1: {2: []}}
         self.hybrid_rb = {2: {1: []}, 1: {2: []}}
@@ -100,7 +100,7 @@ class ResourceAllocatorNomaApprox:
         self.spare_inner_rb[rbf_h][rbf_w] = valid_spare_inner_rb[1:] + defect_spare_inner_rb
         # add target RB to solid inner resource block list.
         rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
-            10*log10(target_rb.rem_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"])
+            10 * log10(target_rb.rem_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"])
         )
         self.solid_rb[rbf_h][rbf_w].append(
             SymNomaRbConfig(
@@ -125,7 +125,7 @@ class ResourceAllocatorNomaApprox:
             target_rb = self.hybrid_rb[rbf_w][rbf_h]
             # add outer resource block configuration
             rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
-                10*log10(
+                10 * log10(
                     target_rb.outer_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"]
                 )
             )
@@ -160,7 +160,7 @@ class ResourceAllocatorNomaApprox:
             self.spare_inner_rb[rbf_w][rbf_h] = self.spare_inner_rb[rbf_w][rbf_h][2:]
             # add into hybrid RB list
             rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
-                10*log10(
+                10 * log10(
                     valid_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"]
                 )
             )
@@ -194,14 +194,14 @@ class ResourceAllocatorNomaApprox:
         )
         # construct valid remaining resource block fractions per timeslot.
         rem_rbf_ts = [
-            self.frbf_h - num_1_2_rb - int(num_2_1_rb/2) - num_2_1_rb % 2,
-            self.frbf_h - num_1_2_rb - int(num_2_1_rb/2)
+            self.frbf_h - num_1_2_rb - int(num_2_1_rb / 2) - num_2_1_rb % 2,
+            self.frbf_h - num_1_2_rb - int(num_2_1_rb / 2)
         ]
 
         # examine valid resource space
         for x in range(self.frbf_w):
             for _x in range(rbf_w):
-                if(rem_rbf_ts[x+_x] < rbf_h):
+                if(rem_rbf_ts[x + _x] < rbf_h):
                     break
             else:
                 # create if resource sufficient.
@@ -228,18 +228,22 @@ class ResourceAllocatorNomaApprox:
             if(len(gp_confs) == 0):
                 continue
             # sort group configs according to its eager rate, higer rate indicates higher priority.
-            sort_gp_confs = sorted(gp_confs, key=lambda x: x["eager_rate"], reverse=True)
+            sort_gp_confs = sorted(
+                gp_confs,
+                key=lambda x: x["eager_rate"] * GE.MATLAB_ENG.SelectCQI_BLER10P(x["sinr_max"]),
+                reverse=True
+            )
             for gp_conf in sort_gp_confs:
                 # preparation
                 rbf_w, rbf_h = round(gp_conf["rbf_w"]), round(gp_conf["rbf_h"])
                 max_sinr = gp_conf["sinr_max"]
-                max_sinr_noise_reciprocal = pow(10, max_sinr/10) / self.max_pwr_mW
+                max_sinr_noise_reciprocal = pow(10, max_sinr / 10) / self.max_pwr_mW
                 pwr_conf = {
                     "max_sinr_noise_reciprocal": max_sinr_noise_reciprocal,
                     "max_cqi": GE.MATLAB_ENG.SelectCQI_BLER10P(max_sinr),
-                    "max_sinr_req_pwr_mW": pow(10, gp_conf["pwr_req_dBm"]/10),
-                    "max_sinr_ext_pwr_mW": pow(10, gp_conf["pwr_ext_dBm"]/10),
-                    "min_sinr_req_pwr_mW": pow(10, -6.9/10)/max_sinr_noise_reciprocal
+                    "max_sinr_req_pwr_mW": pow(10, gp_conf["pwr_req_dBm"] / 10),
+                    "max_sinr_ext_pwr_mW": pow(10, gp_conf["pwr_ext_dBm"] / 10),
+                    "min_sinr_req_pwr_mW": pow(10, -6.9 / 10) / max_sinr_noise_reciprocal
                 }
                 # allocate resource
                 while(gp_conf["rem_bits"] > 0):
@@ -281,7 +285,7 @@ class ResourceAllocatorNomaApprox:
         )
         # arrange independent 2x1 resource blocks(higher qos priority has earlier timeslot offset advantage.)
         independ_2_1_rbs.sort(key=lambda x: x.inner_rb.owner["gid"])
-        max_2_1_rb_per_col = int(len(independ_2_1_rbs)/2) + len(independ_2_1_rbs) % 2
+        max_2_1_rb_per_col = int(len(independ_2_1_rbs) / 2) + len(independ_2_1_rbs) % 2
         for i, sym_rb in enumerate(independ_2_1_rbs):
             ofs_ts = int(i / max_2_1_rb_per_col)
             all_2_1_rbs[ofs_ts].append(sym_rb.inner_rb)
@@ -333,12 +337,12 @@ class ResourceAllocatorOMA:
     # returns negative value indicates unable to allocate
     def Allocate(self, bandwidth, timeslots):
         offset_timeslot = -1
-        if(bandwidth == NET_RB_BW_UNIT*1 and timeslots == 2):
+        if(bandwidth == NET_RB_BW_UNIT * 1 and timeslots == 2):
             if(self.alloc_resources[0] >= bandwidth and self.alloc_resources[1] >= bandwidth):
                 self.alloc_resources[0] -= bandwidth
                 self.alloc_resources[1] -= bandwidth
                 offset_timeslot = 0
-        elif (bandwidth == NET_RB_BW_UNIT*2 and timeslots == 1):
+        elif (bandwidth == NET_RB_BW_UNIT * 2 and timeslots == 1):
             # time critical allocation type
             for i in range(NET_TS_PER_NET_STEP):
                 if(self.alloc_resources[i] >= bandwidth):
@@ -367,7 +371,7 @@ class ResourceAllocatorOMA:
     def Spare(self, bandwidth, timeslots):
         for i in range(0, NET_TS_PER_NET_STEP, timeslots):
             for j in range(timeslots):
-                if(self.alloc_resources[i+j] < bandwidth):
+                if(self.alloc_resources[i + j] < bandwidth):
                     break
             else:
                 return True

@@ -12,8 +12,8 @@ DEBUG_MSG_FLAGS = (
     # DebugMsgType.NONE
     # DebugMsgType.NET_PKG_INFO |
     # DebugMsgType.NET_APPDATA_INFO |
-    DebugMsgType.NET_ALLOC_INFO
-    # DebugMsgType.MATLAB_INFO
+    DebugMsgType.NET_ALLOC_INFO |
+    DebugMsgType.MATLAB_INFO
     # DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings
@@ -28,7 +28,7 @@ SUMO_SKIP_SECONDS = 185
 SUMO_SKIP_STEPS = int(round((1 / SUMO_SECONDS_PER_STEP) * SUMO_SKIP_SECONDS))
 # . total network warm up seconds for a more realistic network environment.
 SUMO_NET_WARMUP_SECONDS = 1
-SUMO_NET_WARMUP_STEPS = int(round((SUMO_NET_WARMUP_SECONDS/SUMO_SECONDS_PER_STEP)))
+SUMO_NET_WARMUP_STEPS = int(round((SUMO_NET_WARMUP_SECONDS / SUMO_SECONDS_PER_STEP)))
 
 
 # Network Settings
@@ -41,7 +41,7 @@ NET_STEPS_PER_SUMO_STEP = int(round(SUMO_SECONDS_PER_STEP / NET_SECONDS_PER_STEP
 # . seconds per network timeslot
 NET_SECONDS_PER_TS = SUMO_SIM_TIME_SCALER * 0.0005
 # . network timeslots per network simulation step
-NET_TS_PER_NET_STEP = int(round(NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS))
+NET_TS_PER_NET_STEP = int(round(NET_SECONDS_PER_STEP / NET_SECONDS_PER_TS))
 # . network application request timeout limit.
 NET_TIMEOUT_SECONDS = 7
 # . resource block bandwidth units
@@ -62,8 +62,8 @@ NET_QoS_RND_REQ_SIZE = {
 #   For emergency group, the value is preset to an average of 64Kbps.
 NET_QoS_RND_REQ_NUM_TIME_SCALE = 1  # seconds
 NET_QoS_RND_REQ_NUM = {
-    QoSLevel.CRITICAL: int(round((64*1024) / ((300+1100)*8/2))),
-    QoSLevel.GENERAL: int(round((500*1024) / ((64+2048)*8/2)))
+    QoSLevel.CRITICAL: int(round((64 * 1024) / ((300 + 1100) * 8 / 2))),
+    QoSLevel.GENERAL: int(round((500 * 1024) / ((64 + 2048) * 8 / 2)))
 }
 # . maximum number of members that belongs to the same social group of QoS level.
 NET_QoS_SG_MAX_MEMBER = {
@@ -76,7 +76,7 @@ NET_QoS_SG_MAX_MEMBER = {
 # . base station's total bandwidth
 BS_TOTAL_BAND = {
     BaseStationType.UMA: 10000000,
-    BaseStationType.UMI:  5000000
+    BaseStationType.UMI: 5000000
 }
 # . base station's frequency
 BS_FREQ = {
@@ -156,13 +156,13 @@ if SUMO_SECONDS_PER_STEP / NET_SECONDS_PER_STEP % 1 != 0:
     msg = "Error: seconds per simulation step should be totally devided by the value of seconds per network step."
     print(msg)
     raise Exception(msg)
-if NET_SECONDS_PER_STEP/NET_SECONDS_PER_TS % 1 != 0:
+if NET_SECONDS_PER_STEP / NET_SECONDS_PER_TS % 1 != 0:
     msg = "Error: seconds per network simulation step should be totally devided by the value of seconds per network timeslot."
     print(msg)
     raise Exception(msg)
 
 # Directory Settings
-ROOT_DIR = "data/GS20/"
+ROOT_DIR = "data/TVAL/"
 
 # Resource Allocation Parameters
 ALLOC_TVAL_CONST = 1000

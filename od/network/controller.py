@@ -185,7 +185,7 @@ class BaseStationController:
     def ArrangeUplinkResource(self):
         # OMA resource allocator
         ra_oma = ResourceAllocatorOMA(
-            BS_TOTAL_BAND[self.type]*0.9,
+            BS_TOTAL_BAND[self.type] * 0.9,
             NET_TS_PER_NET_STEP
         )
         # preset for speed-up
@@ -202,8 +202,8 @@ class BaseStationController:
                 req_ts_per_rb = NET_RB_BW_REQ_TS[req_bw_per_rb]
                 # the maximum rb a subframe can hold
                 max_frame_rb = (
-                    (BS_TOTAL_BAND[self.type]*0.9 / req_bw_per_rb) *
-                    (NET_TS_PER_NET_STEP/req_ts_per_rb)
+                    (BS_TOTAL_BAND[self.type] * 0.9 / req_bw_per_rb) *
+                    (NET_TS_PER_NET_STEP / req_ts_per_rb)
                 )
                 # check if this base station has resource left
                 if(ra_oma.Spare(req_bw_per_rb, req_ts_per_rb)):
@@ -229,7 +229,7 @@ class BaseStationController:
                     req_rbsize_pairs.sort(
                         key=(
                             lambda req_rbsize_pair: (
-                                math.floor(req_rbsize_pair[0].starv_time*1000) * max_frame_rb +
+                                math.floor(req_rbsize_pair[0].starv_time * 1000) * max_frame_rb +
                                 min(
                                     math.ceil(
                                         req_rbsize_pair[0].total_bits / max(
@@ -283,6 +283,8 @@ class BaseStationController:
     def ArrangeDownlinkResource(self):
         # arrange downlink resource
         # TODO: Serve Resend Requests
+        if(GV.SUMO_SIM_INFO.ss == 1862 and GV.SUMO_SIM_INFO.ns == 2):
+            print("Debug")
         if(GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.NOMA_APR):
             self.ArrangeDownlinkNomaApprox()
         else:
@@ -333,7 +335,7 @@ class BaseStationController:
     def PreprocessDownlinkRequest(self):
         # Radio resource configuration
         RES_CONF = {
-            "rbf_h": float(round(BS_TOTAL_BAND[self.type]/NET_RB_BW_UNIT*0.9)),
+            "rbf_h": float(round(BS_TOTAL_BAND[self.type] / NET_RB_BW_UNIT * 0.9)),
             "rbf_w": float(2),
             "max_pwr_dBm": float(BS_TRANS_PWR[self.type]),
         }
@@ -359,8 +361,8 @@ class BaseStationController:
                 ext_alloc_param = self.sg_alloc_param[sg]
                 # accumulate time value in ExternAllocParam for the next allocation process.
                 ext_alloc_param.tval = (
-                    (1-1/ALLOC_TVAL_CONST)*ext_alloc_param.tval +
-                    (sg_total_bits/ALLOC_TVAL_CONST)
+                    (1 - 1 / ALLOC_TVAL_CONST) * ext_alloc_param.tval +
+                    (sg_total_bits / ALLOC_TVAL_CONST)
                 )
                 # ignore if nothing in queue
                 if(len(self.sg_send_req[sg]) == 0):
@@ -397,21 +399,21 @@ class BaseStationController:
                     "gid": float(sg.gid),
                     "qos": float(sg.qos),
                     "rbf_w": float(sg_rb_ts),
-                    "rbf_h": float(sg_rb_bw/NET_RB_BW_UNIT),
+                    "rbf_h": float(sg_rb_bw / NET_RB_BW_UNIT),
                     "sinr_max": float(netstatus.max_sinr),
-                    "pwr_req_dBm":  (
+                    "pwr_req_dBm": (
                         float(BS_TRANS_PWR[self.type])
                         if GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA else
                         float(netstatus.pwr_req_dBm)
                     ),
-                    "pwr_ext_dBm":  (
+                    "pwr_ext_dBm": (
                         float(-100)
                         if GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.OMA else
                         float(netstatus.pwr_ext_dBm)
                     ),
                     "rem_bits": float(sg_total_bits),
                     "mem_num": float(members),
-                    "eager_rate": (members*ext_alloc_param.tval)/max(sg_total_bits, 1),
+                    "eager_rate": (members * ext_alloc_param.tval) / max(sg_total_bits, 1),
                 })
 
             # if this qos has no group requires allocate, ignore it.
@@ -431,8 +433,8 @@ class BaseStationController:
             # required timeslots for using this bandwidth
             sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
             max_frame_bits = (
-                (BS_TOTAL_BAND[self.type]*0.9 / sg_rb_bw)*933 *
-                (NET_TS_PER_NET_STEP/sg_rb_ts)
+                (BS_TOTAL_BAND[self.type] * 0.9 / sg_rb_bw) * 933 *
+                (NET_TS_PER_NET_STEP / sg_rb_ts)
             )
             self.sg_send_req[sg].sort(
                 key=lambda appdata: (
@@ -506,7 +508,7 @@ class BaseStationController:
                     self,
                     CastObject(sg),
                     sg,
-                    total_bits-remain_bits,
+                    total_bits - remain_bits,
                     package_appdatas,
                     sg_rb_ts,
                     offset_ts
@@ -528,7 +530,7 @@ class BaseStationController:
             report += " ===== {}({}) =====\n".format(sg.fname.upper(), sg.gid)
             for ts_key, ts_items in gid_items.items():
                 for cqi_key, rb_num in ts_items.items():
-                    report += "  cqi:{}, num:{}\n".format(cqi_key[1:], rb_num)
+                    report += "  {}t/cqi:{}, num:{}\n".format(ts_key[1:], cqi_key[1:], rb_num)
 
         report += "}\n"
         # Log
@@ -638,7 +640,7 @@ class NetworkCoreController:
         approx_bs = None
         distance = float("Inf")
         for uma_bs in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
-            d = pow((uma_bs.pos[0] - umi_bs.pos[0])**2+(uma_bs.pos[1] - umi_bs.pos[1])**2, 0.5)
+            d = pow((uma_bs.pos[0] - umi_bs.pos[0])**2 + (uma_bs.pos[1] - umi_bs.pos[1])**2, 0.5)
             if(d < distance):
                 approx_bs = uma_bs
         return approx_bs

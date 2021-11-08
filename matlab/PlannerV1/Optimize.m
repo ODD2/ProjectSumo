@@ -271,38 +271,31 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
     %translate the real number eager rate to integer number eager priority.
     for qos = 0 : max_qos
         grp_qos_logi = ([OPT_GP_CONF.qos] == qos);
+        if(sum(grp_qos_logi)==0)
+            continue
+        end
         grp_qos_list = OPT_GP_CONF(grp_qos_logi);
+        max_grp_qos_eager_rate = max([grp_qos_list.eager_rate]);
         [~ , sort_index] = sort([grp_qos_list.eager_rate]);
         OPT_GP_CONF(grp_qos_logi) = grp_qos_list(sort_index);
         %map real value to integer priority.
-        prev_eager_rate = 0;
-        eager_rate_value = 0;
         for i = find(grp_qos_logi)
             eager_rate = OPT_GP_CONF(i).eager_rate;
-            if(eager_rate ~= prev_eager_rate)
-                prev_eager_rate = eager_rate;
-                eager_rate_value = eager_rate_value + 1;
-            end
-            OPT_GP_CONF(i).eager_rate = eager_rate_value;
+            OPT_GP_CONF(i).eager_rate = eager_rate/max_grp_qos_eager_rate + 1;
         end
     end
 
     
 
-    ts_range = 0 : 1;
+    ts_range = 0 : (SIM_CONF.rbf_w -1);
     cqi_range = 0 : 15;
     er_range = 0 : max([OPT_GP_CONF.eager_rate]);
 
-    weight_scale = 1;
-    ts_weight = 1;
-    cqi_weight = (ts_weight * ts_range(end) +1);
-    er_weight = 1.1;
-    qos_scale = (cqi_weight * cqi_range(end) + ts_weight * ts_range(end))*er_weight*er_range(end) + 1;
+
+    cqi_scale = (ts_range(end) +1);
+    qos_scale = (cqi_scale * cqi_range(end) + ts_range(end))*er_range(end) + 1;
     qos_scale = qos_scale * max([OPT_GP_CONF.rbf_w] .* [OPT_GP_CONF.rbf_h]);
     
-    ts_weight = ts_weight * weight_scale;
-    cqi_weight = cqi_weight * weight_scale;
-    er_weight = er_weight * weight_scale;
 
     for gp_conf = OPT_GP_CONF
 
@@ -328,7 +321,7 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
                     sol_end = sol_ofs + (cqi_i - 1) * gp_conf.rb_num + (ts_beg    ) * gp_conf.y_max;                
                     ts_end = SIM_CONF.rbf_w - (ts_beg + (gp_conf.rbf_w - 1));
                     
-                    fval = ((ts_end * ts_weight + cqi * cqi_weight) * er * er_weight) * (qos_scale^(max_qos - qos));
+                    fval = ((ts_end + cqi * cqi_scale) * er) * (qos_scale^(max_qos - qos));
                     
                     %assign local fval.
                     f(sol_beg : sol_end ) = fval;

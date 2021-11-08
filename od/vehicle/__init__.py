@@ -36,14 +36,15 @@ class VehicleRecorder():
         # Workaround Method for Visualization of GENERAL SocialGroup
         if SUMO_SIM_GUI:
             import random
-            random.seed(hash(self.social_groups[-1]))
+            rng = random.Random()
+            rng.seed(hash(self.social_groups[-1]))
             vehicle.setColor(
                 self.name,
                 (
-                    random.randint(0, 255),
-                    random.randint(0, 255),
-                    random.randint(0, 255),
-                    random.randint(0, 255)
+                    rng.randint(0, 255),
+                    rng.randint(0, 255),
+                    rng.randint(0, 255),
+                    rng.randint(0, 255)
                 )
             )
 

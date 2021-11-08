@@ -7,10 +7,14 @@ from time import sleep
 from os import path
 from psutil import virtual_memory as vm
 import multiprocessing as mp
+from threading import Thread
 import single
 
 RUN_MISS_ONLY = True
 SYS_TOTAL_MEM = vm().total / (1024**3)
+VALID_MEMORY = 0
+LIMIT = 70
+WEIGHT_INTCONFS = []
 
 
 class WeightInterestConfig:
@@ -29,7 +33,6 @@ class WeightProcess:
         self.process = process
 
     def Start(self):
-        print("87878787")
         self.process.start()
         print(
             "{} -> {}".format(
@@ -53,27 +56,41 @@ class WeightProcess:
 
 def Worker(s: mp.Semaphore, target, args):
     try:
+
         target(*args)
     except Exception as e:
         print("Worker Exception:{}".format(e))
     s.release()
 
 
-def ParallelSimulationManager(weight_intconfs, limit):
-    valid_memory = limit - vm().percent
-    if(valid_memory < 0):
-        print("Insufficinet Memory: {} - {} = {}".format(limit, vm().percent, valid_memory))
+def MemoryMonitor():
+    global VALID_MEMORY, LIMIT
+    while(len(WEIGHT_INTCONFS) > 0):
+        VALID_MEMORY = LIMIT - vm().percent
+        sleep(300)
+
+
+def ParallelSimulationManager():
+    global VALID_MEMORY, LIMIT, WEIGHT_INTCONFS
+    if((LIMIT - vm().percent) < 0):
+        print("Startup Memory Insufficinet")
         return
+    # begin memory monitor for accurate memory estimation
+    mm = Thread(target=MemoryMonitor)
+    mm.start()
+    # wait for memory to update
+    sleep(5)
+    # process manager
     s = mp.Semaphore(0)
     weight_process_list = []
     with open("scheme_fail_report.txt", "w") as scheme_fail_report:
         while(True):
             remain_weight_intconfs = []
             # arrange weighted interest configs to let heavier ones to have higher precedence.
-            weight_intconfs.sort(key=lambda x: x.weight, reverse=True)
+            WEIGHT_INTCONFS.sort(key=lambda x: x.weight, reverse=True)
             # arrange resource to interest configs accroding to its weight
-            for weight_intconf in weight_intconfs:
-                if(weight_intconf.weight < valid_memory):
+            for weight_intconf in WEIGHT_INTCONFS:
+                if(weight_intconf.weight < VALID_MEMORY):
                     weight_process = WeightProcess(
                         weight_intconf,
                         mp.Process(
@@ -88,18 +105,19 @@ def ParallelSimulationManager(weight_intconfs, limit):
                     if(not RUN_MISS_ONLY or not weight_process.CheckResult()):
                         weight_process.Start()
                         weight_process_list.append(weight_process)
-                        valid_memory -= weight_intconf.weight
+                        VALID_MEMORY -= weight_intconf.weight
                 else:
                     remain_weight_intconfs.append(weight_intconf)
-            # if there're no remaining interest configs, begin to wait all process to end.
-            if(len(remain_weight_intconfs) == 0):
-                break
 
             # remove allocated configs.
-            weight_intconfs = remain_weight_intconfs
+            WEIGHT_INTCONFS = remain_weight_intconfs
+
+            # if there're no remaining interest configs, begin to wait all process to end.
+            if(len(WEIGHT_INTCONFS) == 0):
+                break
 
             # wait untill enough resource for the most required config.
-            while(valid_memory < weight_intconfs[0].weight):
+            while(VALID_MEMORY < WEIGHT_INTCONFS[0].weight):
                 # wait for working process to end
                 s.acquire()
                 # check which process(es) ended
@@ -108,29 +126,31 @@ def ParallelSimulationManager(weight_intconfs, limit):
                     if(not wp.process.is_alive()):
                         # if process is not alive, meaning it has ended, do result check.
                         if(not wp.CheckResult()):
-                            # weight_intconfs.append(wp.weight_conf)
+                            # WEIGHT_INTCONFS.append(wp.weight_conf)
                             time_text = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
                             scheme_fail_report.write("[{}]{}\n".format(time_text, wp))
                             # release resource limit
-                        valid_memory += wp.weight_conf.weight
+                        VALID_MEMORY += wp.weight_conf.weight
                         # join process to prevent existance of zombie process
                         wp.process.join()
                     else:
                         remain_weight_process_list.append(wp)
                 weight_process_list = remain_weight_process_list
-
+        # wait for all the simulation process to join
         for wp in weight_process_list:
             wp.process.join()
+        # wait for the memory monitor thread to join
+        mm.join()
 
 
 def SimulationSettings(fn):
     def wrapper(**args):
         result = []
-        for qos_re_class in [True]:
-            for res_alloc_type in [ResourceAllocatorType.NOMA_OPT]:
+        for qos_re_class in [True, False]:
+            for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
                 for rsu in [False, True]:
                     for traffic_scale in [i / 10 for i in range(7, 15, 1)]:
-                        for seed in [i + 1 for i in range(10)]:
+                        for seed in [i + 11 for i in range(10)]:
                             result.append(
                                 fn(
                                     **args,
@@ -161,8 +181,8 @@ def CreateWeightIntConfs(qos_re_class, res_alloc_type, rsu, traffic_scale, seed)
 if __name__ == "__main__":
     mp.set_start_method("forkserver")
     beg_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    weight_intconfs = CreateWeightIntConfs()
-    ParallelSimulationManager(weight_intconfs, 70)
+    WEIGHT_INTCONFS = CreateWeightIntConfs()
+    ParallelSimulationManager()
     end_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     print("Start at: " + beg_time)
     print("End at: " + end_time)

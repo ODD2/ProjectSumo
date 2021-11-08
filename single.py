@@ -222,5 +222,5 @@ if __name__ == "__main__":
     #     )
     # )
     cProfile.run(
-        """main(InterestConfig(True,ResourceAllocatorType.NOMA_APR,True,1.3,4))"""
+        """main(InterestConfig(True,ResourceAllocatorType.NOMA_OPT,True,1.3,7))"""
     )
