@@ -1,4 +1,3 @@
-from random import randint
 from .connection import ConnectionState, ConnectionRecorder, SharedConnection
 from .monitor import NetworkStatusMonitor
 from od.network.types import BaseStationType, LinkType

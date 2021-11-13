@@ -266,70 +266,72 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
     % end
 
 
+    
+
     max_qos = max([OPT_GP_CONF.qos]);
-
-    %translate the real number eager rate to integer number eager priority.
-    for qos = 0 : max_qos
-        grp_qos_logi = ([OPT_GP_CONF.qos] == qos);
-        if(sum(grp_qos_logi)==0)
-            continue
-        end
-        grp_qos_list = OPT_GP_CONF(grp_qos_logi);
-        max_grp_qos_eager_rate = max([grp_qos_list.eager_rate]);
-        [~ , sort_index] = sort([grp_qos_list.eager_rate]);
-        OPT_GP_CONF(grp_qos_logi) = grp_qos_list(sort_index);
-        %map real value to integer priority.
-        for i = find(grp_qos_logi)
-            eager_rate = OPT_GP_CONF(i).eager_rate;
-            OPT_GP_CONF(i).eager_rate = eager_rate/max_grp_qos_eager_rate + 1;
-        end
-    end
-
-    
-
     ts_range = 0 : (SIM_CONF.rbf_w -1);
-    cqi_range = 0 : 15;
-    er_range = 0 : max([OPT_GP_CONF.eager_rate]);
-
-
     cqi_scale = (ts_range(end) +1);
-    qos_scale = (cqi_scale * cqi_range(end) + ts_range(end))*er_range(end) + 1;
-    qos_scale = qos_scale * max([OPT_GP_CONF.rbf_w] .* [OPT_GP_CONF.rbf_h]);
+    qos_scale = SIM_CONF.rbf_w * SIM_CONF.rbf_h;
     
-
+%   calculate the priority weight for each resource block of qos
+    RB_FVAL_CONF = [];
     for gp_conf = OPT_GP_CONF
-
         qos = gp_conf.qos;
-        er = gp_conf.eager_rate;  
-
+        er = gp_conf.eager_rate;
+        gid = gp_conf.gid;
         if(er == 0)
             continue
         end
-
         for ln = ["oma" "noma"]
             sol_ofs  = gp_conf.(ln + "_sol_ofs");                
             for cqi_i = 1 : gp_conf.(ln + "_cqi_num")
                 cqi = gp_conf.(ln+ "_cqi_list")(cqi_i);
-
                 if(cqi ==0)
                     continue
                 end
-
                 for ts_beg = 1 : gp_conf.x_max
                     %calculations.
                     sol_beg = sol_ofs + (cqi_i - 1) * gp_conf.rb_num + (ts_beg - 1) * gp_conf.y_max + 1;
                     sol_end = sol_ofs + (cqi_i - 1) * gp_conf.rb_num + (ts_beg    ) * gp_conf.y_max;                
                     ts_end = SIM_CONF.rbf_w - (ts_beg + (gp_conf.rbf_w - 1));
-                    
-                    fval = ((ts_end + cqi * cqi_scale) * er) * (qos_scale^(max_qos - qos));
-                    
+                    rb_fval = struct(...
+                        "qos",qos,...
+                        "gid",gid,...
+                        "weight",(ts_end + cqi * cqi_scale) * er,...
+                        "sol_beg",sol_beg,...
+                        "sol_end",sol_end,...
+                        "fval",0 ...
+                    );
                     %assign local fval.
-                    f(sol_beg : sol_end ) = fval;
+                    RB_FVAL_CONF = [RB_FVAL_CONF  rb_fval];
                 end
             end
         end
     end
-
+    
+%   convert real value resource block weight into integer priority value, 
+%   with qos level margin.
+    fval_cur = 1;
+    fval_hop = 1;
+    for qos = max_qos:-1:0
+        grp_qos_logi = ([RB_FVAL_CONF.qos] == qos);
+        if(sum(grp_qos_logi)==0)
+            continue
+        end
+        grp_qos_list = RB_FVAL_CONF(grp_qos_logi);
+        [~ , sort_index] = sort([grp_qos_list.weight]);
+        RB_FVAL_CONF(grp_qos_logi) = grp_qos_list(sort_index);
+        %map real value to integer priority.
+        for i = find(grp_qos_logi)
+            RB_FVAL_CONF(i).fval = fval_cur;
+            sol_beg = RB_FVAL_CONF(i).sol_beg;
+            sol_end = RB_FVAL_CONF(i).sol_end;
+            f(sol_beg:sol_end) = fval_cur;
+            fval_cur=fval_cur + fval_hop;
+        end
+        fval_cur = (fval_cur-1)*qos_scale + 1;
+        fval_hop = fval_cur -1;
+    end
 
     % for gp_conf = OPT_GP_CONF
     %     qos = gp_conf.qos;

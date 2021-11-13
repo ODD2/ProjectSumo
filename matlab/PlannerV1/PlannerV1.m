@@ -1,15 +1,4 @@
 function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
-    x = QoS_GP_CONF{1}{1};
-    disp(class(x.gid));
-    disp(class(x.qos));
-    disp(class(x.rbf_w));
-    disp(class(x.rbf_h));
-    disp(class(x.sinr_max));
-    disp(class(x.pwr_req_dBm));
-    disp(class(x.pwr_ext_dBm));
-    disp(class(x.rem_bits));
-    disp(class(x.mem_num));
-    disp(class(x.eager_rate));
     for qos_i = 1:length(QoS_GP_CONF)
         QoS_GP_CONF{qos_i} = [QoS_GP_CONF{qos_i}{:}];
     end

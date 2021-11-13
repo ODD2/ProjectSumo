@@ -12,8 +12,8 @@ DEBUG_MSG_FLAGS = (
     # DebugMsgType.NONE
     # DebugMsgType.NET_PKG_INFO |
     # DebugMsgType.NET_APPDATA_INFO |
-    DebugMsgType.NET_ALLOC_INFO |
-    DebugMsgType.MATLAB_INFO
+    DebugMsgType.NET_ALLOC_INFO
+    # DebugMsgType.MATLAB_INFO
     # DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings
@@ -162,7 +162,7 @@ if NET_SECONDS_PER_STEP / NET_SECONDS_PER_TS % 1 != 0:
     raise Exception(msg)
 
 # Directory Settings
-ROOT_DIR = "data/TVAL/"
+ROOT_DIR = "data/GS20/"
 
 # Resource Allocation Parameters
-ALLOC_TVAL_CONST = 1000
+ALLOC_TVAL_CONST = 300

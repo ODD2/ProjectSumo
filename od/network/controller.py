@@ -283,8 +283,6 @@ class BaseStationController:
     def ArrangeDownlinkResource(self):
         # arrange downlink resource
         # TODO: Serve Resend Requests
-        if(GV.SUMO_SIM_INFO.ss == 1862 and GV.SUMO_SIM_INFO.ns == 2):
-            print("Debug")
         if(GV.NET_RES_ALLOC_TYPE == ResourceAllocatorType.NOMA_APR):
             self.ArrangeDownlinkNomaApprox()
         else:
@@ -355,7 +353,7 @@ class BaseStationController:
                 sg_rb_ts = NET_RB_BW_REQ_TS[sg_rb_bw]
                 # calculate the total bits for this social group to send all its broadcast appdatas
                 sg_total_bits = sum(
-                    data.bits for data in self.sg_send_req[sg]
+                    [data.bits for data in self.sg_send_req[sg]]
                 )
                 # acces external allocation params
                 ext_alloc_param = self.sg_alloc_param[sg]

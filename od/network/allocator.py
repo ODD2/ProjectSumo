@@ -194,8 +194,8 @@ class ResourceAllocatorNomaApprox:
         )
         # construct valid remaining resource block fractions per timeslot.
         rem_rbf_ts = [
-            self.frbf_h - num_1_2_rb - int(num_2_1_rb / 2) - num_2_1_rb % 2,
-            self.frbf_h - num_1_2_rb - int(num_2_1_rb / 2)
+            self.frbf_h - num_1_2_rb - int(num_2_1_rb / 2) * 2 - (num_2_1_rb % 2) * 2,
+            self.frbf_h - num_1_2_rb - int(num_2_1_rb / 2) * 2
         ]
 
         # examine valid resource space

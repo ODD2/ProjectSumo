@@ -56,7 +56,6 @@ class WeightProcess:
 
 def Worker(s: mp.Semaphore, target, args):
     try:
-
         target(*args)
     except Exception as e:
         print("Worker Exception:{}".format(e))
@@ -67,7 +66,7 @@ def MemoryMonitor():
     global VALID_MEMORY, LIMIT
     while(len(WEIGHT_INTCONFS) > 0):
         VALID_MEMORY = LIMIT - vm().percent
-        sleep(300)
+        sleep(60)
 
 
 def ParallelSimulationManager():
@@ -79,7 +78,7 @@ def ParallelSimulationManager():
     mm = Thread(target=MemoryMonitor)
     mm.start()
     # wait for memory to update
-    sleep(5)
+    sleep(1)
     # process manager
     s = mp.Semaphore(0)
     weight_process_list = []
@@ -146,11 +145,22 @@ def ParallelSimulationManager():
 def SimulationSettings(fn):
     def wrapper(**args):
         result = []
-        for qos_re_class in [True, False]:
-            for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
-                for rsu in [False, True]:
-                    for traffic_scale in [i / 10 for i in range(7, 15, 1)]:
-                        for seed in [i + 11 for i in range(10)]:
+        # for qos_re_class in [True, False]:
+        #     for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
+        #         for rsu in [False, True]:
+        #             for traffic_scale in [i / 10 for i in range(7, 15, 1)]:
+        #                 for seed in [i + 11 for i in range(10)]:
+
+        # for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
+        #     for rsu in [True, False]:
+        #         for qos_re_class in [True, False] if rsu == True else [False]:
+        #             for traffic_scale in [i / 10 for i in range(10, 15, 1)]:
+        #                 for seed in [i + 1 for i in range(5)]:
+        for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
+            for rsu in [True]:
+                for qos_re_class in [True]:
+                    for traffic_scale in [1.3]:
+                        for seed in [7]:
                             result.append(
                                 fn(
                                     **args,
