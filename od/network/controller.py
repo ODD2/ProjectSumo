@@ -187,11 +187,17 @@ class BaseStationController:
             BS_TOTAL_BAND[self.type] * 0.9,
             NET_TS_PER_NET_STEP
         )
-        # preset for speed-up
-        time_ms = GV.SUMO_SIM_INFO.getTime()
         # Serve requests
         for qos in QoSLevel:
-            for sg in [sg for sg in self.sg_upload_req.keys() if sg.qos == qos]:
+            qos_sg_prior = [sg for sg in self.sg_upload_req.keys() if sg.qos == qos]
+            if(len(qos_sg_prior) == 0):
+                continue
+            qos_sg_prior.sort(
+                key=lambda x: min(
+                    [req.starv_time for req in self.sg_upload_req[x]] + [float("inf")]
+                )
+            )
+            for sg in qos_sg_prior:
                 # Check if there exists pending requests
                 if(len(self.sg_upload_req[sg]) == 0):
                     continue
