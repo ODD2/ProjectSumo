@@ -5,7 +5,6 @@ from od.network.package import NetworkPackage
 from od.network.application import VehicleApplication
 from od.network.appdata import AppData
 from od.social.group import SocialGroup, QoSLevel
-from od.social.manager import SocialGroupManager
 from od.env.config import VEH_MOVE_BS_CHECK, SUMO_SIM_GUI
 from od.misc.types import DebugMsgType
 import od.vars as GV
@@ -30,7 +29,7 @@ class VehicleRecorder():
         self.chk_pos = (float('Inf'), float('Inf'))
 
         # Dynamic Vehicle SocialGroups
-        self.social_groups = SocialGroupManager.NewVehicleSocialGroupList()
+        self.social_groups = GV.SocialGroupManager.NewVehicleSocialGroupList()
 
         # Workaround Method for Visualization of GENERAL SocialGroup
         if SUMO_SIM_GUI:

@@ -9,8 +9,9 @@ import od.env.config as oec
 import od.env.station as oes
 import od.misc.interest as omi
 import od.event.quake as oeq
-# STD
 from od.social.group import QoSLevel, SocialGroup
+from od.social.manager import CreateSocialGroupManager
+# STD
 from numpy import random
 from datetime import datetime
 from threading import Lock
@@ -53,6 +54,9 @@ TRACI_LOCK = None
 # Base Station
 BS_SETTING = None
 
+# Socialgroup Manager
+SocialGroupManager = None
+
 
 def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     global NET_CORE_CONTROLLER, NET_STATUS_CACHE, NET_STATION_CONTROLLER
@@ -63,6 +67,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     global TRACI_LOCK
     global BS_SETTING
     global NET_RES_ALLOC_TYPE, NET_QoS_RE_CLS, NET_QoS_RND_REQ_MOD
+    global SocialGroupManager
 
     # Simulation Parameters
     INTEREST_CONFIG = interest_config
@@ -122,6 +127,12 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
             (setting["type"] == ont.BaseStationType.UMI and interest_config.req_rsu)
         )
     }
+
+    # Socialgroup Manager Initialization
+    SocialGroupManager = CreateSocialGroupManager(
+        interest_config.dyn_sg_behav,
+        interest_config.dyn_sg_conf
+    )
 
 
 def TerminateSimulationVariables():

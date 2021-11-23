@@ -1,7 +1,6 @@
 import inspect
 from os import confstr_names
 
-
 # class SocialGroupIterator:
 #     ''' Iterator class '''
 
@@ -20,12 +19,13 @@ from os import confstr_names
 #         # End of Iteration
 #         raise StopIteration
 
+
 class SocialGroupConfig:
-    def __init__(self, qos, pref, unify, dyn):
+    def __init__(self, qos, pref, reader, dyn):
         self.qos = qos
         self.pref = pref
         self.dyn = dyn
-        self.unify = unify
+        self.reader = reader
 
 
 class SocialGroupAttr:
@@ -35,7 +35,7 @@ class SocialGroupAttr:
         self.gid = gid
         self.qos = config.qos
         self.pref = config.pref
-        self.unify = config.unify
+        self.reader = config.reader
         self.dyn = config.dyn
 
     def __repr__(self):
@@ -64,7 +64,7 @@ class SocialGroupMeta(type):
             if(not key.startswith('_') and not inspect.isroutine(value)):
                 sg_attrs.append(
                     SocialGroupAttr(
-                        cname,  key, gserial, value
+                        cname, key, gserial, value
                     )
                 )
                 dct[key] = sg_attrs[-1]

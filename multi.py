@@ -151,16 +151,11 @@ def SimulationSettings(fn):
         #             for traffic_scale in [i / 10 for i in range(7, 15, 1)]:
         #                 for seed in [i + 11 for i in range(10)]:
 
-        # for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
-        #     for rsu in [True, False]:
-        #         for qos_re_class in [True, False] if rsu == True else [False]:
-        #             for traffic_scale in [i / 10 for i in range(10, 15, 1)]:
-        #                 for seed in [i + 1 for i in range(5)]:
         for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
-            for rsu in [True]:
-                for qos_re_class in [True]:
-                    for traffic_scale in [1.3]:
-                        for seed in [7]:
+            for rsu in [True, False]:
+                for qos_re_class in [True, False] if rsu == True else [False]:
+                    for traffic_scale in [i / 10 for i in range(10, 15, 1)]:
+                        for seed in [i + 1 for i in range(5)]:
                             result.append(
                                 fn(
                                     **args,

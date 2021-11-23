@@ -128,7 +128,7 @@ class VehicleApplication(Application):
         current_time = GV.SUMO_SIM_INFO.getTime()
         for sg in self.veh_social_groups:
             # ignore data spawn if social group has a centralized source.(no edge sources)
-            if(sg.unify):
+            if(sg.reader):
                 continue
             # stack data request for data generation.
             self.data_stack[sg] += random.poisson(NET_QoS_RND_REQ_NUM[sg.qos] * GV.NET_QoS_RND_REQ_MOD[sg.qos]) * \

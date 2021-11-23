@@ -5,6 +5,7 @@ from od.env.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
                            SUMO_SKIP_SECONDS, SUMO_NET_WARMUP_SECONDS, EVENT_CONFIGS, NET_TIMEOUT_SECONDS)
 from od.network.types import BaseStationType
 from od.misc.interest import InterestConfig
+from od.misc.exception import ODExecption
 from od.network.appdata import AppDataHeader
 import od.vars as GV
 # STD
@@ -46,7 +47,7 @@ class StatisticRecorder:
         self.social_group = []
         self.interval = (
             SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + min(map(lambda x: x.ofs_sec, EVENT_CONFIGS)),
-            SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + max(map(lambda x: x.ofs_sec+x.dur_sec, EVENT_CONFIGS))
+            SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + max(map(lambda x: x.ofs_sec + x.dur_sec, EVENT_CONFIGS))
         )
         self.nft_traffic = {}
 
@@ -367,14 +368,14 @@ class StatisticRecorder:
         for key, value in report.items():
             text = "[{}]".format(str(key).upper())
             if depth > 0:
-                text = "{:>{}s}".format("", 4*depth) + text
+                text = "{:>{}s}".format("", 4 * depth) + text
 
             if type(value) is not dict:
                 text += ":{:.4f}".format(value)
                 GV.RESULT.Doc(text)
             else:
                 GV.RESULT.Doc(text)
-                self.PrintReport(value, depth+1)
+                self.PrintReport(value, depth + 1)
         if depth == 0:
             GV.RESULT.Doc("")
 
@@ -483,7 +484,7 @@ class StatisticRecorder:
             # record summary
             record_avg_txq_wait_time = (
                 0 if record_total_txq_wait_count == 0
-                else record_total_txq_wait_time/record_total_txq_wait_count
+                else record_total_txq_wait_time / record_total_txq_wait_count
             )
             GV.STATISTIC.Doc(
                 '[{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
@@ -591,7 +592,7 @@ class StatisticRecorder:
             total_bits += record.bits
             if(record.is_src_ot or len([x for x in record.is_bs_ot if x])):
                 ot_bits += record.bits
-        return ot_bits/max(total_bits, 1)
+        return ot_bits / max(total_bits, 1)
 
     def BaseStationTypeThroughPutReport(self, app_stats, bs_type):
         # size of data.
@@ -629,12 +630,12 @@ class StatisticRecorder:
             GV.RESULT.Doc("====={}=====".format(bs_type.name))
             for sg in self.social_group:
                 bs_type_sg_res_rate[sg] = (
-                    sg_bs_type_data[bs_type][sg]/bs_type_total_data
+                    sg_bs_type_data[bs_type][sg] / bs_type_total_data
                 )
                 GV.RESULT.Doc(
                     "{} Resource Usage: {:.2f}%".format(
                         sg,
-                        bs_type_sg_res_rate[sg]*100
+                        bs_type_sg_res_rate[sg] * 100
                     )
                 )
             sg_stats[bs_type] = bs_type_sg_res_rate
@@ -667,7 +668,7 @@ class StatisticRecorder:
                 GV.RESULT.Doc(
                     "{} Drop Rate: {:.2f}%".format(
                         sg,
-                        bs_type_sg_drop_rate[sg]*100
+                        bs_type_sg_drop_rate[sg] * 100
                     )
                 )
             sg_stats[bs_type] = bs_type_sg_drop_rate
@@ -688,7 +689,7 @@ class StatisticRecorder:
                     time_orgnz_record[time] += 1
             _max = max(time_orgnz_record.values())
             _min = min(time_orgnz_record.values())
-            _avg = sum(time_orgnz_record.values())/(self.RecordDuration()*1000)
+            _avg = sum(time_orgnz_record.values()) / (self.RecordDuration() * 1000)
             _num = sum(time_orgnz_record.values())
         # print(time_orgnz_record)
         return {
@@ -710,11 +711,11 @@ class StatisticRecorder:
                 if(time not in time_orgnz_record):
                     time_orgnz_record[time] = []
                 time_orgnz_record[time].append(record.bits)
-            per_ms_avg_data_size = [sum(x)/len(x) for x in time_orgnz_record.values()]
+            per_ms_avg_data_size = [sum(x) / len(x) for x in time_orgnz_record.values()]
             all_data_size = [v for x in time_orgnz_record.values() for v in x]
             _max = max(per_ms_avg_data_size)
             _min = min(per_ms_avg_data_size)
-            _avg = sum(all_data_size)/len(all_data_size)
+            _avg = sum(all_data_size) / len(all_data_size)
             _num = len(all_data_size)
         return {
             "max": _max,
@@ -742,17 +743,17 @@ class StatisticRecorder:
                         time_orgnz_record[time] = 1
                     else:
                         time_orgnz_record[time] += 1
-            _max = max(time_orgnz_record.values())
-            _min = min(time_orgnz_record.values())
-            _avg = sum(time_orgnz_record.values())/(self.RecordDuration()*1000)
-            _num = sum(time_orgnz_record.values())
-        # print(time_orgnz_record)
-        return {
-            "max": _max,
-            "avg": _avg,
-            "min": _min,
-            "num": _num
-        }
+            if(len(time_orgnz_record) > 0):
+                _max = max(time_orgnz_record.values())
+                _min = min(time_orgnz_record.values())
+                _avg = sum(time_orgnz_record.values()) / (self.RecordDuration() * 1000)
+                _num = sum(time_orgnz_record.values())
+            return {
+                "max": _max,
+                "avg": _avg,
+                "min": _min,
+                "num": _num
+            }
 
     def BaseStationAppdataArrivalRateReport(self, app_stats):
         bs_report = []
@@ -773,7 +774,7 @@ class StatisticRecorder:
                 if(len(time_orgnz_record) > 0):
                     _max = max(time_orgnz_record.values())
                     _min = min(time_orgnz_record.values())
-                    _avg = sum(time_orgnz_record.values())/self.RecordDuration()/1000
+                    _avg = sum(time_orgnz_record.values()) / self.RecordDuration() / 1000
                     _num = sum(time_orgnz_record.values())
                 bs_report.append(
                     {
@@ -811,11 +812,11 @@ class StatisticRecorder:
                             time_orgnz_record[time] = []
                         time_orgnz_record[time].append(record.bits)
                 if(len(time_orgnz_record) > 0):
-                    per_ms_avg_data_size = [sum(x)/len(x) for x in time_orgnz_record.values()]
+                    per_ms_avg_data_size = [sum(x) / len(x) for x in time_orgnz_record.values()]
                     total_data_size = [x for i in time_orgnz_record.values() for x in i]
                     _max = max(per_ms_avg_data_size)
                     _min = min(per_ms_avg_data_size)
-                    _avg = sum(total_data_size)/len(total_data_size)
+                    _avg = sum(total_data_size) / len(total_data_size)
                     _num = len(total_data_size)
                 bs_report.append(
                     {
@@ -856,7 +857,7 @@ class StatisticRecorder:
                 if(len(time_orgnz_record) > 0):
                     _max = max(time_orgnz_record.values())
                     _min = min(time_orgnz_record.values())
-                    _avg = sum(time_orgnz_record.values())/self.RecordDuration()/1000
+                    _avg = sum(time_orgnz_record.values()) / self.RecordDuration() / 1000
                     _num = sum(time_orgnz_record.values())
                 bs_report.append(
                     {
@@ -942,7 +943,7 @@ class StatisticRecorder:
                         list(map(
                             lambda x: x[0][0],
                             in_txq_time
-                        )) + [NET_TIMEOUT_SECONDS+record.at]
+                        )) + [NET_TIMEOUT_SECONDS + record.at]
                     )
                     if(len(in_txq_time) == 0 or
                        min_enter_txq_time - record.at >= NET_TIMEOUT_SECONDS):
@@ -958,8 +959,8 @@ class StatisticRecorder:
             for record in self.sg_header[sg].values():
                 for bs in GV.NET_STATION_CONTROLLER:
                     for pair in record.time_bs_txq[bs]:
-                        pair[0] = math.ceil(round(pair[0], 4)*1000)/1000
-                        pair[1] = math.ceil(round(pair[1], 4)*1000)/1000
+                        pair[0] = math.ceil(round(pair[0], 4) * 1000) / 1000
+                        pair[1] = math.ceil(round(pair[1], 4) * 1000) / 1000
 
     def Report(self, save=True):
         # preprocess the raw statistics

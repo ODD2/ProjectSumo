@@ -12,8 +12,8 @@ DEBUG_MSG_FLAGS = (
     # DebugMsgType.NONE
     # DebugMsgType.NET_PKG_INFO |
     # DebugMsgType.NET_APPDATA_INFO |
-    DebugMsgType.NET_ALLOC_INFO
-    # DebugMsgType.MATLAB_INFO
+    DebugMsgType.NET_ALLOC_INFO |
+    DebugMsgType.MATLAB_INFO
     # DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings
@@ -64,11 +64,6 @@ NET_QoS_RND_REQ_NUM_TIME_SCALE = 1  # seconds
 NET_QoS_RND_REQ_NUM = {
     QoSLevel.CRITICAL: int(round((64 * 1024) / ((300 + 1100) * 8 / 2))),
     QoSLevel.GENERAL: int(round((500 * 1024) / ((64 + 2048) * 8 / 2)))
-}
-# . maximum number of members that belongs to the same social group of QoS level.
-NET_QoS_SG_MAX_MEMBER = {
-    QoSLevel.CRITICAL: 0,
-    QoSLevel.GENERAL: 20,
 }
 
 
@@ -162,7 +157,7 @@ if NET_SECONDS_PER_STEP / NET_SECONDS_PER_TS % 1 != 0:
     raise Exception(msg)
 
 # Directory Settings
-ROOT_DIR = "data/GS20/"
+ROOT_DIR = "data/"
 
 # Resource Allocation Parameters
 ALLOC_TVAL_CONST = 300

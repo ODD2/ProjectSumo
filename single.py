@@ -21,6 +21,7 @@ from od.env.station import BS_PRESET
 from od.misc.types import DebugMsgType
 from od.layer import NetObjLayer
 from od.misc.interest import InterestConfig
+from od.social.manager import DynamicSocialGroupBehaviour
 
 
 # Base Station Indicator Creator
@@ -222,5 +223,15 @@ if __name__ == "__main__":
     #     )
     # )
     cProfile.run(
-        """main(InterestConfig(True,ResourceAllocatorType.NOMA_APR,True,1.3,7))"""
+        """main(
+            InterestConfig(
+                DynamicSocialGroupBehaviour.MAX_N_MEMBER,
+                20,
+                True,
+                ResourceAllocatorType.NOMA_APR,
+                True,
+                1.3,
+                7
+            )
+        )"""
     )

@@ -1,11 +1,10 @@
 from od import social
 from od.social.group import SocialGroup, QoSLevel
-from od.network.types import LinkType
+from od.network.misc import CastObject
 from od.network.application import BaseStationApplication
 from od.network.appdata import AppData, AppDataHeader
 from od.network.package import NetworkPackage
-from od.network.types import BaseStationType, ResourceAllocatorType
-from od.network.misc import CastObject
+from od.network.types import BaseStationType, ResourceAllocatorType, LinkType
 from od.vehicle.request import UploadRequest, ResendRequest
 from od.network.allocator import (ResourceAllocatorNomaApprox,
                                   ResourceAllocatorOMA,
@@ -440,6 +439,8 @@ class BaseStationController:
                     min(appdata.bits, max_frame_bits)
                 )
             )
+            # create package target receiver name list for speedup.
+            CastObject.name = "|".join([v.name for v in self.sg_sub_vehs[sg]])
             for ts_key, ts_items in gid_items.items():
                 # the offset timeslot of the package
                 offset_ts = int(ts_key[1:])
@@ -504,7 +505,7 @@ class BaseStationController:
                 # create package
                 package = self.CreatePackage(
                     self,
-                    CastObject(sg),
+                    CastObject,
                     sg,
                     total_bits - remain_bits,
                     package_appdatas,
