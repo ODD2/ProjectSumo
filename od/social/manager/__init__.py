@@ -9,6 +9,7 @@ class SocialGroupManagerClass:
     def __init__(self, dyn_sg_conf):
         self.dyn_sg_conf = dyn_sg_conf
         self.dyn_gen_sg_serial = 0
+        self.dyn_gen_sg_vehs = {}
 
     def NewVehicleSocialGroupList(self):
         pass
@@ -32,13 +33,13 @@ class SocialGroupManagerClass:
 # Dynamic social group manager for Max N Social Groups Scenario.
 class MaxGroupSGM(SocialGroupManagerClass):
     def __init__(self, dyn_sg_conf):
-        self.super().__init__(dyn_sg_conf)
-        for _ in range(MAX_N_MEMBER_PRELOCATE_GROUP_NUM):
+        super().__init__(dyn_sg_conf)
+        for _ in range(dyn_sg_conf):
             self.CreateGeneralSocialGroup()
 
     def NewVehicleSocialGroupList(self):
         global SocialGroup
-        return [SocialGroup.CRASH, SocialGroup.RCWS, random.choice(SocialGroup)]
+        return [SocialGroup.CRASH, SocialGroup.RCWS, random.choice([sg for sg in SocialGroup if sg.dyn])]
 
 
 # Dynamic social group manager for Max N Members Per Social Group Scenario.
@@ -49,8 +50,6 @@ class MaxMemberSGM(SocialGroupManagerClass):
     def __init__(self, dyn_sg_conf):
         super().__init__(dyn_sg_conf)
         self.vehicle_stack = 0
-
-        self.dyn_gen_sg_vehs = {}
         for _ in range(MAX_N_MEMBER_PRELOCATE_GROUP_NUM):
             self.CreateGeneralSocialGroup()
 

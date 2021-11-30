@@ -209,7 +209,7 @@ class StatisticRecorder:
             sum_e2e_time[nft] = self.VehicleReceivedIntactAppdataReport(app_stats)
             sum_wait_time[nft] = self.BaseStationAppdataTXQReport(app_stats)
             sum_tx_time[nft] = self.BaseStationAppdataTXReport(app_stats)
-            sum_timeout_ratio[nft] = self.AppdataSourceTimeoutRatioReport(app_stats)
+            sum_timeout_ratio[nft] = self.AppdataTimeoutRatioReport(app_stats)
             sum_veh_avg_arv_rate[nft] = self.VehicleAppdataArrivalRateReport(app_stats)
             sum_veh_avg_arv_size[nft] = self.VehicleAppdataArrivalSizeReport(app_stats)
             sum_veh_avg_dep_rate[nft] = self.VehicleAppdataDepartRateReport(app_stats)
@@ -585,14 +585,12 @@ class StatisticRecorder:
             "min": min_tx_time,
         }
 
-    def AppdataSourceTimeoutRatioReport(self, app_stats):
-        total_bits = 0
-        ot_bits = 0
+    def AppdataTimeoutRatioReport(self, app_stats):
+        ot_data = 0
         for record in app_stats.values():
-            total_bits += record.bits
-            if(record.is_src_ot or len([x for x in record.is_bs_ot if x])):
-                ot_bits += record.bits
-        return ot_bits / max(total_bits, 1)
+            if(record.is_src_ot or (True in record.is_bs_ot)):
+                ot_data += 1
+        return ot_data / max(len(app_stats), 1)
 
     def BaseStationTypeThroughPutReport(self, app_stats, bs_type):
         # size of data.
@@ -748,12 +746,12 @@ class StatisticRecorder:
                 _min = min(time_orgnz_record.values())
                 _avg = sum(time_orgnz_record.values()) / (self.RecordDuration() * 1000)
                 _num = sum(time_orgnz_record.values())
-            return {
-                "max": _max,
-                "avg": _avg,
-                "min": _min,
-                "num": _num
-            }
+        return {
+            "max": _max,
+            "avg": _avg,
+            "min": _min,
+            "num": _num
+        }
 
     def BaseStationAppdataArrivalRateReport(self, app_stats):
         bs_report = []
@@ -951,7 +949,10 @@ class StatisticRecorder:
                     else:
                         # Check base station overtime condition.
                         for bs in GV.NET_STATION_CONTROLLER:
-                            if(record.time_bs_serv[bs] - record.at >= NET_TIMEOUT_SECONDS):
+                            if(
+                                len(record.time_bs_txq[bs]) > 0 and
+                                record.time_bs_txq[bs][-1][1] - record.at >= NET_TIMEOUT_SECONDS
+                            ):
                                 record.is_bs_ot[bs] = True
 
         # preprocess wait time adjustment(0.5ms -> 1ms)

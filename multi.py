@@ -1,5 +1,6 @@
 from od.misc.interest import InterestConfig
 from od.network.types import ResourceAllocatorType
+from od.social.manager import DynamicSocialGroupBehaviour
 from od.env.config import ROOT_DIR
 from od.view import DisplayStatistics
 from datetime import datetime
@@ -20,7 +21,7 @@ WEIGHT_INTCONFS = []
 class WeightInterestConfig:
     def __init__(self, interest_config):
         self.interest_config = interest_config
-        self.weight = (3 / 1.4 * interest_config.traffic_scale)
+        self.weight = (10 / 1.4 * interest_config.traffic_scale)
         self.weight *= 1.2 if interest_config.req_rsu else 1
         self.weight *= 1.5 if interest_config.res_alloc_type == ResourceAllocatorType.NOMA_OPT else 1
         self.weight /= SYS_TOTAL_MEM
@@ -64,9 +65,8 @@ def Worker(s: mp.Semaphore, target, args):
 
 def MemoryMonitor():
     global VALID_MEMORY, LIMIT
-    while(len(WEIGHT_INTCONFS) > 0):
-        VALID_MEMORY = LIMIT - vm().percent
-        sleep(60)
+    VALID_MEMORY = LIMIT - vm().percent
+    sleep(300)
 
 
 def ParallelSimulationManager():
@@ -117,8 +117,6 @@ def ParallelSimulationManager():
 
             # wait untill enough resource for the most required config.
             while(VALID_MEMORY < WEIGHT_INTCONFS[0].weight):
-                # wait for working process to end
-                s.acquire()
                 # check which process(es) ended
                 remain_weight_process_list = []
                 for wp in weight_process_list:
@@ -135,6 +133,7 @@ def ParallelSimulationManager():
                     else:
                         remain_weight_process_list.append(wp)
                 weight_process_list = remain_weight_process_list
+                MemoryMonitor()
         # wait for all the simulation process to join
         for wp in weight_process_list:
             wp.process.join()
@@ -150,35 +149,39 @@ def SimulationSettings(fn):
         #         for rsu in [False, True]:
         #             for traffic_scale in [i / 10 for i in range(7, 15, 1)]:
         #                 for seed in [i + 11 for i in range(10)]:
-
-        for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
-            for rsu in [True, False]:
-                for qos_re_class in [True, False] if rsu == True else [False]:
-                    for traffic_scale in [i / 10 for i in range(10, 15, 1)]:
-                        for seed in [i + 1 for i in range(5)]:
-                            result.append(
-                                fn(
-                                    **args,
-                                    qos_re_class=qos_re_class,
-                                    res_alloc_type=res_alloc_type,
-                                    rsu=rsu,
-                                    traffic_scale=traffic_scale,
-                                    seed=seed
+        # for dyn_sg_conf in [(i + 2) * 5 for i in range(5)]:
+        #     for res_alloc_type in [ResourceAllocatorType.NOMA_APR]:
+        #         for rsu in [True, False]:
+        #             for qos_re_class in [True, False] if rsu == True else [False]:
+        #                 for traffic_scale in [i / 10 for i in range(10, 15, 1)]:
+        #                     for seed in [i + 1 for i in range(9)]:
+        for dyn_sg_conf in [(i * 2) + 5 for i in range(5)]:
+            for res_alloc_type in [ResourceAllocatorType.NOMA_APR]:
+                for rsu in [True]:
+                    for qos_re_class in [True, False] if rsu == True else [False]:
+                        for traffic_scale in [1.4]:
+                            for seed in [i + 1 for i in range(9)]:
+                                result.append(
+                                    fn(
+                                        **args,
+                                        dyn_sg_behav=DynamicSocialGroupBehaviour.MAX_N_GROUPS,
+                                        dyn_sg_conf=dyn_sg_conf,
+                                        qos_re_class=qos_re_class,
+                                        res_alloc_type=res_alloc_type,
+                                        req_rsu=rsu,
+                                        traffic_scale=traffic_scale,
+                                        rng_seed=seed
+                                    )
                                 )
-                            )
         return result
     return wrapper
 
 
 @ SimulationSettings
-def CreateWeightIntConfs(qos_re_class, res_alloc_type, rsu, traffic_scale, seed):
+def CreateWeightIntConfs(**kargs):
     return WeightInterestConfig(
         InterestConfig(
-            qos_re_class,
-            res_alloc_type,
-            rsu,
-            traffic_scale,
-            seed
+            **kargs
         )
     )
 
