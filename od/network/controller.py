@@ -180,7 +180,7 @@ class BaseStationController:
             UploadRequest(sender, total_bits, starv_time)
         )
 
-    # arrange uplink resource
+    # Arrange uplink resource
     def ArrangeUplinkResource(self):
         # OMA resource allocator
         ra_oma = ResourceAllocatorOMA(
@@ -334,7 +334,7 @@ class BaseStationController:
         # create packages.
         self.DeployAllocationReport(alloc_report)
 
-    # organize informations for downlink allocation process
+    # Organize informations for downlink allocation process
     def PreprocessDownlinkRequest(self):
         # Radio resource configuration
         RES_CONF = {
@@ -425,7 +425,7 @@ class BaseStationController:
 
         return RES_CONF, QoS_GP_CONF
 
-    # create packages according to the given allocation report
+    # Create packages according to the given allocation report
     def DeployAllocationReport(self, alloc_report):
         self.PrintAllocationReport(alloc_report)
         # deliver package according to optimized allocate resource
@@ -526,7 +526,7 @@ class BaseStationController:
                     package
                 )
 
-    # record allocation result
+    # Record allocation result
     def PrintAllocationReport(self, alloc_report):
         # Construct Formatted Report
         report = "{\n"

@@ -5,6 +5,7 @@ from od.env.config import (BS_HEIGHT, BS_TRANS_PWR, BS_FREQ,
                            VEH_HEIGHT)
 from od.social.group import SocialGroup
 import od.engine as GE
+from od.social.group.types import QoSLevel
 import od.vars as GV
 import matlab
 import math
@@ -47,7 +48,7 @@ class NetStatusCache:
                         GET_BS_CQI_SINR_5G_FUTURE(
                             query[0],
                             query[1],
-                            query[2]
+                            query[2].qos
                         )
                     )
                 )
@@ -88,7 +89,7 @@ class NetStatusCache:
 
 
 # (VehicleRecorder, BaseStationController, SocialGroup)
-def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
+def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, qos: QoSLevel):
     # Vehicle's position
     Intf_dist = [5000]  # dummy base station for work around
     Intf_pwr_dBm = [BS_TRANS_PWR[bs_ctrlr.type]]
@@ -103,9 +104,9 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         CP = BS_UMA_CP
     elif(bs_ctrlr.type == BaseStationType.UMI):
         # resource block bandwidth
-        bandwidth = BS_UMI_RB_BW_QoS[social_group.qos]
+        bandwidth = BS_UMI_RB_BW_QoS[qos]
         # cyclic prefix
-        CP = BS_UMI_CP_QoS[social_group.qos]
+        CP = BS_UMI_CP_QoS[qos]
 
     # Height of antenna
     h_BS = BS_HEIGHT[bs_ctrlr.type]
@@ -155,8 +156,8 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, social_group: SocialGroup):
         matlab.double(Intf_h_MS),
         matlab.double(Intf_dist),
         matlab.double(Intf_pwr_dBm),
-        float(DS_Desired*1000),  # us->ns
-        float(CP*1000),  # us->ns
+        float(DS_Desired * 1000),  # us->ns
+        float(CP * 1000),  # us->ns
         True if bs_ctrlr.type == BaseStationType.UMA else False,
         float(0.001),
         float(tx_p_dBm - 3.01029995664),
