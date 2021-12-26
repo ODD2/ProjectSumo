@@ -174,30 +174,30 @@ class VehicleRecorder():
                     )
 
     # Subscribe base station
-    def SubscribeBS(self, bs_type, social_group: SocialGroup, bs_ctrl):
+    def SubscribeBS(self, bs_type, sg: SocialGroup, bs_ctrl):
         # if the desire base station was already subscribed
-        if self.sub_sg_bs[bs_type][social_group] == bs_ctrl:
+        if self.sub_sg_bs[bs_type][sg] == bs_ctrl:
             return
         else:
-            self.UnsubscribeBS(bs_type, social_group)
+            self.UnsubscribeBS(bs_type, sg)
 
         # Subscribe the new one
-        self.sub_sg_bs[bs_type][social_group] = bs_ctrl
+        self.sub_sg_bs[bs_type][sg] = bs_ctrl
         # Register to base station, too.
-        bs_ctrl.VehicleSubscribe(self, social_group)
+        bs_ctrl.VehicleSubscribe(self, sg)
         # Update connection state
         self.ConnectionChange(True, bs_ctrl)
 
     # Unsubscribe base station
-    def UnsubscribeBS(self, bs_type, social_group: SocialGroup):
+    def UnsubscribeBS(self, bs_type, sg: SocialGroup):
         # There is no subscription, nothing to do.
-        if (self.sub_sg_bs[bs_type][social_group] == None):
+        if (self.sub_sg_bs[bs_type][sg] == None):
             return
         # Unsubscribe the base station
-        bs_ctrl = self.sub_sg_bs[bs_type][social_group]
-        self.sub_sg_bs[bs_type][social_group] = None
+        bs_ctrl = self.sub_sg_bs[bs_type][sg]
+        self.sub_sg_bs[bs_type][sg] = None
         # Unregister from base station
-        bs_ctrl.VehicleUnsubscribe(self, social_group)
+        bs_ctrl.VehicleUnsubscribe(self, sg)
         # Update connection state
         self.ConnectionChange(False, bs_ctrl)
 
@@ -225,11 +225,11 @@ class VehicleRecorder():
                     GV.ERROR.Log("Error: No BS to serve request.")
 
     # Function called by BaseStationController to give resource block to upload requests
-    def UploadResourceGranted(self, bs_ctrl, social_group: SocialGroup, total_bits, trans_ts, offset_ts):
+    def UploadResourceGranted(self, bs_ctrl, sg: SocialGroup, total_bits, trans_ts, offset_ts):
         self.SendPackage(
             self.CreatePackage(
                 bs_ctrl,
-                social_group,
+                sg,
                 total_bits,
                 trans_ts,
                 offset_ts
@@ -237,9 +237,9 @@ class VehicleRecorder():
         )
 
     # Create package
-    def CreatePackage(self, dest, social_group: SocialGroup, total_bits, trans_ts, offset_ts):
+    def CreatePackage(self, dest, sg: SocialGroup, total_bits, trans_ts, offset_ts):
         # the number of appdata waiting for services
-        datas_count = len(self.app.sg_data_queue[social_group])
+        datas_count = len(self.app.sg_data_queue[sg])
         # the serving appdata index
         data_delivering = 0
         # the appdatas collected in the package
@@ -247,7 +247,7 @@ class VehicleRecorder():
         # while there's still space for allocation
         remain_bits = total_bits
         while(remain_bits > 0 and data_delivering < datas_count):
-            appdata = self.app.sg_data_queue[social_group][data_delivering]
+            appdata = self.app.sg_data_queue[sg][data_delivering]
             data_size = remain_bits if appdata.bits > remain_bits else appdata.bits
             package_datas.append(
                 AppData(
@@ -265,14 +265,18 @@ class VehicleRecorder():
             # if there's no remaining bits left, work on to the next appdata
             if(appdata.bits == 0):
                 data_delivering += 1
+                GV.STATISTIC_RECORDER.VehicleAppdataServe(
+                    sg,
+                    [appdata.header]
+                )
 
         # Remove appdata from list if it has no remaining bits to transmit
-        self.app.sg_data_queue[social_group] = self.app.sg_data_queue[social_group][data_delivering:]
+        self.app.sg_data_queue[sg] = self.app.sg_data_queue[sg][data_delivering:]
 
         package = NetworkPackage(
             self,
             dest,
-            social_group,
+            sg,
             total_bits - remain_bits,
             package_datas,
             trans_ts,
@@ -283,7 +287,7 @@ class VehicleRecorder():
         GV.DEBUG.Log(
             "[{}][package][{}]:create.({})".format(
                 self.name,
-                social_group.fname.lower(),
+                sg.fname.lower(),
                 package
             ),
             DebugMsgType.NET_PKG_INFO
@@ -313,6 +317,13 @@ class VehicleRecorder():
         pkg_in_proc = []
         for pkg in self.pkg_in_proc[LinkType.DOWNLINK]:
             if timeslot == pkg.end_ts:
+                # process received package
+                self.PackageDelivered(pkg)
+                # change connection state
+                self.con_state[pkg.src.name].rec.ChangeState(
+                    ConnectionState.Success
+                )
+            elif timeslot == pkg.offset_ts:
                 # log
                 GV.DEBUG.Log(
                     "[{}][package][{}]:receive.({})".format(
@@ -322,12 +333,7 @@ class VehicleRecorder():
                     ),
                     DebugMsgType.NET_PKG_INFO
                 )
-                # process received package
-                self.PackageDelivered(pkg)
-                # change connection state
-                self.con_state[pkg.src.name].rec.ChangeState(
-                    ConnectionState.Success
-                )
+                pkg_in_proc.append(pkg)
             else:
                 # update connection state
                 pkg_in_proc.append(pkg)
@@ -339,33 +345,75 @@ class VehicleRecorder():
         self.pkg_in_proc[LinkType.DOWNLINK] = pkg_in_proc
 
     def ProcessUplinkPackage(self, timeslot):
-        # exit if no package to process
         if(len(self.pkg_in_proc[LinkType.UPLINK]) == 0):
             return
-        # Upload
+        # Define
+        stats_appdata_trans_beg = {}  # statistic
+        stats_appdata_trans_end = {}  # statistic
         pkg_in_proc = []
+        # Upload
         for pkg in self.pkg_in_proc[LinkType.UPLINK]:
-            if(timeslot == pkg.offset_ts):
-                GV.DEBUG.Log(
-                    "[{}][package][{}]:deliver.({})".format(
-                        self.name,
-                        pkg.social_group.fname.lower(),
-                        pkg,
-                    ),
-                    DebugMsgType.NET_PKG_INFO
+            if timeslot == pkg.end_ts:
+                if(pkg.social_group not in stats_appdata_trans_end):
+                    stats_appdata_trans_end[pkg.social_group] = set()
+                stats_appdata_trans_end[pkg.social_group].update(
+                    list(map(
+                        lambda x: x.header,
+                        pkg.appdatas
+                    ))
                 )
                 # update connection state
                 self.con_state[pkg.dest.name].rec.ChangeState(
                     ConnectionState.Success
                 )
-            else:
-                pkg_in_proc.append(pkg)
+            elif timeslot == pkg.offset_ts:
+                # log
+                GV.DEBUG.Log(
+                    "[{}][package][{}]:deliver.({})".format(
+                        self.name,
+                        pkg.social_group.fname.lower(),
+                        pkg
+                    ),
+                    DebugMsgType.NET_PKG_INFO
+                )
+                # record the application data that started transmission at current timeslot
+                if(pkg.social_group not in stats_appdata_trans_beg):
+                    stats_appdata_trans_beg[pkg.social_group] = set()
+                stats_appdata_trans_beg[pkg.social_group].update(
+                    list(map(
+                        lambda x: x.header,
+                        pkg.appdatas
+                    ))
+                )
                 # update connection state
                 self.con_state[pkg.dest.name].rec.ChangeState(
                     ConnectionState.Transmit
                 )
-        # . remove sent packages
+                pkg_in_proc.append(pkg)
+            else:
+                pkg_in_proc.append(pkg)
+        # Remove packages delivered
         self.pkg_in_proc[LinkType.UPLINK] = pkg_in_proc
+
+        # Statistic
+        # record transmission begin after recording transmission end,
+        # the sequence matters!!
+        for sg, appdatas in stats_appdata_trans_end.items():
+            if(len(appdatas) > 0):
+                GV.STATISTIC_RECORDER.VehicleAppdataEndTX(
+                    sg, appdatas
+                )
+                GV.STATISTIC_RECORDER.VehicleAppdataEnterTXQ(
+                    sg, appdatas
+                )
+        for sg, appdatas in stats_appdata_trans_beg.items():
+            if(len(appdatas) > 0):
+                GV.STATISTIC_RECORDER.VehicleAppdataExitTXQ(
+                    sg, appdatas
+                )
+                GV.STATISTIC_RECORDER.VehicleAppdataStartTX(
+                    sg, appdatas
+                )
 
     # Process package that're delivered
     def PackageDelivered(self, package: NetworkPackage):
@@ -373,18 +421,18 @@ class VehicleRecorder():
             self.app.RecvData(package.social_group, appdata)
 
     # Select the service base station according to the social type provided.
-    def SelectSocialBS(self, social_group: SocialGroup):
+    def SelectSocialBS(self, sg: SocialGroup):
         # 2021/1/11 Scenario:
         # UMIs are spcificly for time critical data, only critical datas select UMI
         # as a type of upload destination. Any other social datas never select a UMI.
-        if (social_group.qos == QoSLevel.CRITICAL):
+        if (sg.qos == QoSLevel.CRITICAL):
             return (
-                self.sub_sg_bs[BaseStationType.UMI][social_group] if
-                self.sub_sg_bs[BaseStationType.UMI][social_group] != None
-                else self.sub_sg_bs[BaseStationType.UMA][social_group]
+                self.sub_sg_bs[BaseStationType.UMI][sg] if
+                self.sub_sg_bs[BaseStationType.UMI][sg] != None
+                else self.sub_sg_bs[BaseStationType.UMA][sg]
             )
         else:
-            return self.sub_sg_bs[BaseStationType.UMA][social_group]
+            return self.sub_sg_bs[BaseStationType.UMA][sg]
 
     # Function called by BaseStationControllers to send packages
     def ReceivePackage(self, package: NetworkPackage):

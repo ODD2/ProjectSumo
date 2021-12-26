@@ -85,6 +85,8 @@ class BaseStationController:
         # Upload
         for pkg in self.pkg_in_proc[LinkType.UPLINK]:
             if timeslot == pkg.end_ts:
+                self.PackageDelivered(pkg)
+            elif timeslot == pkg.offset_ts:
                 # log
                 GV.DEBUG.Log(
                     "[{}][package][{}]:receive.({})".format(
@@ -94,7 +96,7 @@ class BaseStationController:
                     ),
                     DebugMsgType.NET_PKG_INFO
                 )
-                self.PackageDelivered(pkg)
+                pkg_in_proc.append(pkg)
             else:
                 pkg_in_proc.append(pkg)
         # Remove packages delivered
@@ -131,7 +133,7 @@ class BaseStationController:
                     ),
                     DebugMsgType.NET_PKG_INFO
                 )
-                # record the application data that ended transmission at current timeslot
+                # record the application data that started transmission at current timeslot
                 if(pkg.social_group not in stats_appdata_trans_beg):
                     stats_appdata_trans_beg[pkg.social_group] = set()
                 stats_appdata_trans_beg[pkg.social_group].update(

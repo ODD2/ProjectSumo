@@ -225,13 +225,13 @@ if __name__ == "__main__":
     cProfile.run(
         """main(
             InterestConfig(
-                DynamicSocialGroupBehaviour.MAX_N_GROUPS,
+                DynamicSocialGroupBehaviour.MAX_N_MEMBER,
                 20,
                 True,
                 ResourceAllocatorType.NOMA_APR,
                 True,
-                1.3,
-                7
+                1.0,
+                1
             )
         )"""
     )

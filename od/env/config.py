@@ -157,7 +157,7 @@ if NET_SECONDS_PER_STEP / NET_SECONDS_PER_TS % 1 != 0:
     raise Exception(msg)
 
 # Directory Settings
-ROOT_DIR = "data/"
+ROOT_DIR = "data/UPLINK_STATS/"
 
 # Resource Allocation Parameters
 ALLOC_TVAL_CONST = 300
