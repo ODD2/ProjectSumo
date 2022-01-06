@@ -179,6 +179,19 @@ class StatisticRecorder:
             record = self.GetAppdataRecord(sg, header)
             record.time_bs_serv[bs] = current_time
 
+    #
+    def ConvertQoS(self, header, formal_sg, convert_sg):
+        if(header.id not in self.raw_sg_header[formal_sg]):
+            raise Exception("Error! Converting Vanishing Header of SocialGroup!")
+        elif(convert_sg in self.raw_sg_header and header.id in self.raw_sg_header[convert_sg]):
+            return
+        else:
+            formal_record = self.GetAppdataRecord(formal_sg, header)
+            convert_record = self.GetAppdataRecord(convert_sg, header)
+            convert_record.time_veh_tx = formal_record.time_veh_tx
+            convert_record.time_veh_txq = formal_record.time_veh_txq
+            convert_record.time_veh_serv = formal_record.time_veh_serv
+
     # extract specific network traffic from self.sg_headers
     def ExtractNetworkTraffic(self, nft, fresh=False):
         if(fresh or not nft in self.nft_traffic):
@@ -234,8 +247,9 @@ class StatisticRecorder:
         # summary of different estimate features
         sum_e2e_time = [None for x in NetFlowType]
         sum_wait_time = [None for x in NetFlowType]
+        sum_veh_e2e_time = [None for x in NetFlowType]
         sum_bs_wait_time = [None for x in NetFlowType]
-        sum_tx_time = [None for x in NetFlowType]
+        sum_bs_tx_time = [None for x in NetFlowType]
         sum_bst_thrput = [[None for x in BaseStationType] for x in NetFlowType]
         sum_timeout_ratio = [None for x in NetFlowType]
         sum_veh_avg_arv_rate = [None for _ in NetFlowType]
@@ -248,10 +262,11 @@ class StatisticRecorder:
         for nft in NetFlowType:
             GV.STATISTIC.Doc("<{}>".format(nft.name.upper()))
             app_stats = self.ExtractNetworkTraffic(nft)
-            sum_e2e_time[nft] = self.VehicleReceivedIntactAppdataReport(app_stats)
+            sum_e2e_time[nft] = self.AppdataE2EReport(app_stats)
             sum_wait_time[nft] = self.AppdataTXQReport(app_stats)
+            sum_veh_e2e_time[nft] = self.VehicleReceivedIntactAppdataReport(app_stats)
             sum_bs_wait_time[nft] = self.BaseStationAppdataTXQReport(app_stats)
-            sum_tx_time[nft] = self.BaseStationAppdataTXReport(app_stats)
+            sum_bs_tx_time[nft] = self.BaseStationAppdataTXReport(app_stats)
             sum_timeout_ratio[nft] = self.AppdataTimeoutRatioReport(app_stats)
             sum_veh_avg_arv_rate[nft] = self.VehicleAppdataArrivalRateReport(app_stats)
             sum_veh_avg_arv_size[nft] = self.VehicleAppdataArrivalSizeReport(app_stats)
@@ -339,14 +354,18 @@ class StatisticRecorder:
             x.name: sum_wait_time[x]
             for x in NetFlowType
         }
+        rep_veh_e2e_time = {
+            x.name: sum_veh_e2e_time[x]
+            for x in NetFlowType
+        }
         # bs wait time
         rep_bs_wait_time = {
             x.name: sum_bs_wait_time[x]
             for x in NetFlowType
         }
         # transmit time
-        rep_tx_time = {
-            x.name: sum_tx_time[x]
+        rep_bs_tx_time = {
+            x.name: sum_bs_tx_time[x]
             for x in NetFlowType
         }
         # timeout ratio
@@ -391,8 +410,9 @@ class StatisticRecorder:
         report = {
             "end-to-end": rep_e2e_time,
             "wait-time": rep_wait_time,
-            "bs_wait-time": rep_bs_wait_time,
-            "tx-time": rep_tx_time,
+            "veh-end-to-end": rep_veh_e2e_time,
+            "bs-wait-time": rep_bs_wait_time,
+            "bs-tx-time": rep_bs_tx_time,
             "bst-thrput": rep_bst_thrput,
             "bst-thrput-rate": rep_bst_thrput_rate,
             "sys-thrput": rep_sys_thrput,
@@ -430,7 +450,7 @@ class StatisticRecorder:
 
     # Reports
     def VehicleReceivedIntactAppdataReport(self, app_stats):
-        GV.STATISTIC.Doc("<End-to-End>")
+        GV.STATISTIC.Doc("<Vehicle-Receive-E2E>")
         # predefine
         total_trip_time = 0
         total_trip_count = 0
@@ -479,8 +499,60 @@ class StatisticRecorder:
             "min": min_trip_time,
         }
 
+    def AppdataE2EReport(self, app_stats):
+        GV.STATISTIC.Doc("<Appdata-E2E>")
+        # predefine
+        total_trip_time = 0
+        total_trip_count = 0
+        max_trip_time = float('-inf')
+        min_trip_time = float('inf')
+        avg_trip_time = 0
+        # collect data from app stats
+        for header_id, record in app_stats.items():
+            record_total_trip_time = 0
+            record_total_trip_count = 0
+            record_max_trip_time = float('-inf')
+            record_min_trip_time = float('inf')
+            for serve_at in record.time_bs_serv:
+                if(serve_at == -1):
+                    continue
+                serve_time = serve_at + NET_SECONDS_PER_STEP - record.at
+                record_total_trip_time += serve_time
+                record_total_trip_count += 1
+                record_max_trip_time = record_max_trip_time if record_max_trip_time > serve_time else serve_time
+                record_min_trip_time = record_min_trip_time if record_min_trip_time < serve_time else serve_time
+
+            record_avg_trip_time = (
+                0 if record_total_trip_count == 0
+                else record_total_trip_time / record_total_trip_count
+            )
+
+            GV.STATISTIC.Doc(
+                '[{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
+                    header_id,
+                    record_total_trip_time,
+                    record_total_trip_count,
+                    record_avg_trip_time,
+                    record_max_trip_time,
+                    record_min_trip_time,
+                )
+            )
+            total_trip_time += record_total_trip_time
+            total_trip_count += record_total_trip_count
+            min_trip_time = min_trip_time if min_trip_time < record_min_trip_time else record_min_trip_time
+            max_trip_time = max_trip_time if max_trip_time > record_max_trip_time else record_max_trip_time
+
+        # calculate average
+        avg_trip_time = (0 if total_trip_count == 0 else total_trip_time / total_trip_count)
+        GV.STATISTIC.Doc("</End-to-End>")
+        return {
+            "avg": avg_trip_time,
+            "max": max_trip_time,
+            "min": min_trip_time,
+        }
+
     def AppdataTXQReport(self, app_stats):
-        GV.STATISTIC.Doc("<E2E-TXQ-WAIT>")
+        GV.STATISTIC.Doc("<Appdata-TXQ>")
         # time waited of appdata in transmit queue
         max_txq_wait_time = float('-inf')
         min_txq_wait_time = float('inf')
@@ -569,7 +641,7 @@ class StatisticRecorder:
         }
 
     def BaseStationAppdataTXQReport(self, app_stats):
-        GV.STATISTIC.Doc("<TXQ-WAIT>")
+        GV.STATISTIC.Doc("<BS-TXQ>")
         # time waited of appdata in transmit queue
         max_txq_wait_time = float('-inf')
         min_txq_wait_time = float('inf')
@@ -651,7 +723,7 @@ class StatisticRecorder:
         }
 
     def BaseStationAppdataTXReport(self, app_stats):
-        GV.STATISTIC.Doc("<TX-TIME>")
+        GV.STATISTIC.Doc("<BS-TX>")
         max_tx_time = float('-inf')
         min_tx_time = float('inf')
         total_tx_time = 0

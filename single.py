@@ -142,8 +142,6 @@ def main(interest_config):
     vehicle_recorders = {}
     # - run
     for _ in range(SUMO_SIM_STEPS):
-        # forward sumo simulation step
-        traci.simulationStep()
         # fetch the newest sumo simulation informations
         UpdateSS([GV.SUMO_SIM_INFO])
         UpdateSS(GV.SUMO_SIM_EVENTS)
@@ -151,7 +149,8 @@ def main(interest_config):
         # remove ghost(non-exist) vehicles
         for ghost_vid in GV.SUMO_SIM_INFO.ghost_veh_ids:
             GV.DEBUG.Log(
-                "[{}]: left the map.".format(ghost_vid),
+                "[{}]: left the map.",
+                (ghost_vid),
                 DebugMsgType.SUMO_VEH_INFO
             )
             vehicle_recorders[ghost_vid].Leave()
@@ -160,7 +159,8 @@ def main(interest_config):
         # add new vehicles
         for vid in GV.SUMO_SIM_INFO.new_veh_ids:
             GV.DEBUG.Log(
-                "[{}]: joined the map.".format(vid),
+                "[{}]: joined the map.",
+                (vid),
                 DebugMsgType.SUMO_VEH_INFO
             )
             vehicle_recorders[vid] = VehicleRecorder(vid)
@@ -191,6 +191,9 @@ def main(interest_config):
                 # Update vehicle recorders & base stations for each network timeslot step
                 UpdateT(vehicle_recorders.values(), ts)
                 UpdateT(GV.NET_STATION_CONTROLLER, ts)
+
+        # forward sumo simulation step
+        traci.simulationStep()
 
     # End Simulation
     # - manually destruct vehicle recorder in order to close traci.
@@ -228,10 +231,10 @@ if __name__ == "__main__":
                 DynamicSocialGroupBehaviour.MAX_N_MEMBER,
                 20,
                 True,
-                ResourceAllocatorType.NOMA_APR,
+                ResourceAllocatorType.NOMA_OPT,
                 True,
                 1.0,
-                1
+                6
             )
         )"""
     )

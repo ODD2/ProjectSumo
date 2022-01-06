@@ -285,7 +285,8 @@ class VehicleRecorder():
 
         # log
         GV.DEBUG.Log(
-            "[{}][package][{}]:create.({})".format(
+            "[{}][package][{}]:create.({})",
+            (
                 self.name,
                 sg.fname.lower(),
                 package
@@ -326,7 +327,8 @@ class VehicleRecorder():
             elif timeslot == pkg.offset_ts:
                 # log
                 GV.DEBUG.Log(
-                    "[{}][package][{}]:receive.({})".format(
+                    "[{}][package][{}]:receive.({})",
+                    (
                         self.name,
                         pkg.social_group.fname.lower(),
                         pkg,
@@ -369,7 +371,8 @@ class VehicleRecorder():
             elif timeslot == pkg.offset_ts:
                 # log
                 GV.DEBUG.Log(
-                    "[{}][package][{}]:deliver.({})".format(
+                    "[{}][package][{}]:deliver.({})",
+                    (
                         self.name,
                         pkg.social_group.fname.lower(),
                         pkg

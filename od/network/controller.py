@@ -89,7 +89,8 @@ class BaseStationController:
             elif timeslot == pkg.offset_ts:
                 # log
                 GV.DEBUG.Log(
-                    "[{}][package][{}]:receive.({})".format(
+                    "[{}][package][{}]:receive.({})",
+                    (
                         self.name,
                         pkg.social_group.fname.lower(),
                         pkg
@@ -126,7 +127,8 @@ class BaseStationController:
             # package start transmission
             elif(timeslot == pkg.offset_ts):
                 GV.DEBUG.Log(
-                    "[{}][package][{}]:deliver.({})".format(
+                    "[{}][package][{}]:deliver.({})",
+                    (
                         self.name,
                         pkg.social_group.fname.lower(),
                         pkg
@@ -322,12 +324,24 @@ class BaseStationController:
         # create stdout receiver, save output for debug
         out = io.StringIO()
         # optimize allocation request
-        alloc_report, exitflag = GE.MATLAB_ENG.PlannerV1(
-            RES_CONF, QoS_GP_CONF, nargout=2, stdout=out
-        )
+        try:
+            alloc_report, exitflag = GE.MATLAB_ENG.PlannerV1(
+                RES_CONF, QoS_GP_CONF, nargout=2, stdout=out
+            )
+        except Exception as e:
+            GV.ERROR.Log(
+                "[{}][alloc]:Caught Matlab Exception!\nQoS_GP_CONF:{}\nRES_CONF:{}\n".format(
+                    self.name,
+                    QoS_GP_CONF,
+                    RES_CONF
+                )
+            )
+            return
+            # raise e
         #  save output for debug
         GV.DEBUG.Log(
-            "[{}][alloc]:report.\n{}".format(
+            "[{}][alloc]:report.\n{}",
+            (
                 self.name,
                 out.getvalue()
             ),
@@ -542,7 +556,8 @@ class BaseStationController:
         report += "}\n"
         # Log
         GV.DEBUG.Log(
-            "[{}][alloc]:report.\n{}".format(
+            "[{}][alloc]:report.\n{}",
+            (
                 self.name,
                 report
             ),
@@ -564,7 +579,8 @@ class BaseStationController:
 
         # log
         GV.DEBUG.Log(
-            "[{}][package][{}]:create.({})".format(
+            "[{}][package][{}]:create.({})",
+            (
                 self.name,
                 social_group.fname.lower(),
                 package
@@ -659,11 +675,19 @@ class NetworkCoreController:
             if(sender not in self.umi_approx_uma):
                 self.umi_approx_uma[sender] = self.MapApproximityUMA(sender)
             # propagate only to the uma closest to the sender umi.
-            self.umi_approx_uma[sender].Propagate(
-                self,
-                SocialGroup.RCWS if GV.NET_QoS_RE_CLS else social_group,
-                header
-            )
+            if(GV.NET_QoS_RE_CLS):
+                GV.STATISTIC_RECORDER.ConvertQoS(header, social_group, SocialGroup.RCWS)
+                self.umi_approx_uma[sender].Propagate(
+                    self,
+                    SocialGroup.RCWS,
+                    header
+                )
+            else:
+                self.umi_approx_uma[sender].Propagate(
+                    self,
+                    social_group,
+                    header
+                )
         elif(sender.type == BaseStationType.UMA and social_group.qos == QoSLevel.GENERAL):
             for uma_bs in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
                 if(uma_bs == sender):

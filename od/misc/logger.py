@@ -8,13 +8,13 @@ class Logger:
     def __init__(self, dirpath, file):
         if not os.path.isdir(dirpath):
             os.makedirs(dirpath)
-        self.file = open(dirpath+file, "w")
+        self.file = open(dirpath + file, "w")
 
     def Encapsulate(self):
         self.file.close()
 
     def Doc(self, msg: str):
-        self.file.write(msg+'\n')
+        self.file.write(msg + '\n')
         return msg
 
     def Log(self, msg: str):
@@ -24,7 +24,7 @@ class Logger:
             GV.SUMO_SIM_INFO.ts,
             msg
         )
-        self.file.write(log+'\n')
+        self.file.write(log + '\n')
         return log
 
 
@@ -42,12 +42,12 @@ class Debugger(Logger):
     def __init__(self, dirpath, file):
         super().__init__(dirpath, file)
 
-    def Doc(self, msg, level: DebugMsgType):
+    def Doc(self, msg_fmt, msg_args, level: DebugMsgType):
         if(level & DEBUG_MSG_FLAGS > 0):
-            return Logger.Doc(self, msg)
+            return Logger.Doc(self, msg_fmt.format(*msg_args))
         return ""
 
-    def Log(self, msg, level: DebugMsgType):
+    def Log(self, msg_fmt, msg_args, level: DebugMsgType):
         if(level & DEBUG_MSG_FLAGS > 0):
-            return Logger.Log(self, msg)
+            return Logger.Log(self, msg_fmt.format(*msg_args))
         return ""

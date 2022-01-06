@@ -37,7 +37,8 @@ class Application:
             )
 
             GV.DEBUG.Log(
-                "[{}][app][{}]:data intro.({})".format(
+                "[{}][app][{}]:data intro.({})",
+                (
                     self.owner.name,
                     social_group.fname.lower(),
                     appdata.header
@@ -110,7 +111,8 @@ class VehicleApplication(Application):
 
     def DataIntact(self, social_group: SocialGroup, appdata: AppData):
         GV.DEBUG.Log(
-            "[{}][app][{}]:data intact.({})".format(
+            "[{}][app][{}]:data intact.({})",
+            (
                 self.owner.name,
                 social_group.fname.lower(),
                 appdata.header
@@ -165,7 +167,8 @@ class VehicleApplication(Application):
 
                 # Log
                 GV.DEBUG.Log(
-                    "[{}][app][{}]:data spawn.({})".format(
+                    "[{}][app][{}]:data spawn.({})",
+                    (
                         self.owner.name,
                         sg.fname.lower(),
                         appdata.header
@@ -201,7 +204,8 @@ class VehicleApplication(Application):
 
 #     def DataIntact(self, social_group: SocialGroup, appdata: AppData):
 #         GV.DEBUG.Log(
-#             "[{}][app][{}]:data intact.({})".format(
+#             "[{}][app][{}]:data intact.({})",
+#             (
 #                 self.owner.name,
 #                 social_group.fname.lower(),
 #                 appdata.header
@@ -221,7 +225,8 @@ class BaseStationApplicationUMA(Application):
 
     def DataIntact(self, social_group: SocialGroup, appdata: AppData):
         GV.DEBUG.Log(
-            "[{}][app][{}]:data intact.({})".format(
+            "[{}][app][{}]:data intact.({})",
+            (
                 self.owner.name,
                 social_group.fname.lower(),
                 appdata.header
@@ -249,7 +254,8 @@ class BaseStationApplicationUMI(Application):
 
     def DataIntact(self, social_group: SocialGroup, appdata: AppData):
         GV.DEBUG.Log(
-            "[{}][app][{}]:data intact.({})".format(
+            "[{}][app][{}]:data intact.({})",
+            (
                 self.owner.name,
                 social_group.fname.lower(),
                 appdata.header
