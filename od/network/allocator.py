@@ -35,17 +35,29 @@ class AsymNomaRbConfig:
         self.outer_rbs = outer_rbs
         self.outer_pwr_mW = outer_pwr_mW
 
+    def __repr__(self):
+        return "{{I:{},O:{}}}".format(self.inner_rbs, self.outer_rbs)
+
 
 class SymNomaRbConfig:
     def __init__(self, inner_rb, outer_rb):
         self.inner_rb = inner_rb
         self.outer_rb = outer_rb
 
+    def __repr__(self):
+        return "{{I:{},O:{}}}".format(self.inner_rb, self.outer_rb)
+
 
 class NomaRbConfig:
     def __init__(self, owner, cqi):
         self.cqi = cqi
         self.owner = owner
+
+    def __repr__(self):
+        return "(g{}:c{})".format(int(self.owner["gid"]), int(self.cqi))
+
+    def __str__(self):
+        return self.__repr__()
 
 
 class InnerRbConfig(NomaRbConfig):
@@ -68,8 +80,9 @@ class ResourceAllocatorNomaApprox:
         self.max_pwr_mW = pow(10, RES_CONF["max_pwr_dBm"] / 10)
 
         self.spare_inner_rb = {2: {1: []}, 1: {2: []}}
-        self.hybrid_rb = {2: {1: []}, 1: {2: []}}
-        self.solid_rb = {2: {1: []}, 1: {2: []}}
+        self.spare_hybrid_rb = {2: {1: []}, 1: {2: []}}
+        self.solid_hybrid_rb = {2: {1: []}, 1: {2: []}}
+        self.solid_normal_rb = {2: {1: []}, 1: {2: []}}
 
         self.procedures = [
             self.CheckValidSymetricGeo,
@@ -102,7 +115,7 @@ class ResourceAllocatorNomaApprox:
         rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
             10 * log10(target_rb.rem_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"])
         )
-        self.solid_rb[rbf_h][rbf_w].append(
+        self.solid_normal_rb[rbf_h][rbf_w].append(
             SymNomaRbConfig(
                 target_rb,
                 OuterRbConfig(
@@ -119,10 +132,10 @@ class ResourceAllocatorNomaApprox:
 
     def CheckValidSpareOuter(self, gp_conf, rbf_h, rbf_w, gp_pwr_conf):
         # check for hybrid resource blocks to convert into a solid one.
-        if(len(self.hybrid_rb[rbf_w][rbf_h]) > 0):
+        if(len(self.spare_hybrid_rb[rbf_w][rbf_h]) > 0):
             # find resource block providing best power condition
-            self.hybrid_rb[rbf_w][rbf_h].sort(key=lambda x: x.outer_pwr_mW, reverse=True)
-            target_rb = self.hybrid_rb[rbf_w][rbf_h]
+            self.spare_hybrid_rb[rbf_w][rbf_h].sort(key=lambda x: x.outer_pwr_mW, reverse=True)
+            target_rb = self.spare_hybrid_rb[rbf_w][rbf_h][0]
             # add outer resource block configuration
             rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
                 10 * log10(
@@ -140,9 +153,9 @@ class ResourceAllocatorNomaApprox:
                 int(NET_RB_SLOT_SYMBOLS)
             )
             # remove from hybrid RB list, due to it has become a solid RB.
-            self.hybrid_rb[rbf_w][rbf_h] = self.hybrid_rb[rbf_w][rbf_h][1:]
+            self.spare_hybrid_rb[rbf_w][rbf_h] = self.spare_hybrid_rb[rbf_w][rbf_h][1:]
             # add into solid RB list.
-            self.solid_rb[rbf_w][rbf_h].append(target_rb)
+            self.solid_hybrid_rb[rbf_w][rbf_h].append(target_rb)
             return True
 
         # check for spare resource blocks to construct into a hybrid one.
@@ -164,13 +177,16 @@ class ResourceAllocatorNomaApprox:
                     valid_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"]
                 )
             )
-            self.hybrid_rb[rbf_w][rbf_h].append(
+            self.spare_hybrid_rb[rbf_w][rbf_h].append(
                 AsymNomaRbConfig(
                     inner_rbs,
-                    [OuterRbConfig(
-                        gp_conf,
-                        rb_cqi
-                    )]
+                    [
+                        OuterRbConfig(
+                            gp_conf,
+                            rb_cqi
+                        )
+                    ],
+                    valid_pwr_mW
                 )
             )
             gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
@@ -182,26 +198,39 @@ class ResourceAllocatorNomaApprox:
 
     def CheckValidSpareInner(self, gp_conf, rbf_h, rbf_w, gp_pwr_conf):
         # calculate resource occupation
-        num_2_1_rb = (
+        num_random_2_1_rb = (
             len(self.spare_inner_rb[2][1]) +
-            len(self.hybrid_rb[2][1]) +
-            len(self.solid_rb[2][1])
+            len(self.solid_normal_rb[2][1])
+        )
+        num_static_2_1_rb = (
+            len(self.spare_hybrid_rb[2][1]) +
+            len(self.solid_hybrid_rb[2][1])
         )
         num_1_2_rb = (
             len(self.spare_inner_rb[1][2]) +
-            len(self.hybrid_rb[1][2]) +
-            len(self.solid_rb[1][2])
+            len(self.spare_hybrid_rb[1][2]) * 2 +
+            len(self.solid_hybrid_rb[1][2]) * 2 +
+            len(self.solid_normal_rb[1][2])
         )
         # construct valid remaining resource block fractions per timeslot.
         rem_rbf_ts = [
-            self.frbf_h - num_1_2_rb - int(num_2_1_rb / 2) * 2 - (num_2_1_rb % 2) * 2,
-            self.frbf_h - num_1_2_rb - int(num_2_1_rb / 2) * 2
+            (
+                self.frbf_h -
+                num_1_2_rb -
+                (int(num_random_2_1_rb / 2) + (num_random_2_1_rb % 2) + num_static_2_1_rb) * 2
+            ),
+            (
+                self.frbf_h -
+                num_1_2_rb -
+                (int(num_random_2_1_rb / 2) + num_static_2_1_rb) * 2
+            )
         ]
-
         # examine valid resource space
         for x in range(self.frbf_w):
             for _x in range(rbf_w):
-                if(rem_rbf_ts[x + _x] < rbf_h):
+                if((x + _x) < self.frbf_w and rem_rbf_ts[x + _x] >= rbf_h):
+                    continue
+                else:
                     break
             else:
                 # create if resource sufficient.
@@ -230,18 +259,19 @@ class ResourceAllocatorNomaApprox:
             # sort group configs according to its eager rate, higer rate indicates higher priority.
             sort_gp_confs = sorted(
                 gp_confs,
-                key=lambda x: x["eager_rate"] * GE.MATLAB_ENG.SelectCQI_BLER10P(x["sinr_max"]),
+                key=lambda x: x["eager_rate"] * x["sinr_max"],
                 reverse=True
             )
             for gp_conf in sort_gp_confs:
                 # preparation
                 rbf_w, rbf_h = round(gp_conf["rbf_w"]), round(gp_conf["rbf_h"])
                 max_sinr = gp_conf["sinr_max"]
-                max_sinr_noise_reciprocal = pow(10, max_sinr / 10) / self.max_pwr_mW
+                max_sinr_req_pwr_mW = pow(10, gp_conf["pwr_req_dBm"] / 10)
+                max_sinr_noise_reciprocal = pow(10, max_sinr / 10) / max_sinr_req_pwr_mW
                 pwr_conf = {
                     "max_sinr_noise_reciprocal": max_sinr_noise_reciprocal,
                     "max_cqi": GE.MATLAB_ENG.SelectCQI_BLER10P(max_sinr),
-                    "max_sinr_req_pwr_mW": pow(10, gp_conf["pwr_req_dBm"] / 10),
+                    "max_sinr_req_pwr_mW": max_sinr_req_pwr_mW,
                     "max_sinr_ext_pwr_mW": pow(10, gp_conf["pwr_ext_dBm"] / 10),
                     "min_sinr_req_pwr_mW": pow(10, -6.9 / 10) / max_sinr_noise_reciprocal
                 }
@@ -263,10 +293,12 @@ class ResourceAllocatorNomaApprox:
         # allocation assignment report for all 1x2 geo resource blocks
         all_1_2_rbs = (
             [rb for rb in self.spare_inner_rb[1][2]] +
-            [sym_rb.inner_rb for sym_rb in self.solid_rb[1][2]] +
-            [sym_rb.outer_rb for sym_rb in self.solid_rb[1][2]] +
-            [rb for asym_rb in self.hybrid_rb[1][2] for rb in asym_rb.inner_rbs] +
-            [rb for asym_rb in self.hybrid_rb[2][1] for rb in asym_rb.outer_rbs]
+            [rb for asym_rb in self.spare_hybrid_rb[1][2] for rb in asym_rb.inner_rbs] +
+            [rb for asym_rb in self.spare_hybrid_rb[2][1] for rb in asym_rb.outer_rbs] +
+            [sym_rb.inner_rb for sym_rb in self.solid_normal_rb[1][2]] +
+            [sym_rb.outer_rb for sym_rb in self.solid_normal_rb[1][2]] +
+            [rb for asym_rb in self.solid_hybrid_rb[1][2] for rb in asym_rb.inner_rbs] +
+            [rb for asym_rb in self.solid_hybrid_rb[2][1] for rb in asym_rb.outer_rbs]
         )
         # add 1x2 geo resource blocks into report
         for rb in all_1_2_rbs:
@@ -275,26 +307,30 @@ class ResourceAllocatorNomaApprox:
 
         # allocation assignment report for all 2x1 geo resource blocks
         all_2_1_rbs = [[] for _ in range(2)]
-        independ_2_1_rbs = (
+        # 2x1 resource blocks that could be arrange in desire.
+        random_2_1_rbs = (
             [SymNomaRbConfig(rb, None) for rb in self.spare_inner_rb[2][1]] +
-            [sym_rb for sym_rb in self.solid_rb[2][1]]
+            [sym_rb for sym_rb in self.solid_normal_rb[2][1]]
         )
-        depend_2_1_rbs = (
-            [asym_rb.inner_rbs for asym_rb in self.hybrid_rb[2][1]] +
-            [asym_rb.outer_rbs for asym_rb in self.hybrid_rb[1][2]]
+        # 2x1 resource blocks that had been arranged specifically.
+        static_2_1_rbs = (
+            [asym_rb.inner_rbs for asym_rb in self.spare_hybrid_rb[2][1]] +
+            [asym_rb.outer_rbs for asym_rb in self.spare_hybrid_rb[1][2]] +
+            [asym_rb.inner_rbs for asym_rb in self.solid_hybrid_rb[2][1]] +
+            [asym_rb.outer_rbs for asym_rb in self.solid_hybrid_rb[1][2]]
         )
-        # arrange independent 2x1 resource blocks(higher qos priority has earlier timeslot offset advantage.)
-        independ_2_1_rbs.sort(key=lambda x: x.inner_rb.owner["gid"])
-        max_2_1_rb_per_col = int(len(independ_2_1_rbs) / 2) + len(independ_2_1_rbs) % 2
-        for i, sym_rb in enumerate(independ_2_1_rbs):
+        # arrange random 2x1 resource blocks(higher qos priority has earlier timeslot offset advantage.)
+        random_2_1_rbs.sort(key=lambda x: x.inner_rb.owner["gid"])
+        max_2_1_rb_per_col = int(len(random_2_1_rbs) / 2) + len(random_2_1_rbs) % 2
+        for i, sym_rb in enumerate(random_2_1_rbs):
             ofs_ts = int(i / max_2_1_rb_per_col)
             all_2_1_rbs[ofs_ts].append(sym_rb.inner_rb)
             if(sym_rb.outer_rb):
                 all_2_1_rbs[ofs_ts].append(sym_rb.outer_rb)
         # arrange dependent 2x1 resource blocks(higher qos priority has earlier timeslot offset advantage.)
-        for rbs in depend_2_1_rbs:
-            rbs.sort(key=lambda x: x.owner["gid"])
-            for ofs_ts, rb in enumerate(rbs):
+        for pair_rbs in static_2_1_rbs:
+            pair_rbs.sort(key=lambda x: x.owner["gid"])
+            for ofs_ts, rb in enumerate(pair_rbs):
                 all_2_1_rbs[ofs_ts].append(rb)
         # add 1x2 geo resource blocks into report
         for ofs_ts, rbs in enumerate(all_2_1_rbs):

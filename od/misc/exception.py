@@ -1,2 +1,2 @@
-class ODExecption(Exception):
+class ODException(Exception):
     pass

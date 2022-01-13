@@ -202,17 +202,14 @@ def main(interest_config):
     # - close traci
     traci.close(wait=False)
 
-    # - statistic report
-    report = GV.STATISTIC_RECORDER.Report(True)
-    # report = {}
+    # - save statistics for further process
+    GV.STATISTIC_RECORDER.Report(save=True)
 
     # - terminate global variables
     GV.TerminateSimulationVariables()
 
     # - terminate matlab engine
     GE.TerminateMatlabEngine()
-
-    return report
 
 
 if __name__ == "__main__":
@@ -231,7 +228,7 @@ if __name__ == "__main__":
                 DynamicSocialGroupBehaviour.MAX_N_MEMBER,
                 20,
                 True,
-                ResourceAllocatorType.NOMA_OPT,
+                ResourceAllocatorType.NOMA_APR,
                 True,
                 1.0,
                 6

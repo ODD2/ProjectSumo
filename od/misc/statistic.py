@@ -5,9 +5,10 @@ from od.env.config import (SUMO_SECONDS_PER_STEP, NET_SECONDS_PER_STEP,
                            SUMO_SKIP_SECONDS, SUMO_NET_WARMUP_SECONDS, EVENT_CONFIGS, NET_TIMEOUT_SECONDS)
 from od.network.types import BaseStationType
 from od.misc.interest import InterestConfig
-from od.misc.exception import ODExecption
+from od.misc.exception import ODException
 from od.network.appdata import AppDataHeader
 import od.vars as GV
+import copy
 # STD
 from enum import IntEnum
 import math
@@ -37,6 +38,21 @@ class AppdataStatistic:
         self.time_bs_drop = [-1 for _ in GV.NET_STATION_CONTROLLER]
         self.is_bs_ot = [False for _ in GV.NET_STATION_CONTROLLER]
 
+    def __repr__(self) -> str:
+        return (
+            "time at:{}\n".format(self.at) +
+            "trips:{}\n".format(self.time_veh_trip) +
+            "bs ot:{}\n".format(self.is_bs_ot) +
+            "src ot:{}\n".format(self.is_src_ot) +
+            "time veh serv:{}\n".format(self.time_veh_serv) +
+            "time veh txq:{}\n".format(self.time_veh_txq) +
+            "time veh tx:{}\n".format(self.time_veh_tx) +
+            "time bs drop:{}\n".format(self.time_bs_drop) +
+            "time bs serv:{}\n".format(self.time_bs_serv) +
+            "time bs txq:{}\n".format(self.time_bs_txq) +
+            "time bs tx:{}\n".format(self.time_bs_tx)
+        )
+
 
 class StatisticRecorder:
     def __init__(self, dirpath, interest_config: InterestConfig):
@@ -46,17 +62,14 @@ class StatisticRecorder:
         self.dirpath = dirpath
         self.interest_config = interest_config
         self.raw_sg_header = {}
-        self.sg_header = {}
+        self.sg_header = None
         self.social_group = []
         self.interval = (
             SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + min(map(lambda x: x.ofs_sec, EVENT_CONFIGS)),
             SUMO_SKIP_SECONDS + SUMO_NET_WARMUP_SECONDS + max(map(lambda x: x.ofs_sec + x.dur_sec, EVENT_CONFIGS))
         )
         self.nft_traffic = {}
-
-    # the total amount of time for the recorder in seconds.
-    def RecordDuration(self):
-        return self.interval[1] - self.interval[0]
+    # ============= RECORD UTILITIES ==============
 
     # record the amount of vehicles in the system throughout the whole simulation
     def VehiclesJoin(self, veh_num):
@@ -95,12 +108,13 @@ class StatisticRecorder:
     def BaseStationOverTimeAppdata(self, sg, bs, headers):
         pass
 
+    # call by BaseStation while a appdata enters TX queue
     def VehicleAppdataEnterTXQ(self, sg, headers):
         current_time = GV.SUMO_SIM_INFO.getTime()
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
             record.time_veh_txq.append(
-                [current_time, 0]
+                [current_time, -1]
             )
 
     # call by BaseStation while a appdata exits TX queue
@@ -139,7 +153,7 @@ class StatisticRecorder:
         for header in headers:
             record = self.GetAppdataRecord(sg, header)
             record.time_bs_txq[bs].append(
-                [current_time, 0]
+                [current_time, -1]
             )
 
     # call by BaseStation while a appdata exits TX queue
@@ -179,10 +193,10 @@ class StatisticRecorder:
             record = self.GetAppdataRecord(sg, header)
             record.time_bs_serv[bs] = current_time
 
-    #
-    def ConvertQoS(self, header, formal_sg, convert_sg):
+    # call by CoreController while converting qos level of appdata.
+    def CoreStationConvertQoS(self, header, formal_sg, convert_sg):
         if(header.id not in self.raw_sg_header[formal_sg]):
-            raise Exception("Error! Converting Vanishing Header of SocialGroup!")
+            raise ODException("Error! Converting Vanishing Header of SocialGroup!")
         elif(convert_sg in self.raw_sg_header and header.id in self.raw_sg_header[convert_sg]):
             return
         else:
@@ -191,6 +205,11 @@ class StatisticRecorder:
             convert_record.time_veh_tx = formal_record.time_veh_tx
             convert_record.time_veh_txq = formal_record.time_veh_txq
             convert_record.time_veh_serv = formal_record.time_veh_serv
+    # ============== HELPER FUNCTIONS ===============
+
+    # the total amount of time for the recorder in seconds.
+    def RecordDuration(self):
+        return self.interval[1] - self.interval[0]
 
     # extract specific network traffic from self.sg_headers
     def ExtractNetworkTraffic(self, nft, fresh=False):
@@ -205,7 +224,7 @@ class StatisticRecorder:
                 ]:
                     for header, value in self.sg_header[sg].items():
                         if(header in int_records):
-                            raise Exception("Appdata Duplicate in different Critical SocialGroups")
+                            raise ODException("Appdata Duplicate in different Critical SocialGroups")
                         int_records[header] = value
                 traffic = int_records
             elif(nft == NetFlowType.GENERAL):
@@ -216,7 +235,7 @@ class StatisticRecorder:
                 ]:
                     for header, value in self.sg_header[sg].items():
                         if(header in int_records):
-                            raise Exception("Appdata Duplicate in different General SocialGroups")
+                            raise ODException("Appdata Duplicate in different General SocialGroups")
                         int_records[header] = value
                 traffic = int_records
             elif(nft == NetFlowType.C2G):
@@ -242,12 +261,14 @@ class StatisticRecorder:
 
         return self.nft_traffic[nft]
 
+    # ============== REPORT UTILITIES ==============
+
     # create report for network traffics.
     def CreateReport(self):
         # summary of different estimate features
         sum_e2e_time = [None for x in NetFlowType]
+        sum_e2b_time = [None for x in NetFlowType]
         sum_wait_time = [None for x in NetFlowType]
-        sum_veh_e2e_time = [None for x in NetFlowType]
         sum_bs_wait_time = [None for x in NetFlowType]
         sum_bs_tx_time = [None for x in NetFlowType]
         sum_bst_thrput = [[None for x in BaseStationType] for x in NetFlowType]
@@ -262,9 +283,9 @@ class StatisticRecorder:
         for nft in NetFlowType:
             GV.STATISTIC.Doc("<{}>".format(nft.name.upper()))
             app_stats = self.ExtractNetworkTraffic(nft)
-            sum_e2e_time[nft] = self.AppdataE2EReport(app_stats)
-            sum_wait_time[nft] = self.AppdataTXQReport(app_stats)
-            sum_veh_e2e_time[nft] = self.VehicleReceivedIntactAppdataReport(app_stats)
+            sum_e2e_time[nft] = self.VehicleAppdataDelayReport(app_stats)
+            sum_e2b_time[nft] = self.BaseStationAppdataDelayReport(app_stats)
+            sum_wait_time[nft] = self.AppdataWaitTimeReport(app_stats)
             sum_bs_wait_time[nft] = self.BaseStationAppdataTXQReport(app_stats)
             sum_bs_tx_time[nft] = self.BaseStationAppdataTXReport(app_stats)
             sum_timeout_ratio[nft] = self.AppdataTimeoutRatioReport(app_stats)
@@ -349,13 +370,14 @@ class StatisticRecorder:
             x.name: sum_e2e_time[x]
             for x in NetFlowType
         }
+        # end to bs time
+        rep_e2b_time = {
+            x.name: sum_e2b_time[x]
+            for x in NetFlowType
+        }
         # wait time
         rep_wait_time = {
             x.name: sum_wait_time[x]
-            for x in NetFlowType
-        }
-        rep_veh_e2e_time = {
-            x.name: sum_veh_e2e_time[x]
             for x in NetFlowType
         }
         # bs wait time
@@ -409,8 +431,8 @@ class StatisticRecorder:
         # create report
         report = {
             "end-to-end": rep_e2e_time,
+            "end-to-bs": rep_e2b_time,
             "wait-time": rep_wait_time,
-            "veh-end-to-end": rep_veh_e2e_time,
             "bs-wait-time": rep_bs_wait_time,
             "bs-tx-time": rep_bs_tx_time,
             "bst-thrput": rep_bst_thrput,
@@ -448,9 +470,9 @@ class StatisticRecorder:
         if depth == 0:
             GV.RESULT.Doc("")
 
-    # Reports
-    def VehicleReceivedIntactAppdataReport(self, app_stats):
-        GV.STATISTIC.Doc("<Vehicle-Receive-E2E>")
+    # report the time elapse from data creation to vehicle receive for success transmission appdatas.
+    def VehicleAppdataDelayReport(self, app_stats):
+        GV.STATISTIC.Doc("<E2E-DELAY>")
         # predefine
         total_trip_time = 0
         total_trip_count = 0
@@ -467,8 +489,8 @@ class StatisticRecorder:
             for trip_time in record.time_veh_trip.values():
                 record_total_trip_time += trip_time
                 record_total_trip_count += 1
-                record_max_trip_time = record_max_trip_time if record_max_trip_time > trip_time else trip_time
-                record_min_trip_time = record_min_trip_time if record_min_trip_time < trip_time else trip_time
+                record_max_trip_time = max(record_max_trip_time, trip_time)
+                record_min_trip_time = min(record_min_trip_time, trip_time)
 
             record_avg_trip_time = (
                 0 if record_total_trip_count == 0
@@ -487,20 +509,21 @@ class StatisticRecorder:
             )
             total_trip_time += record_total_trip_time
             total_trip_count += record_total_trip_count
-            min_trip_time = min_trip_time if min_trip_time < record_min_trip_time else record_min_trip_time
-            max_trip_time = max_trip_time if max_trip_time > record_max_trip_time else record_max_trip_time
+            max_trip_time = max(max_trip_time, record_max_trip_time)
+            min_trip_time = min(min_trip_time, record_min_trip_time)
 
         # calculate average
         avg_trip_time = (0 if total_trip_count == 0 else total_trip_time / total_trip_count)
-        GV.STATISTIC.Doc("</End-to-End>")
+        GV.STATISTIC.Doc("</E2E-DELAY>")
         return {
             "avg": avg_trip_time,
             "max": max_trip_time,
             "min": min_trip_time,
         }
 
-    def AppdataE2EReport(self, app_stats):
-        GV.STATISTIC.Doc("<Appdata-E2E>")
+    # report the time elapse from data creation to end of base station transmission.
+    def BaseStationAppdataDelayReport(self, app_stats):
+        GV.STATISTIC.Doc("<E2B-DELAY>")
         # predefine
         total_trip_time = 0
         total_trip_count = 0
@@ -514,13 +537,14 @@ class StatisticRecorder:
             record_max_trip_time = float('-inf')
             record_min_trip_time = float('inf')
             for serve_at in record.time_bs_serv:
-                if(serve_at == -1):
+                # the data never complete tramission by this base station, ignore.
+                if(serve_at < 0):
                     continue
                 serve_time = serve_at + NET_SECONDS_PER_STEP - record.at
                 record_total_trip_time += serve_time
                 record_total_trip_count += 1
-                record_max_trip_time = record_max_trip_time if record_max_trip_time > serve_time else serve_time
-                record_min_trip_time = record_min_trip_time if record_min_trip_time < serve_time else serve_time
+                record_max_trip_time = max(record_max_trip_time, serve_time)
+                record_min_trip_time = min(record_min_trip_time, serve_time)
 
             record_avg_trip_time = (
                 0 if record_total_trip_count == 0
@@ -539,20 +563,21 @@ class StatisticRecorder:
             )
             total_trip_time += record_total_trip_time
             total_trip_count += record_total_trip_count
-            min_trip_time = min_trip_time if min_trip_time < record_min_trip_time else record_min_trip_time
-            max_trip_time = max_trip_time if max_trip_time > record_max_trip_time else record_max_trip_time
+            max_trip_time = max(max_trip_time, record_max_trip_time)
+            min_trip_time = min(min_trip_time, record_min_trip_time)
 
         # calculate average
         avg_trip_time = (0 if total_trip_count == 0 else total_trip_time / total_trip_count)
-        GV.STATISTIC.Doc("</End-to-End>")
+        GV.STATISTIC.Doc("</E2E-DELAY>")
         return {
             "avg": avg_trip_time,
             "max": max_trip_time,
             "min": min_trip_time,
         }
 
-    def AppdataTXQReport(self, app_stats):
-        GV.STATISTIC.Doc("<Appdata-TXQ>")
+    # report the time elapse in transmission waiting queue.
+    def AppdataWaitTimeReport(self, app_stats):
+        GV.STATISTIC.Doc("<E2E-TXQ>")
         # time waited of appdata in transmit queue
         max_txq_wait_time = float('-inf')
         min_txq_wait_time = float('inf')
@@ -573,42 +598,30 @@ class StatisticRecorder:
             )
             # evaluate record
             for bs in GV.NET_STATION_CONTROLLER:
-                serial = bs.serial
                 bs_total_txq_wait_time = 0
                 # the data was never received by this base station, ignore.
-                if(len(record.time_bs_txq[serial]) == 0):
+                if(len(record.time_bs_txq[bs]) == 0):
                     continue
+
                 # sum up total base station txq wait time.
-                for time_interval in record.time_bs_txq[serial]:
+                for time_interval in record.time_bs_txq[bs]:
                     time_enter = time_interval[0]
                     time_exit = time_interval[1]
                     # Error detection
-                    if(time_enter == 0 or time_exit == 0):
-                        GV.ERROR.Log(
-                            "Error! TXQ time unexpected. {}".format(record.time_bs_txq[serial])
+                    if(time_enter < 0 or time_exit < 0):
+                        raise ODException(
+                            "Error! TXQ time unexpected. {}".format(record.time_bs_txq[bs])
                         )
                     # accumulate time.
                     if(not math.isclose(time_enter, time_exit) and time_enter * time_exit > 0):
                         bs_total_txq_wait_time += (time_exit - time_enter)
 
-                # ignore if there's no waiting time.
-                # if bs_total_txq_wait_time == 0:
-                #     continue
-
                 # add txq wait time to record.
                 bs_total_txq_wait_time += record_veh_txq_wait_time
                 record_total_txq_wait_count += 1
                 record_total_txq_wait_time += bs_total_txq_wait_time
-                record_max_txq_wait_time = (
-                    record_max_txq_wait_time
-                    if record_max_txq_wait_time > bs_total_txq_wait_time
-                    else bs_total_txq_wait_time
-                )
-                record_min_txq_wait_time = (
-                    record_min_txq_wait_time
-                    if record_min_txq_wait_time < bs_total_txq_wait_time
-                    else bs_total_txq_wait_time
-                )
+                record_max_txq_wait_time = max(record_max_txq_wait_time, bs_total_txq_wait_time)
+                record_min_txq_wait_time = min(record_min_txq_wait_time, bs_total_txq_wait_time)
             # record summary
             record_avg_txq_wait_time = (
                 0 if record_total_txq_wait_count == 0
@@ -627,13 +640,13 @@ class StatisticRecorder:
             # add record
             total_txq_wait_time += record_total_txq_wait_time
             total_txq_wait_count += record_total_txq_wait_count
-            max_txq_wait_time = max_txq_wait_time if max_txq_wait_time > record_max_txq_wait_time else record_max_txq_wait_time
-            min_txq_wait_time = min_txq_wait_time if min_txq_wait_time < record_min_txq_wait_time else record_min_txq_wait_time
+            max_txq_wait_time = max(max_txq_wait_time, record_max_txq_wait_time)
+            min_txq_wait_time = min(min_txq_wait_time, record_min_txq_wait_time)
 
         avg_txq_wait_time = (0 if total_txq_wait_count ==
                              0 else total_txq_wait_time / total_txq_wait_count)
 
-        GV.STATISTIC.Doc("</E2E-TXQ-WAIT>")
+        GV.STATISTIC.Doc("</E2E-TXQ>")
         return {
             "avg": avg_txq_wait_time,
             "max": max_txq_wait_time,
@@ -656,20 +669,22 @@ class StatisticRecorder:
             record_total_txq_wait_count = 0
             # evaluate record
             for bs in GV.NET_STATION_CONTROLLER:
-                serial = bs.serial
                 bs_total_txq_wait_time = 0
                 # the data was never received by this base station, ignore.
-                if(len(record.time_bs_txq[serial]) == 0):
+                # if(len(record.time_bs_txq[bs]) == 0):
+                #     continue
+
+                # the data never complete tramission by this base station, ignore.
+                if(record.time_bs_serv[bs] < 0):
                     continue
+
                 # sum up total base station txq wait time.
-                for time_interval in record.time_bs_txq[serial]:
+                for time_interval in record.time_bs_txq[bs]:
                     time_enter = time_interval[0]
                     time_exit = time_interval[1]
                     # Error detection
-                    if(time_enter == 0 or time_exit == 0):
-                        GV.ERROR.Log(
-                            "Error! TXQ time unexpected. {}".format(record.time_bs_txq[serial])
-                        )
+                    if(time_enter < 0 or time_exit < 0):
+                        raise ODException("Error! TXQ time unexpected. {}".format(record.time_bs_txq[bs]))
                     # accumulate time.
                     if(not math.isclose(time_enter, time_exit) and time_enter * time_exit > 0):
                         bs_total_txq_wait_time += (time_exit - time_enter)
@@ -681,16 +696,8 @@ class StatisticRecorder:
                 # add txq wait time to record.
                 record_total_txq_wait_count += 1
                 record_total_txq_wait_time += bs_total_txq_wait_time
-                record_max_txq_wait_time = (
-                    record_max_txq_wait_time
-                    if record_max_txq_wait_time > bs_total_txq_wait_time
-                    else bs_total_txq_wait_time
-                )
-                record_min_txq_wait_time = (
-                    record_min_txq_wait_time
-                    if record_min_txq_wait_time < bs_total_txq_wait_time
-                    else bs_total_txq_wait_time
-                )
+                record_max_txq_wait_time = max(record_max_txq_wait_time, bs_total_txq_wait_time)
+                record_min_txq_wait_time = min(record_min_txq_wait_time, bs_total_txq_wait_time)
             # record summary
             record_avg_txq_wait_time = (
                 0 if record_total_txq_wait_count == 0
@@ -709,13 +716,13 @@ class StatisticRecorder:
             # add record
             total_txq_wait_time += record_total_txq_wait_time
             total_txq_wait_count += record_total_txq_wait_count
-            max_txq_wait_time = max_txq_wait_time if max_txq_wait_time > record_max_txq_wait_time else record_max_txq_wait_time
-            min_txq_wait_time = min_txq_wait_time if min_txq_wait_time < record_min_txq_wait_time else record_min_txq_wait_time
+            max_txq_wait_time = max(max_txq_wait_time, record_max_txq_wait_time)
+            min_txq_wait_time = min(min_txq_wait_time, record_min_txq_wait_time)
 
         avg_txq_wait_time = (0 if total_txq_wait_count ==
                              0 else total_txq_wait_time / total_txq_wait_count)
 
-        GV.STATISTIC.Doc("</TXQ-WAIT>")
+        GV.STATISTIC.Doc("</BS-TXQ>")
         return {
             "avg": avg_txq_wait_time,
             "max": max_txq_wait_time,
@@ -737,15 +744,13 @@ class StatisticRecorder:
             record_total_tx_count = 0
             # evaluate record
             for bs in GV.NET_STATION_CONTROLLER:
-                serial = bs.serial
                 bs_total_tx_time = 0
-                # ignore if base station never transmit this appdata.
-                # or if base station did not seccessfully transmit the appdata.
-                if(record.time_bs_drop[serial] > 0 or
-                   record.time_bs_serv[serial] < 0):
+
+                # the data never complete tramission by this base station, ignore.
+                if(record.time_bs_serv[bs] < 0):
                     continue
                 # sum up all the base station tx time
-                for time_pair in record.time_bs_tx[serial]:
+                for time_pair in record.time_bs_tx[bs]:
                     time_begin = time_pair[0]
                     time_end = time_pair[1]
                     if(time_begin * time_end > 0):
@@ -756,16 +761,8 @@ class StatisticRecorder:
                 # add tx time to record
                 record_total_tx_count += 1
                 record_total_tx_time += bs_total_tx_time
-                record_max_tx_time = (
-                    record_max_tx_time
-                    if record_max_tx_time > bs_total_tx_time
-                    else bs_total_tx_time
-                )
-                record_min_tx_time = (
-                    record_min_tx_time
-                    if record_min_tx_time < bs_total_tx_time
-                    else bs_total_tx_time
-                )
+                record_max_tx_time = max(record_max_tx_time, bs_total_tx_time)
+                record_min_tx_time = min(record_min_tx_time, bs_total_tx_time)
             # record summary
             record_avg_tx_time = (
                 0 if record_total_tx_count == 0
@@ -784,11 +781,11 @@ class StatisticRecorder:
             # accumulate record
             total_tx_time += record_total_tx_time
             total_tx_count += record_total_tx_count
-            max_tx_time = max_tx_time if max_tx_time > record_max_tx_time else record_max_tx_time
-            min_tx_time = min_tx_time if min_tx_time < record_min_tx_time else record_min_tx_time
+            max_tx_time = max(max_tx_time, record_max_tx_time)
+            min_tx_time = min(min_tx_time, record_min_tx_time)
 
         avg_tx_time = (0 if total_tx_count == 0 else total_tx_time / total_tx_count)
-        GV.STATISTIC.Doc("</TX-TIME>")
+        GV.STATISTIC.Doc("</BS-TX>")
         return {
             "avg": avg_tx_time,
             "max": max_tx_time,
@@ -812,7 +809,7 @@ class StatisticRecorder:
 
         for header, record in app_stats.items():
             for bs in bs_ctrlrs:
-                if(record.time_bs_serv[bs] > 0):
+                if(record.time_bs_serv[bs] >= 0):
                     bits += record.bits
                     count += 1
                     break
@@ -829,7 +826,7 @@ class StatisticRecorder:
         for sg in self.social_group:
             for record in self.sg_header[sg].values():
                 for bs in GV.NET_STATION_CONTROLLER:
-                    if(record.time_bs_serv[bs] > 0):
+                    if(record.time_bs_serv[bs] >= 0):
                         sg_bs_type_data[bs.type][sg] += 1
 
         for bs_type in BaseStationType:
@@ -860,9 +857,9 @@ class StatisticRecorder:
         for sg in self.social_group:
             for record in self.sg_header[sg].values():
                 for bs in GV.NET_STATION_CONTROLLER:
-                    if(len(record.time_bs_txq[bs]) > 0):
+                    if(len(record.time_bs_txq[bs]) >= 0):
                         sg_bs_type_recv[bs.type][sg] += 1
-                    if(record.time_bs_drop[bs] > 0):
+                    if(record.time_bs_drop[bs] >= 0):
                         sg_bs_type_drop[bs.type][sg] += 1
 
         for bs_type in BaseStationType:
@@ -1057,7 +1054,7 @@ class StatisticRecorder:
                 _num = 0
                 for record in app_stats.values():
                     time = record.time_bs_serv[bs]
-                    if(time > 0):
+                    if(time >= 0):
                         if(not time in time_orgnz_record):
                             time_orgnz_record[time] = 1
                         else:
@@ -1089,11 +1086,11 @@ class StatisticRecorder:
 
     def Preprocess(self):
         # preprocess only raw statistic data, if it has been processed, skip process.
-        if(not self.raw_sg_header):
-            print("Skipping Preprocess, Since there's no Raw Data.")
+        if(not self.sg_header == None):
+            print("Skipping Preprocess...")
             return
 
-        # save the whole social group generated during simulation
+        # save the social groups generated during simulation
         self.social_group = [sg for sg in SocialGroup]
 
         # create empty dataset for social groups without data during simulation.
@@ -1102,54 +1099,45 @@ class StatisticRecorder:
                 self.raw_sg_header[sg] = {}
 
         # extract only appdata that're in interest intervals.
-        for sg in self.social_group:
-            self.sg_header[sg] = {
+        for sg in self.raw_sg_header:
+            self.raw_sg_header[sg] = {
                 header: record
                 for header, record in self.raw_sg_header[sg].items()
                 if (record.at >= self.interval[0] and
                     record.at < self.interval[1])
             }
 
-        # clean raw appdata since we have our interest intervals.
-        self.raw_sg_header = None
+        # create a deep copy of raw data for value manipulation.
+        self.sg_header = copy.deepcopy(self.raw_sg_header)
 
         # preprocess basestation txq timing adjustments
         for sg in self.social_group:
             for record in self.sg_header[sg].values():
-                for serial in GV.NET_STATION_CONTROLLER:
-                    if(len(record.time_bs_txq[serial]) > 0):
-                        # check if the latest enqueue time exceeds the total simulation time
-                        if(record.time_bs_txq[serial][-1][0] > SUMO_TOTAL_SECONDS):
-                            record.time_bs_drop[serial] = SUMO_TOTAL_SECONDS
-                            record.time_bs_txq[serial][-1][0] = SUMO_TOTAL_SECONDS
-
+                for bs in GV.NET_STATION_CONTROLLER:
+                    if(len(record.time_bs_txq[bs]) > 0):
                         # check if the latest dequeue time is unset
-                        if(record.time_bs_txq[serial][-1][1] == 0):
-                            if(record.time_bs_drop[serial] >= 0):
+                        if(record.time_bs_txq[bs][-1][1] < 0):
+                            if(record.time_bs_drop[bs] >= 0):
                                 # if it's unset because it had been dropped by base station
                                 # the dequeue time will be the time it was dropped
-                                record.time_bs_txq[serial][-1][1] = record.time_bs_drop[serial]
-                            elif(record.time_bs_serv[serial] >= 0):
+                                record.time_bs_txq[bs][-1][1] = record.time_bs_drop[bs]
+                            elif(record.time_bs_serv[bs] >= 0):
                                 # if it's unset because it had been completely served
                                 # no dequeue time is not required, so is the enqueue time.
-                                record.time_bs_txq[serial].pop()
+                                record.time_bs_txq[bs].pop()
                             else:
                                 # if it's unset because the simulation ended (not dropped also not served)
                                 # set the dequeue time to the simulation end time.
-                                record.time_bs_txq[serial][-1][1] = SUMO_TOTAL_SECONDS
+                                record.time_bs_txq[bs][-1][1] = SUMO_TOTAL_SECONDS
 
         # preprocess vehicle txq timing adjustments
         for sg in self.social_group:
             for record in self.sg_header[sg].values():
-                if(len(record.time_veh_txq) == 1 and record.time_veh_txq[0][1] == 0):
+                if(len(record.time_veh_txq) == 1 and record.time_veh_txq[0][1] == -1):
                     record.time_veh_txq.pop()
                 elif(len(record.time_veh_txq) > 0):
-                    # check if the latest enqueue time exceeds the total simulation time
-                    if(record.time_veh_txq[-1][0] > SUMO_TOTAL_SECONDS):
-                        record.time_veh_txq[-1][0] = SUMO_TOTAL_SECONDS
-
                     # check if the latest dequeue time is unset
-                    if(record.time_veh_txq[-1][1] == 0):
+                    if(record.time_veh_txq[-1][1] == -1):
                         if(record.time_veh_serv >= 0):
                             # if it's unset because it had been completely served
                             # no dequeue time is required, so as the enqueue time.
@@ -1167,32 +1155,29 @@ class StatisticRecorder:
                     continue
                 else:
                     # Check data source overtime condition.
-                    in_txq_time = list(filter(lambda x: len(x) > 0, record.time_bs_txq))
-                    min_enter_txq_time = min(
-                        list(map(
-                            lambda x: x[0][0],
-                            in_txq_time
-                        )) + [NET_TIMEOUT_SECONDS + record.at]
-                    )
-                    if(len(in_txq_time) == 0 or
-                       min_enter_txq_time - record.at >= NET_TIMEOUT_SECONDS):
+                    if(len(record.time_veh_txq) == 0 or
+                       (record.time_veh_serv - record.at) >= NET_TIMEOUT_SECONDS):
                         record.is_src_ot = True
                     else:
                         # Check base station overtime condition.
                         for bs in GV.NET_STATION_CONTROLLER:
                             if(
                                 len(record.time_bs_txq[bs]) > 0 and
-                                record.time_bs_txq[bs][-1][1] - record.at >= NET_TIMEOUT_SECONDS
+                                (record.time_bs_txq[bs][-1][1] - record.at) >= NET_TIMEOUT_SECONDS
                             ):
                                 record.is_bs_ot[bs] = True
 
         # preprocess wait time adjustment(0.5ms -> 1ms)
         for sg in self.social_group:
             for record in self.sg_header[sg].values():
+                def adjust(x): return math.ceil(round(x, 4) * 1000) / 1000
+                for pair in record.time_veh_txq:
+                    pair[0] = adjust(pair[0])
+                    pair[1] = adjust(pair[1])
                 for bs in GV.NET_STATION_CONTROLLER:
                     for pair in record.time_bs_txq[bs]:
-                        pair[0] = math.ceil(round(pair[0], 4) * 1000) / 1000
-                        pair[1] = math.ceil(round(pair[1], 4) * 1000) / 1000
+                        pair[0] = adjust(pair[0])
+                        pair[1] = adjust(pair[1])
 
     def Report(self, save=True):
         # preprocess the raw statistics
@@ -1205,9 +1190,9 @@ class StatisticRecorder:
             if not os.path.isdir(self.dirpath):
                 os.makedirs(self.dirpath)
             report_filename = 'report.pickle'
-            object_filename = 'object.pickle'
             with open(self.dirpath + report_filename, 'wb') as interest_statistic_report_file:
                 pickle.dump(statistic_report, interest_statistic_report_file)
+            object_filename = 'object.pickle'
             with open(self.dirpath + object_filename, 'wb') as interest_statistic_object_file:
                 pickle.dump(self, interest_statistic_object_file)
         # return statistic object

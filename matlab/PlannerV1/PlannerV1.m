@@ -112,6 +112,8 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
             sinr_max_sdn = 10 ^(sinr_max/10); 
             pwr_req_dBm = qos_gp_conf.pwr_req_dBm;
             pwr_ext_dBm = qos_gp_conf.pwr_ext_dBm;
+            pwr_req_mW = 10^(pwr_req_dBm/10);
+            pwr_ext_mW = 10^(pwr_ext_dBm/10);
             
 %           create a new solution group config
             new_gp_conf  = OPT_GP_CONF_TEMPLATE;            
@@ -127,6 +129,8 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
 %           max cqi & max  sinr
             new_gp_conf.cqi_max = cqi_max;
             new_gp_conf.sinr_max = sinr_max;
+            new_gp_conf.sinr_max_req_pwr_mW = pwr_req_mW;
+            new_gp_conf.sinr_max_ext_pwr_mW = pwr_ext_mW;
             new_gp_conf.sinr_max_sdn = sinr_max_sdn;
             
 %           newly joined groups will try to allocate both in oma&noma layer
@@ -140,14 +144,14 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
             
 % 			configure oma prerequisite settings
 			new_gp_conf.oma_cqi_list = [ cqi_max ];
-            new_gp_conf.oma_cqi_req_pwr_mw = [ 10^(pwr_req_dBm/10)];
-            new_gp_conf.oma_cqi_ext_pwr_mw = [ 10^(pwr_ext_dBm/10)];
+            new_gp_conf.oma_cqi_req_pwr_mw = pwr_req_mW;
+            new_gp_conf.oma_cqi_ext_pwr_mw = pwr_ext_mW;
             new_gp_conf.oma_cqi_num = 1;
 
 %           add new group configs
             OPT_GP_CONF = [OPT_GP_CONF new_gp_conf];
 
-            fprintf("G%d - req_pwr: %fdB/%fmW ext_pwr:%fdB/%fmW\n",[qos_gp_conf.gid pwr_req_dBm new_gp_conf.oma_cqi_req_pwr_mw(1) pwr_ext_dBm new_gp_conf.oma_cqi_ext_pwr_mw(1)]);
+            fprintf("G%d - req_pwr: %fdB/%fmW ext_pwr:%fdB/%fmW\n",[qos_gp_conf.gid pwr_req_dBm pwr_req_mW pwr_ext_dBm pwr_ext_mW]);
 
         end
         
@@ -185,7 +189,7 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
                 continue
             end
 
-            noise_reciprocal = OPT_GP_CONF(index).sinr_max_sdn / SIM_CONF.max_pwr_mw;
+            noise_reciprocal = OPT_GP_CONF(index).sinr_max_sdn / OPT_GP_CONF(index).sinr_max_req_pwr_mW;
             noma_cqi_max =  SelectCQI_BLER10P(10 *log10( oma_max_rem_pwr_mw * noise_reciprocal));
             noma_cqi_min =  max( SelectCQI_BLER10P(10 *log10( oma_min_rem_pwr_mw * noise_reciprocal)) , 1);
 %           unable to provide suitable power for noma layer allocation

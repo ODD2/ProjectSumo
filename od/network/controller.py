@@ -676,7 +676,7 @@ class NetworkCoreController:
                 self.umi_approx_uma[sender] = self.MapApproximityUMA(sender)
             # propagate only to the uma closest to the sender umi.
             if(GV.NET_QoS_RE_CLS):
-                GV.STATISTIC_RECORDER.ConvertQoS(header, social_group, SocialGroup.RCWS)
+                GV.STATISTIC_RECORDER.CoreStationConvertQoS(header, social_group, SocialGroup.RCWS)
                 self.umi_approx_uma[sender].Propagate(
                     self,
                     SocialGroup.RCWS,
