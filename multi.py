@@ -121,11 +121,13 @@ def ParallelSimulationManager():
 def SimulationSettings(fn):
     def wrapper(**args):
         result = []
+        seed_range = [i + 1 for i in range(50)]
+        traffic_scale_range = [i / 10 for i in range(10, 15, 1)]
         for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
             for rsu in [True, False]:
                 for qos_re_class in [True, False] if rsu == True else [False]:
-                    for traffic_scale in [i / 10 for i in range(10, 15, 1)]:
-                        for seed in [i + 1 for i in range(10)]:
+                    for traffic_scale in traffic_scale_range:
+                        for seed in seed_range:
                             result.append(
                                 fn(
                                     **args,
@@ -144,7 +146,7 @@ def SimulationSettings(fn):
                     for rsu in [True]:
                         for qos_re_class in [True, False] if rsu == True else [False]:
                             for traffic_scale in [1.4]:
-                                for seed in [i + 1 for i in range(10)]:
+                                for seed in seed_range:
                                     result.append(
                                         fn(
                                             **args,

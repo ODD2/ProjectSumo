@@ -1,5 +1,6 @@
 import os
 import sys
+from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import pickle
 import math
@@ -40,8 +41,9 @@ plt.rcParams.update(
         "figure.dpi": 100,
         "axes.titlesize": "medium",
         "legend.fontsize": "x-small",
-        'figure.figsize': [6, 4],
-
+        "figure.figsize": [6, 4],
+        "lines.linewidth": 3,
+        "lines.markersize": 15
     }
 )
 PINF = float("inf")
@@ -60,18 +62,48 @@ for name, bs_config in BS_PRESET.items():
         YRSU_SCENARIO_BS_ID.append(name)
 
 # ============== LINE MARKER ================
-
+CB_COLOR_CYCLE = ['#377eb8', '#ff7f00', '#4daf4a',
+                  '#f781bf', '#a65628', '#984ea3',
+                  '#999999', '#e41a1c', '#dede00']
+# CB_COLOR_CYCLE = ['r', 'b']
 LINE_MARKER_STYLES = [
-    marker_style + line_style
-    for marker_style in ['o', 'v', '^', '<', '>', '*', 'x', 'd']
-    for line_style in ['--', '-.', ':']
+    {
+        "marker": marker_style,
+        "linestyle": (i_m, line_style),
+        # "markerfacecolor": 'w',
+        "markeredgewidth": 1.5,
+        "fillstyle": "none",
+        "alpha": 0.8,
+    }
+    # for line_style in ['--', '-.', ':']
+    # for marker_style in ['o', 'v', '^', '$*$', '$o$', "$x$", "$+$"]
+    # for line_style in [(0, (1, 6)), (2, (1, 6)), (4, (1, 6))]
+    for line_style in [(1, 5), (3, 5, 1, 5), (5, 5), (3, 1, 1, 1)]
+    for i_m, marker_style in enumerate(['o', 'v', '^', "s", "*", ])
 ]
 random.seed(1)
-random.shuffle(LINE_MARKER_STYLES)
+# random.shuffle(LINE_MARKER_STYLES)
+random.shuffle(CB_COLOR_CYCLE)
 
 
-def GetLineMarkerStyle(line_no):
-    return LINE_MARKER_STYLES[line_no % len(LINE_MARKER_STYLES)]
+# ================ Line Style ===================
+line_no = -1
+line_style_repo = {}
+
+
+def GetLineMarkerStyle(name):
+    if(name not in line_style_repo):
+        line_style_repo[name] = GetNewLineMarkerStyle()
+    return line_style_repo[name]
+
+
+def GetNewLineMarkerStyle():
+    global line_no
+    line_no += 1
+    return {
+        **LINE_MARKER_STYLES[line_no % len(LINE_MARKER_STYLES)],
+        "color": CB_COLOR_CYCLE[line_no % len(CB_COLOR_CYCLE)]
+    }
 
 
 # ============== Helper Functions ================
@@ -150,10 +182,11 @@ class Graph:
         self.lines.append(line)
 
 
-def ShowGraphs(graphs, save):
+def ShowGraphs(graphs, save, category="general"):
+    line_set = set()
     for _g, (title, graph) in enumerate(graphs.items()):
         plt.figure(_g, figsize=(11, 8))
-        plt.title(title)
+        plt.title(graph.title)
         plt.xlabel(graph.xlabel)
         plt.ylabel(graph.ylabel)
         plt.yscale(**(graph.yscale_opts))
@@ -162,10 +195,22 @@ def ShowGraphs(graphs, save):
             plt.plot(
                 line.x,
                 line.y,
-                GetLineMarkerStyle(_l),
+                **GetLineMarkerStyle(line.label),
                 label=line.label
             )
-        plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=graph.ncols)
+        # plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=graph.ncols)
         if save:
             plt.savefig('{}/{}.pdf'.format(dirpath, title), bbox_inches="tight")
-    plt.show()
+    plt.figure("Legends")
+    lines = [
+        Line2D(
+            [], [], **line_style_repo[label], label=label
+        )
+        for label in sorted(line_style_repo.keys())
+    ]
+    plt.gcf().legend(
+        handles=lines,
+        loc="center",
+        ncol=4
+    )
+    plt.gcf().savefig('{}/{}_legends.pdf'.format(dirpath, category), bbox_inches="tight")
