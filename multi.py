@@ -121,7 +121,7 @@ def ParallelSimulationManager():
 def SimulationSettings(fn):
     def wrapper(**args):
         result = []
-        seed_range = [i + 1 for i in range(50)]
+        seed_range = [i + 1 for i in range(20)]
         traffic_scale_range = [i / 10 for i in range(10, 15, 1)]
         for res_alloc_type in [ResourceAllocatorType.NOMA_OPT, ResourceAllocatorType.NOMA_APR]:
             for rsu in [True, False]:

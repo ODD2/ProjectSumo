@@ -145,10 +145,11 @@ def GetScenarioBaseStationNames(req_rsu):
 
 
 def ScenarioNetFlowType(qos_re_class):
-    if(qos_re_class):
-        return NetFlowType
-    else:
-        return [NetFlowType.CRITICAL, NetFlowType.GENERAL]
+    return [NetFlowType.CRITICAL, NetFlowType.GENERAL]
+    # if(qos_re_class):
+    #     return NetFlowType
+    # else:
+    #     return [NetFlowType.CRITICAL, NetFlowType.GENERAL]
 
 
 def ScenarioQoSReClassRange(req_rsu):

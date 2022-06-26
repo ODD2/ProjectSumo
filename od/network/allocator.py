@@ -112,7 +112,7 @@ class ResourceAllocatorNomaApprox:
         # remove target RB from spare inner resource block list, it's no longer a spare RB.
         self.spare_inner_rb[rbf_h][rbf_w] = valid_spare_inner_rb[1:] + defect_spare_inner_rb
         # add target RB to solid inner resource block list.
-        rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
+        rb_cqi = GE.SelectCQI_BLER10P(
             10 * log10(target_rb.rem_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"])
         )
         self.solid_normal_rb[rbf_h][rbf_w].append(
@@ -124,7 +124,7 @@ class ResourceAllocatorNomaApprox:
                 )
             )
         )
-        gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
+        gp_conf["rem_bits"] -= GE.GetThroughputPerRB(
             float(rb_cqi),
             int(NET_RB_SLOT_SYMBOLS)
         )
@@ -137,7 +137,7 @@ class ResourceAllocatorNomaApprox:
             self.spare_hybrid_rb[rbf_w][rbf_h].sort(key=lambda x: x.outer_pwr_mW, reverse=True)
             target_rb = self.spare_hybrid_rb[rbf_w][rbf_h][0]
             # add outer resource block configuration
-            rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
+            rb_cqi = GE.SelectCQI_BLER10P(
                 10 * log10(
                     target_rb.outer_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"]
                 )
@@ -148,7 +148,7 @@ class ResourceAllocatorNomaApprox:
                     rb_cqi
                 )
             )
-            gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
+            gp_conf["rem_bits"] -= GE.GetThroughputPerRB(
                 float(rb_cqi),
                 int(NET_RB_SLOT_SYMBOLS)
             )
@@ -172,7 +172,7 @@ class ResourceAllocatorNomaApprox:
             # remove from spare inner RB list, due to they have become a hybrid RB
             self.spare_inner_rb[rbf_w][rbf_h] = self.spare_inner_rb[rbf_w][rbf_h][2:]
             # add into hybrid RB list
-            rb_cqi = GE.MATLAB_ENG.SelectCQI_BLER10P(
+            rb_cqi = GE.SelectCQI_BLER10P(
                 10 * log10(
                     valid_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"]
                 )
@@ -189,7 +189,7 @@ class ResourceAllocatorNomaApprox:
                     valid_pwr_mW
                 )
             )
-            gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
+            gp_conf["rem_bits"] -= GE.GetThroughputPerRB(
                 float(rb_cqi),
                 int(NET_RB_SLOT_SYMBOLS)
             )
@@ -241,7 +241,7 @@ class ResourceAllocatorNomaApprox:
                         gp_pwr_conf["max_sinr_ext_pwr_mW"]
                     )
                 )
-                gp_conf["rem_bits"] -= GE.MATLAB_ENG.GetThroughputPerRB(
+                gp_conf["rem_bits"] -= GE.GetThroughputPerRB(
                     float(gp_pwr_conf["max_cqi"]),
                     int(NET_RB_SLOT_SYMBOLS)
                 )
@@ -270,7 +270,7 @@ class ResourceAllocatorNomaApprox:
                 max_sinr_noise_reciprocal = pow(10, max_sinr / 10) / max_sinr_req_pwr_mW
                 pwr_conf = {
                     "max_sinr_noise_reciprocal": max_sinr_noise_reciprocal,
-                    "max_cqi": GE.MATLAB_ENG.SelectCQI_BLER10P(max_sinr),
+                    "max_cqi": GE.SelectCQI_BLER10P(max_sinr),
                     "max_sinr_req_pwr_mW": max_sinr_req_pwr_mW,
                     "max_sinr_ext_pwr_mW": pow(10, gp_conf["pwr_ext_dBm"] / 10),
                     "min_sinr_req_pwr_mW": pow(10, -6.9 / 10) / max_sinr_noise_reciprocal

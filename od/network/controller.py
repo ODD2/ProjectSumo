@@ -220,7 +220,7 @@ class BaseStationController:
                     req_rbsize_pairs = []
                     # collect the resource block size for all requests
                     for req in self.sg_upload_req[sg]:
-                        rbsize = GE.MATLAB_ENG.GetThroughputPerRB(
+                        rbsize = GE.GetThroughputPerRB(
                             float(
                                 GV.NET_STATUS_CACHE.GetNetStatus(
                                     (
@@ -325,9 +325,10 @@ class BaseStationController:
         out = io.StringIO()
         # optimize allocation request
         try:
-            alloc_report, exitflag = GE.MATLAB_ENG.PlannerV1(
-                RES_CONF, QoS_GP_CONF, nargout=2, stdout=out
+            future = GE.MATLAB_ENG.PlannerV1(
+                RES_CONF, QoS_GP_CONF, nargout=2, stdout=out, background=True
             )
+            alloc_report, exitflag = future.result(timeout=300)
         except Exception as e:
             GV.ERROR.Log(
                 "[{}][alloc]:Caught Matlab Exception!\nQoS_GP_CONF:{}\nRES_CONF:{}\n".format(
@@ -474,7 +475,7 @@ class BaseStationController:
                     sg_rb_cqi = int(cqi_key[1:])
                     # social group rosource block size for the specified cqi
                     total_bits += round(
-                        GE.MATLAB_ENG.GetThroughputPerRB(
+                        GE.GetThroughputPerRB(
                             sg_rb_cqi, NET_RB_SLOT_SYMBOLS
                         )
                     ) * rb_num
