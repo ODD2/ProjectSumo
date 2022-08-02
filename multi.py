@@ -21,7 +21,7 @@ WEIGHT_INTCONFS = []
 class WeightInterestConfig:
     def __init__(self, interest_config):
         self.interest_config = interest_config
-        self.weight = (3 / 1.4 * interest_config.traffic_scale)
+        self.weight = (4 / 1.4 * interest_config.traffic_scale)
         self.weight *= 1.2 if interest_config.req_rsu else 1
         self.weight *= 1 if interest_config.res_alloc_type == ResourceAllocatorType.OMA else 1.5
         self.weight /= SYS_TOTAL_MEM

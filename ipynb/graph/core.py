@@ -1,3 +1,4 @@
+from fileinput import filename
 import os
 import sys
 from matplotlib.lines import Line2D
@@ -127,9 +128,18 @@ def ScenarioAllocName(alloc_type):
     if(alloc_type == ResourceAllocatorType.OMA):
         return "OMA"
     elif(alloc_type == ResourceAllocatorType.NOMA_OPT):
-        return "NOMA-Optim"
+        return "Optim"
     elif(alloc_type == ResourceAllocatorType.NOMA_APR):
-        return "NOMA-Approx"
+        return "Approx"
+
+
+def ScenarioDynamicSGName(dyn_sg_behav):
+    if(dyn_sg_behav == DynamicSocialGroupBehaviour.MAX_N_GROUPS):
+        return "$\Delta_{Groups}$"
+    elif(dyn_sg_behav == DynamicSocialGroupBehaviour.MAX_N_MEMBER):
+        return "$\Delta_{Member}$"
+    else:
+        return "Unknown"
 
 
 def ScenarioPrefix(req_rsu, qos_re_class):
@@ -142,6 +152,10 @@ def ScenarioPrefix(req_rsu, qos_re_class):
 
 def GetScenarioBaseStationNames(req_rsu):
     return YRSU_SCENARIO_BS_ID if req_rsu else NRSU_SCENARIO_BS_ID
+
+
+def ScenarioSINRState(sinr_stat):
+    return "P" if sinr_stat else "NP"
 
 
 def ScenarioNetFlowType(qos_re_class):
@@ -171,19 +185,24 @@ class Line:
 
 
 class Graph:
-    def __init__(self, title, xlabel, ylabel, yscale_opts={"value": "linear"}, ncols=3):
+    def __init__(self, title, xlabel, ylabel, yscale_opts={"value": "linear"}, save_as=None, ncols=3):
         self.title = title
         self.xlabel = xlabel
         self.ylabel = ylabel
         self.lines = []
         self.yscale_opts = yscale_opts
         self.ncols = ncols
+        self.y_lim = None
+        self.save_as = save_as if save_as else title
 
     def addLine(self, line: Line):
         self.lines.append(line)
 
+    def SetYScale(self, y_lim):
+        self.y_lim = y_lim
 
-def ShowGraphs(graphs, save, category="general"):
+
+def ShowGraphs(graphs, save, category="general", legend_size=4):
     line_set = set()
     for _g, (title, graph) in enumerate(graphs.items()):
         plt.figure(_g, figsize=(11, 8))
@@ -192,6 +211,8 @@ def ShowGraphs(graphs, save, category="general"):
         plt.ylabel(graph.ylabel)
         plt.yscale(**(graph.yscale_opts))
         plt.gca().xaxis.set_major_locator(MaxNLocator(5, min_n_ticks=3))
+        if(graph.y_lim != None):
+            plt.gca().set_ylim(graph.y_lim)
         for _l, line in enumerate(graph.lines):
             plt.plot(
                 line.x,
@@ -201,7 +222,7 @@ def ShowGraphs(graphs, save, category="general"):
             )
         # plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=graph.ncols)
         if save:
-            plt.savefig('{}/{}.pdf'.format(dirpath, title), bbox_inches="tight")
+            plt.savefig('{}/{}.pdf'.format(dirpath, graph.save_as), bbox_inches="tight")
     plt.figure("Legends")
     lines = [
         Line2D(
@@ -212,6 +233,6 @@ def ShowGraphs(graphs, save, category="general"):
     plt.gcf().legend(
         handles=lines,
         loc="center",
-        ncol=4
+        ncol=legend_size
     )
     plt.gcf().savefig('{}/{}_legends.pdf'.format(dirpath, category), bbox_inches="tight")

@@ -57,14 +57,6 @@ def UpdateSS(objs):
         obj.UpdateSS()
     return
 
-    # threads = []
-    # for obj in objs:
-    #     t = Thread(target=obj.UpdateSS)
-    #     t.start()
-    #     threads.append(t)
-    # for t in threads:
-    #     t.join()
-
 
 def UpdateNS(objs, ns):
     # Debug
@@ -72,26 +64,12 @@ def UpdateNS(objs, ns):
         obj.UpdateNS(ns)
     return
 
-    # threads = []
-    # for obj in objs:
-    #     threads.append(Thread(target=obj.UpdateNS, args=(ns,)))
-    #     threads[-1].start()
-    # for t in threads:
-    #     t.join()
-
 
 def UpdateT(objs, ts):
     # Debug
     for obj in objs:
         obj.UpdateT(ts)
     return
-
-    # threads = []
-    # for obj in objs:
-    #     threads.append(Thread(target=obj.UpdateT, args=(ts,)))
-    #     threads[-1].start()
-    # for t in threads:
-    #     t.join()
 
 
 def InitTraci(interest_config):
@@ -228,10 +206,10 @@ if __name__ == "__main__":
                 DynamicSocialGroupBehaviour.MAX_N_MEMBER,
                 20,
                 True,
-                ResourceAllocatorType.NOMA_APR,
+                ResourceAllocatorType.NOMA_OPT,
                 True,
-                1.0,
-                6
+                1.4,
+                11
             )
         )"""
     )

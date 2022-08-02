@@ -269,6 +269,7 @@ class StatisticRecorder:
         sum_e2e_time = [None for x in NetFlowType]
         sum_e2b_time = [None for x in NetFlowType]
         sum_wait_time = [None for x in NetFlowType]
+        sum_tx_time = [None for x in NetFlowType]
         sum_bs_wait_time = [None for x in NetFlowType]
         sum_bs_tx_time = [None for x in NetFlowType]
         sum_bst_thrput = [[None for x in BaseStationType] for x in NetFlowType]
@@ -286,6 +287,7 @@ class StatisticRecorder:
             sum_e2e_time[nft] = self.VehicleAppdataDelayReport(app_stats)
             sum_e2b_time[nft] = self.BaseStationAppdataDelayReport(app_stats)
             sum_wait_time[nft] = self.AppdataWaitTimeReport(app_stats)
+            sum_tx_time[nft] = self.AppdataTransferTimeReport(app_stats)
             sum_bs_wait_time[nft] = self.BaseStationAppdataTXQReport(app_stats)
             sum_bs_tx_time[nft] = self.BaseStationAppdataTXReport(app_stats)
             sum_timeout_ratio[nft] = self.AppdataTimeoutRatioReport(app_stats)
@@ -380,6 +382,10 @@ class StatisticRecorder:
             x.name: sum_wait_time[x]
             for x in NetFlowType
         }
+        rep_tx_time = {
+            x.name: sum_tx_time[x]
+            for x in NetFlowType
+        }
         # bs wait time
         rep_bs_wait_time = {
             x.name: sum_bs_wait_time[x]
@@ -433,6 +439,7 @@ class StatisticRecorder:
             "end-to-end": rep_e2e_time,
             "end-to-bs": rep_e2b_time,
             "wait-time": rep_wait_time,
+            "tx-time": rep_tx_time,
             "bs-wait-time": rep_bs_wait_time,
             "bs-tx-time": rep_bs_tx_time,
             "bst-thrput": rep_bst_thrput,
@@ -651,6 +658,76 @@ class StatisticRecorder:
             "avg": avg_txq_wait_time,
             "max": max_txq_wait_time,
             "min": min_txq_wait_time,
+        }
+
+    def AppdataTransferTimeReport(self, app_stats):
+        GV.STATISTIC.Doc("<E2E-TX>")
+        max_tx_time = float('-inf')
+        min_tx_time = float('inf')
+        total_tx_time = 0
+        total_tx_count = 0
+        avg_tx_time = 0
+        for header_id, record in app_stats.items():
+            # the time for this appdata to deliver by all base stations.
+            record_max_tx_time = float('-inf')
+            record_min_tx_time = float('inf')
+            record_total_tx_time = 0
+            record_total_tx_count = 0
+            record_veh_tx_time = sum(
+                map(
+                    lambda x: x[1] - x[0],
+                    record.time_veh_tx
+                )
+            )
+            # evaluate record
+            for bs in GV.NET_STATION_CONTROLLER:
+                bs_total_tx_time = 0
+
+                # the data never complete tramission by this base station, ignore.
+                if(record.time_bs_serv[bs] < 0):
+                    continue
+                # sum up all the base station tx time
+                for time_pair in record.time_bs_tx[bs]:
+                    time_begin = time_pair[0]
+                    time_end = time_pair[1]
+                    if(time_begin * time_end > 0):
+                        # ignore trivial values
+                        if(math.isclose(time_begin, time_end)):
+                            continue
+                        bs_total_tx_time += time_end - time_begin
+                # add tx time to record
+                bs_total_tx_time += record_veh_tx_time
+                record_total_tx_count += 1
+                record_total_tx_time += bs_total_tx_time
+                record_max_tx_time = max(record_max_tx_time, bs_total_tx_time)
+                record_min_tx_time = min(record_min_tx_time, bs_total_tx_time)
+            # record summary
+            record_avg_tx_time = (
+                0 if record_total_tx_count == 0
+                else record_total_tx_time / record_total_tx_count
+            )
+            GV.STATISTIC.Doc(
+                '[{}]:{{ sum:{:.4f}s, num:{:.0f}, avg:{:.4f}s, max:{:.4f}s, min:{:.4f}s}}'.format(
+                    header_id,
+                    record_total_tx_time,
+                    record_total_tx_count,
+                    record_avg_tx_time,
+                    record_max_tx_time,
+                    record_min_tx_time,
+                )
+            )
+            # accumulate record
+            total_tx_time += record_total_tx_time
+            total_tx_count += record_total_tx_count
+            max_tx_time = max(max_tx_time, record_max_tx_time)
+            min_tx_time = min(min_tx_time, record_min_tx_time)
+
+        avg_tx_time = (0 if total_tx_count == 0 else total_tx_time / total_tx_count)
+        GV.STATISTIC.Doc("<E2E-TX>")
+        return {
+            "avg": avg_tx_time,
+            "max": max_tx_time,
+            "min": min_tx_time,
         }
 
     def BaseStationAppdataTXQReport(self, app_stats):
@@ -1155,8 +1232,8 @@ class StatisticRecorder:
                     continue
                 else:
                     # Check data source overtime condition.
-                    if(len(record.time_veh_txq) == 0 or
-                       (record.time_veh_serv - record.at) >= NET_TIMEOUT_SECONDS):
+                    if(len(record.time_veh_txq) == 0 or record.time_veh_serv == -1 or
+                       (record.time_veh_txq[-1][1] - record.at) >= NET_TIMEOUT_SECONDS):
                         record.is_src_ot = True
                     else:
                         # Check base station overtime condition.

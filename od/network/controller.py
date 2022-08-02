@@ -15,7 +15,7 @@ from od.env.config import (NET_TS_PER_NET_STEP, NET_RB_BW_REQ_TS,
                            BS_UMA_RB_BW, BS_UMI_RB_BW_QoS,
                            BS_TOTAL_BAND, BS_RADIUS,
                            BS_TRANS_PWR,
-                           ALLOC_TVAL_CONST)
+                           ALLOC_TVAL_CONST, ALLOC_FAIL_LIMIT)
 import od.engine as GE
 import od.vars as GV
 import math
@@ -328,15 +328,26 @@ class BaseStationController:
             future = GE.MATLAB_ENG.PlannerV1(
                 RES_CONF, QoS_GP_CONF, nargout=2, stdout=out, background=True
             )
-            alloc_report, exitflag = future.result(timeout=300)
+            alloc_report, exitflag = future.result(timeout=60)
         except Exception as e:
+            GV.ALLOC_FAILURE_COUNTER += 1
             GV.ERROR.Log(
-                "[{}][alloc]:Caught Matlab Exception!\nQoS_GP_CONF:{}\nRES_CONF:{}\n".format(
+                "[{}][alloc]:Caught Matlab Exception(#{})!\nQoS_GP_CONF:{}\nRES_CONF:{}\n".format(
                     self.name,
+                    GV.ALLOC_FAILURE_COUNTER,
                     QoS_GP_CONF,
                     RES_CONF
                 )
             )
+            if(GV.ALLOC_FAILURE_COUNTER >= ALLOC_FAIL_LIMIT):
+                msg = "Simulation Failure, Allocation Failure Limit Reached!"
+                GV.ERROR.Log(
+                    "[{}][alloc]:Simulation Failure, Allocation Failure Limit Reached.\n".format(
+                        self.name
+                    )
+                )
+                print("Simulation Failure, Allocation Failure Limit Reached!")
+                GV.ExceptionalExit()
             return
             # raise e
         #  save output for debug
@@ -666,6 +677,7 @@ class NetworkCoreController:
         for uma_bs in [bs for bs in GV.NET_STATION_CONTROLLER if bs.type == BaseStationType.UMA]:
             d = pow((uma_bs.pos[0] - umi_bs.pos[0])**2 + (uma_bs.pos[1] - umi_bs.pos[1])**2, 0.5)
             if(d < distance):
+                distance = d
                 approx_bs = uma_bs
         return approx_bs
 

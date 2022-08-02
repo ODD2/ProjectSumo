@@ -1,4 +1,5 @@
 # Custom
+from od.engine import TerminateMatlabEngine
 import od.network.controller as onc
 import od.network.model as onm
 import od.network.types as ont
@@ -56,6 +57,9 @@ BS_SETTING = None
 
 # Socialgroup Manager
 SocialGroupManager = None
+
+# Allocation Failure Counter
+ALLOC_FAILURE_COUNTER = 0
 
 
 def InitializeSimulationVariables(interest_config: omi.InterestConfig):
@@ -141,3 +145,9 @@ def TerminateSimulationVariables():
     ERROR.Encapsulate()
     STATISTIC.Encapsulate()
     RESULT.Encapsulate()
+
+
+def ExceptionalExit():
+    TerminateSimulationVariables()
+    TerminateMatlabEngine()
+    exit(0)

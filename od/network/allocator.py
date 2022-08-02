@@ -65,6 +65,9 @@ class InnerRbConfig(NomaRbConfig):
         self.rem_pwr_mW = rem_pwr_mW
         super().__init__(owner, cqi)
 
+    def __repr__(self):
+        return "({},rem_pwr:{})".format(super().__repr__(), self.rem_pwr_mW)
+
 
 class OuterRbConfig(NomaRbConfig):
     def __init__(self, owner, cqi):
@@ -91,6 +94,7 @@ class ResourceAllocatorNomaApprox:
         ]
 
     def CheckValidSymetricGeo(self, gp_conf, rbf_h, rbf_w, gp_pwr_conf):
+
         if(len(self.spare_inner_rb[rbf_h][rbf_w]) == 0):
             return False
         # classify valid/defect spare inner resource block for specify group.
@@ -101,9 +105,11 @@ class ResourceAllocatorNomaApprox:
                 valid_spare_inner_rb.append(inner_rb)
             else:
                 defect_spare_inner_rb.append(inner_rb)
+        print(gp_conf, self.spare_inner_rb[rbf_h][rbf_w], gp_pwr_conf)
         # checking for existence of valid spare inner resource block
         if(len(valid_spare_inner_rb) == 0):
             return False
+
         # sort all valid spare inner resource block according to its remaining power
         valid_spare_inner_rb.sort(key=lambda x: x.rem_pwr_mW, reverse=True)
         # get the target spare inner resource block
@@ -259,10 +265,13 @@ class ResourceAllocatorNomaApprox:
             # sort group configs according to its eager rate, higer rate indicates higher priority.
             sort_gp_confs = sorted(
                 gp_confs,
+                # key=lambda x: x["eager_rate"] * (pow(10, x["sinr_max"] / 10) / (pow(10, x["pwr_req_dBm"] / 10))),
                 key=lambda x: x["eager_rate"] * x["sinr_max"],
                 reverse=True
             )
+            print([(gp_conf["gid"], gp_conf["eager_rate"] * gp_conf["sinr_max"]) for gp_conf in gp_confs])
             for gp_conf in sort_gp_confs:
+
                 # preparation
                 rbf_w, rbf_h = round(gp_conf["rbf_w"]), round(gp_conf["rbf_h"])
                 max_sinr = gp_conf["sinr_max"]
@@ -275,6 +284,7 @@ class ResourceAllocatorNomaApprox:
                     "max_sinr_ext_pwr_mW": pow(10, gp_conf["pwr_ext_dBm"] / 10),
                     "min_sinr_req_pwr_mW": pow(10, -6.9 / 10) / max_sinr_noise_reciprocal
                 }
+                print("Allocate For:\n{}\n{}".format(gp_conf, pwr_conf))
                 # allocate resource
                 while(gp_conf["rem_bits"] > 0):
                     # run through validation list for valid RB allocation.
