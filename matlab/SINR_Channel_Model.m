@@ -1,6 +1,29 @@
 function [ CQI_out, SINR_rx_dB_10 ] = SINR_Channel_Model( D2D_dist, h_BS, h_MS, fc, tx_p_dBm, bandwidth, Intf_dist, Intf_pwr_dBm, DS_Desired, CP)
-%UNTITLED2 Summary of this function goes here
-%   Detailed explanation goes here
+% SINR_Channel_Model  Legacy single-variable-BS SINR model using WINNER+ B1.
+%
+%   This is an earlier version of the channel model, retained for reference.
+%   It uses the WINNER+ B1 LOS path-loss formula and a single scalar
+%   interfering BS, unlike SINR_Channel_Model_5G which uses TR 38.901 UMa/UMi
+%   models and supports vector-valued interfering BSs.
+%
+%   [ CQI_out, SINR_rx_dB_10 ] = SINR_Channel_Model( D2D_dist, h_BS, h_MS,
+%     fc, tx_p_dBm, bandwidth, Intf_dist, Intf_pwr_dBm, DS_Desired, CP )
+%
+%   Inputs:
+%     D2D_dist     - 2D distance from BS to UE (m).
+%     h_BS         - BS antenna height (m).
+%     h_MS         - UE antenna height (m).
+%     fc           - Carrier frequency (GHz).
+%     tx_p_dBm     - Transmit power (dBm).
+%     bandwidth    - Channel bandwidth (Hz), used for thermal noise.
+%     Intf_dist    - Distance to the interfering BS (m, scalar).
+%     Intf_pwr_dBm - Transmit power of the interfering BS (dBm, scalar).
+%     DS_Desired   - Delay spread (ns).
+%     CP           - Cyclic prefix duration (s).
+%
+%   Outputs:
+%     CQI_out      - CQI index selected via SNR_BLER_CQI.mat lookup.
+%     SINR_rx_dB_10 - Received SINR (dB).
 
 %Per T% 38.901, table 7.7.2-3 (normalized) (Normalized Delay, power in dB)
 TDL_C = [0     , -4.4 ; ...

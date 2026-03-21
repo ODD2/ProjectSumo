@@ -1,12 +1,24 @@
 function [cqi_index]=SelectCQI(SNR_UPPERBOUND, BLER_UPPERBOUND)
-%% [cqi_index snr bler]=SelectCQI(SNR_UPPERBOUND, BLER_UPPERBOUND)
-% report the highest CQI which can satisfy the following condition:
-%   1. Achieving BLER <= BLER_UPPERBOUND
-%   2. Required SNR <= SNR_UPPERBOUND
-% and this function reports the CQI and correspond Requiring-SNR
-%   and BLER to this CQI
+% SelectCQI  Return the highest CQI satisfying both SINR and BLER constraints.
 %
-% SNR<->BLER table is follow the Table 7.2.3-1 of TS 36.213 v12.3.0
+%   CQI_INDEX = SelectCQI(SNR_UPPERBOUND, BLER_UPPERBOUND) searches the
+%   SNR-BLER lookup table (SNR_BLER_CQI.mat) for the highest CQI index
+%   whose required SNR does not exceed SNR_UPPERBOUND and whose achievable
+%   BLER does not exceed BLER_UPPERBOUND.
+%
+%   This function is slower than SelectCQI_BLER10P because it loads and
+%   searches a MAT-file table.  Use SelectCQI_BLER10P inside the main
+%   simulation loop; use this function only when a non-10% BLER target is
+%   needed (e.g., BLER_UPPERBOUND = 0.1 matches SelectCQI_BLER10P).
+%
+%   Inputs:
+%     SNR_UPPERBOUND  - Maximum allowable received SINR (dB).
+%     BLER_UPPERBOUND - Maximum allowable block error rate (0â€“1).
+%
+%   Output:
+%     cqi_index - Highest feasible CQI index (0 if none satisfies constraints).
+%
+% SNR<->BLER table follows Table 7.2.3-1 of TS 36.213 v12.3.0
 % [Table 7.2.3-1]
 %-----------------------------------------------------------
 %| CQI index | modulation | code rate x 1024 | efficiency |
@@ -27,15 +39,15 @@ function [cqi_index]=SelectCQI(SNR_UPPERBOUND, BLER_UPPERBOUND)
 %|    14    |    64QAM   |       873      |   5.1152   |
 %|    15    |    64QAM   |       948      |   5.5547   |
 %------------------------------------------------------------
-% Ãö©óCQI tableªº»¡©ú
-% > code rate(½X²v)   = «H®§¤ñ¯S¼Æ / («H®§¤ñ¯S¼Æ+®ÕÅç¤ñ¯S¼Æ)
-% > efficiency (®Ä²v) = «H®§¤ñ¯S¼Æ / Á`²Å¸¹¼Æ
-% ¥Ñ©ó«H®§¤ñ¯S¼Æ+®ÕÅç¤ñ¯S¼Æ=Á`¤ñ¯S¼Æ=Á`²Å¸¹¼Æ*½Õ»s¶¥¼Æ¡A©Ò¥H
-% ®Ä²v = ½X²v*½Õ»s¶¥¼Æ
-% ¨Ò¦p,CQI index = 1, QPSK, modulation order¬°2, ½X²v = 78/1024 = 0.07617
-% ®Ä²v = 0.1523 = 0.07617 * 2
+% ï¿½ï¿½ï¿½ï¿½CQI tableï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+% > code rate(ï¿½Xï¿½v)   = ï¿½Hï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½ / (ï¿½Hï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½+ï¿½ï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½)
+% > efficiency (ï¿½Ä²v) = ï¿½Hï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½ / ï¿½`ï¿½Å¸ï¿½ï¿½ï¿½
+% ï¿½Ñ©ï¿½Hï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½+ï¿½ï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½=ï¿½`ï¿½ï¿½Sï¿½ï¿½=ï¿½`ï¿½Å¸ï¿½ï¿½ï¿½*ï¿½Õ»sï¿½ï¿½ï¿½Æ¡Aï¿½Ò¥H
+% ï¿½Ä²v = ï¿½Xï¿½v*ï¿½Õ»sï¿½ï¿½ï¿½ï¿½
+% ï¿½Ò¦p,CQI index = 1, QPSK, modulation orderï¿½ï¿½2, ï¿½Xï¿½v = 78/1024 = 0.07617
+% ï¿½Ä²v = 0.1523 = 0.07617 * 2
 % 
-% ¨º­Ó1024À³¸Ó´N¬O¬°¤Fªí¥Üªº¤è«K
+% ï¿½ï¿½ï¿½ï¿½1024ï¿½ï¿½ï¿½Ó´Nï¿½Oï¿½ï¿½ï¿½Fï¿½ï¿½ï¿½Üªï¿½ï¿½ï¿½K
     if nargin < 2
         ME = MException('MyComponent:invalidFormat', sprintf('ERROR INPUT!\n [cqi_index]=SelectCQI(snr, BLER_UPPERBOUND)\n'));
         throw(ME); %terminate

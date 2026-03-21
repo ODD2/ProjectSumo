@@ -1,4 +1,17 @@
 function [return_value]=GetBLER_from_CQI_and_SNR(CQI, SNR)
+% GetBLER_from_CQI_and_SNR  Return the lowest achievable BLER for a CQI/SNR pair.
+%
+%   BLER = GetBLER_from_CQI_and_SNR(CQI, SNR) searches the SNR-BLER lookup
+%   table (SNR_BLER_CQI.mat) for all entries at the given CQI whose SNR is
+%   strictly less than the supplied SNR value, and returns the minimum BLER
+%   found.  Returns 1.0 if no such entry exists (SNR is below the table range).
+%
+%   Inputs:
+%     CQI - CQI index (1–15).
+%     SNR - Received SINR (dB).
+%
+%   Output:
+%     return_value - Minimum achievable BLER (0–1) at the given CQI and SNR.
     if nargin < 2
         ME = MException('MyComponent:invalidFormat', sprintf('ERROR INPUT!\n [bler]=GetBLERfrom_CQI_and_SNR(CQI, SNR)\n'));
         throw(ME); %terminate

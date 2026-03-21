@@ -1,7 +1,43 @@
 % function [Aeq,beq,A,b] = Optimize(SIM_CONF,GP_CONF)
 function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
-%The function that constructs linear/non-linear constraints, objective
-%function and runs the optimizer
+% Optimize  Build and solve the ILP for one OMA or NOMA allocation phase.
+%
+%   [x, fval, exitflag, output] = Optimize(SIM_CONF, OPT_GP_CONF, OMA_LAYER)
+%   constructs all linear equality and inequality constraints for the current
+%   set of group configurations and calls MATLAB intlinprog to find an optimal
+%   binary solution vector x.
+%
+%   The solution vector x is a binary vector partitioned into per-group,
+%   per-CQI, per-RB-position segments.  Each element indicates whether a
+%   resource block at that position/CQI/layer is allocated (1) or not (0).
+%
+%   Constraints enforced:
+%     Equality  - Fix allocated RB counts for previously-solved groups (OMA
+%                 and NOMA).  When OMA_LAYER=false, also fixes OMA RBs of the
+%                 currently-allocating groups.
+%     Inequality (≤ 1 per RB fraction) - Each physical RB fraction may be
+%                 occupied by at most one OMA allocation and one NOMA allocation.
+%     Inequality (power budget) - Total allocated power across all RB fractions
+%                 must not exceed max_pwr_mw.
+%     Inequality (per-group overlap) - A group may not reuse the same RB
+%                 fractions in both OMA and NOMA layers.
+%     Inequality (redundancy) - Total allocated bits must not exceed
+%                 remaining bits + one minimum RB worth of bits.
+%
+%   Objective: maximize a weighted sum favouring earlier timeslots, higher CQI,
+%   and higher QoS priority.  intlinprog stops after the root LP relaxation
+%   (branching phase is cut via CustomOutputFunction) to limit solve time.
+%
+%   Inputs:
+%     SIM_CONF     - Simulation config (rbf_h, rbf_w, rbfs, max_pwr_mw).
+%     OPT_GP_CONF  - Array of group config structs (see PlannerV1 for fields).
+%     OMA_LAYER    - true → allocate OMA layer; false → allocate NOMA layer.
+%
+%   Outputs:
+%     x        - int16 binary solution vector.
+%     fval     - Objective value (negated internally for maximization).
+%     exitflag - intlinprog exit code (1/2 = optimal/feasible, <0 = infeasible).
+%     output   - intlinprog diagnostic struct.
 
 %   collect required simulation info
 %   - size of the solution

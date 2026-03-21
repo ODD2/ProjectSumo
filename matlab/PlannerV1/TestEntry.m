@@ -1,6 +1,17 @@
 function [a,b] = TestEntry()
-%TEST Summary of this function goes here
-%   Detailed explanation goes here
+% TestEntry  Stand-alone test harness for PlannerV1.
+%
+%   [a, b] = TestEntry() constructs a representative SIM_CONF and QoS_GP_CONF
+%   and calls PlannerV1 directly, allowing the optimizer to be exercised
+%   outside the main Python simulation loop.
+%
+%   The embedded scenario has two QoS levels (0 = CRITICAL, 1 = GENERAL)
+%   with 8 groups total, using a 50-RB × 2-timeslot resource grid at 23 dBm
+%   maximum transmit power.
+%
+%   Outputs:
+%     a - GID_REQ_RES struct returned by PlannerV1 (see PlannerV1 for format).
+%     b - ExitFlag from intlinprog.
     SIM_CONF = struct("rbf_h",50.0,...
                       "rbf_w",2.0,...
                       "max_pwr_dBm",23.0 ...

@@ -1,5 +1,16 @@
 function [bler] = SNR_to_BLER(cqi, snr_bound)
-%Given the used CQI and SNR of the UE, report the achieving BLER
+% SNR_to_BLER  Look up the achievable BLER for a given CQI and received SNR.
+%
+%   BLER = SNR_to_BLER(CQI, SNR_BOUND) walks the SNR-BLER curve for the
+%   specified CQI index and returns the BLER at the first table entry whose
+%   SNR does not exceed SNR_BOUND.  Returns 1.0 (worst case) if no such entry.
+%
+%   Inputs:
+%     cqi       - CQI index (1–15).
+%     snr_bound - Received SINR (dB).
+%
+%   Output:
+%     bler - Block error rate (0–1) at the given operating point.
     load('SNR_BLER_CQI.mat');
     [d BLER_LEVEL CQI_LEVEL] = size(snr_to_bler_with_cqi);
     

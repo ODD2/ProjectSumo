@@ -1,5 +1,27 @@
 function [out] = GetThroughputPerRB(UsedCQI, SymbolPerSlot)
-% GetThroughputPerSlot(UsedCQI, SymbolPerSlot)
+% GetThroughputPerRB  Compute the number of bits carried by one resource block.
+%
+%   OUT = GetThroughputPerRB(USEDCQI, SYMBOLPERSLOT) returns the bit
+%   capacity of one resource block (RB) for the given CQI index and number
+%   of OFDM symbols per slot.
+%
+%   Formula:
+%     bits = 12 subcarriers Ã— SymbolPerSlot Ã— efficiency(UsedCQI)
+%
+%   Spectral efficiency values follow 3GPP TS 36.213 Table 7.2.3-1.
+%   CQI = 0 (out of range) is mapped to index 16, which has zero efficiency,
+%   returning 0 bits.
+%
+%   Inputs:
+%     UsedCQI       - CQI index (0-15, scalar or array).
+%                     CQI 0 is treated as unusable and returns 0 bits.
+%     SymbolPerSlot - Number of OFDM symbols per slot (typically 14 for
+%                     normal cyclic prefix, or 7 for extended CP).
+%
+%   Output:
+%     out - Number of bits per resource block (scalar or array matching
+%           the shape of UsedCQI).
+%
 % return the Throughput per slot in bit (including the length of CRC)
 % RB: one slot(in time)
 %
@@ -24,15 +46,15 @@ function [out] = GetThroughputPerRB(UsedCQI, SymbolPerSlot)
 %|    14    |    64QAM   |       873      |   5.1152   |
 %|    15    |    64QAM   |       948      |   5.5547   |
 %------------------------------------------------------------
-% Ãö©óCQI tableªº»¡©ú
-% > code rate(½X²v)   = «H®§¤ñ¯S¼Æ / («H®§¤ñ¯S¼Æ+®ÕÅç¤ñ¯S¼Æ)
-% > efficiency (®Ä²v) = «H®§¤ñ¯S¼Æ / Á`²Å¸¹¼Æ
-% ¥Ñ©ó«H®§¤ñ¯S¼Æ+®ÕÅç¤ñ¯S¼Æ=Á`¤ñ¯S¼Æ=Á`²Å¸¹¼Æ*½Õ»s¶¥¼Æ¡A©Ò¥H
-% ®Ä²v = ½X²v*½Õ»s¶¥¼Æ
-% ¨Ò¦p,CQI index = 1, QPSK, modulation order¬°2, ½X²v = 78/1024 = 0.0762
-% ®Ä²v = 0.1523 = 0.0762 * 2
+% ï¿½ï¿½ï¿½ï¿½CQI tableï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+% > code rate(ï¿½Xï¿½v)   = ï¿½Hï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½ / (ï¿½Hï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½+ï¿½ï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½)
+% > efficiency (ï¿½Ä²v) = ï¿½Hï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½ / ï¿½`ï¿½Å¸ï¿½ï¿½ï¿½
+% ï¿½Ñ©ï¿½Hï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½+ï¿½ï¿½ï¿½ï¿½ï¿½Sï¿½ï¿½=ï¿½`ï¿½ï¿½Sï¿½ï¿½=ï¿½`ï¿½Å¸ï¿½ï¿½ï¿½*ï¿½Õ»sï¿½ï¿½ï¿½Æ¡Aï¿½Ò¥H
+% ï¿½Ä²v = ï¿½Xï¿½v*ï¿½Õ»sï¿½ï¿½ï¿½ï¿½
+% ï¿½Ò¦p,CQI index = 1, QPSK, modulation orderï¿½ï¿½2, ï¿½Xï¿½v = 78/1024 = 0.0762
+% ï¿½Ä²v = 0.1523 = 0.0762 * 2
 % 
-% ¨º­Ó1024À³¸Ó´N¬O¬°¤Fªí¥Üªº¤è«K
+% ï¿½ï¿½ï¿½ï¿½1024ï¿½ï¿½ï¿½Ó´Nï¿½Oï¿½ï¿½ï¿½Fï¿½ï¿½ï¿½Üªï¿½ï¿½ï¿½K
 
     %if CQI == 0 then set CQI to 16
     UsedCQI(UsedCQI == 0) = 16; %16 is an unexpected value to avoid being selected as Group's CQI

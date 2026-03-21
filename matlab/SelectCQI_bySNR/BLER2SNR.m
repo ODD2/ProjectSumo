@@ -1,7 +1,16 @@
 function [SNR]=BLER2SNR(BLER, CQI)
-% [SNR]=BLER2SNR(BLER, CQI)
-%Given the used CQI-level and the BLER, output the linearly-approximated
-%bler from the SNR-BLER curve
+% BLER2SNR  Invert the SNR-BLER curve to find the SNR required for a target BLER.
+%
+%   SNR = BLER2SNR(BLER, CQI) uses linear interpolation on the SNR-BLER lookup
+%   table (SNR_BLER_CQI.mat) to return the SNR (dB) at which the specified CQI
+%   achieves the desired block error rate.
+%
+%   Inputs:
+%     BLER - Target block error rate (0–1).
+%     CQI  - CQI index (1–15).
+%
+%   Output:
+%     SNR - Required received SINR (dB) to achieve BLER at the given CQI.
     load('SNR_BLER_CQI.mat');
 
     [~, BLER_LEVEL ~] = size(snr_to_bler_with_cqi);

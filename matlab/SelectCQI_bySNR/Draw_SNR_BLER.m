@@ -1,3 +1,10 @@
+% Draw_SNR_BLER  Plot the SNR-BLER curves for all 15 CQI levels.
+%
+%   Loads SNR_BLER_CQI.mat and produces a single figure with 15 line plots
+%   (one per CQI index, colour-coded) showing BLER as a function of SNR.
+%
+%   Run as a script (no inputs or outputs).  Requires SNR_BLER_CQI.mat to be
+%   on the MATLAB path.
 load('SNR_BLER_CQI.mat');
 color = 'rgbcmykrgbcmykrgbcmyk';
 figure;

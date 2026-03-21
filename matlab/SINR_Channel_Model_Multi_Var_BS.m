@@ -1,8 +1,35 @@
 function [ CQI_out,  SINR_rx_dB_10] = SINR_Channel_Model_Multi_Var_BS( D2D_dist, h_BS, h_MS, fc, tx_p_dBm, bandwidth, Intf_h_BS, Intf_h_MS, Intf_dist, Intf_pwr_dBm, DS_Desired, CP)
-%UNTITLED2 Summary of this function goes here
-%   Detailed explanation goes here
-%  Limitations:  DS_Desired is not per BS (we assume flat interference from
-%  neighboring BS, i.e. DS = 0 as they are assumed to always be transmitting;
+% SINR_Channel_Model_Multi_Var_BS  Legacy SINR model supporting multiple
+%   interfering BSs using the WINNER+ B1 path-loss formula.
+%
+%   Intermediate version between SINR_Channel_Model (single interferer) and
+%   SINR_Channel_Model_5G (TR 38.901 UMa/UMi).  Delay spread applies only to
+%   the desired BS; interfering BSs are treated as flat additive noise.
+%
+%   [ CQI_out, SINR_rx_dB_10 ] = SINR_Channel_Model_Multi_Var_BS(
+%     D2D_dist, h_BS, h_MS, fc, tx_p_dBm, bandwidth,
+%     Intf_h_BS, Intf_h_MS, Intf_dist, Intf_pwr_dBm, DS_Desired, CP )
+%
+%   Inputs:
+%     D2D_dist     - 2D distance from desired BS to UE (m).
+%     h_BS         - Desired BS antenna height (m).
+%     h_MS         - UE antenna height (m).
+%     fc           - Carrier frequency (GHz).
+%     tx_p_dBm     - Desired BS transmit power (dBm).
+%     bandwidth    - Channel bandwidth (Hz).
+%     Intf_h_BS    - Interfering BS antenna heights (m, vector).
+%     Intf_h_MS    - UE heights as seen from interfering BSs (m, vector).
+%     Intf_dist    - Distances to interfering BSs (m, vector).
+%     Intf_pwr_dBm - Transmit powers of interfering BSs (dBm, vector).
+%     DS_Desired   - Delay spread of the desired link (us).
+%     CP           - Cyclic prefix duration (us).
+%
+%   Outputs:
+%     CQI_out       - CQI index (minimum 1, clamped via max(...,1)).
+%     SINR_rx_dB_10 - Received SINR (dB).
+%
+%   Limitations:  DS_Desired is not per BS (we assume flat interference from
+%   neighboring BS, i.e. DS = 0 as they are assumed to always be transmitting;
 
 %Per T% 38.901, table 7.7.2-3 (normalized) (Normalized Delay, power in dB)
 TDL_C = [0     , -4.4 ; ...

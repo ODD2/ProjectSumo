@@ -1,8 +1,49 @@
 function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
+% PlannerV1  Two-phase OMA + NOMA resource-block allocation optimizer.
+%
+%   [GID_REQ_RES, ExitFlag] = PlannerV1(SIM_CONF, QoS_GP_CONF) solves an
+%   Integer Linear Program (via MATLAB intlinprog) to assign downlink resource
+%   blocks (RBs) across social groups, respecting power and RB-overlap
+%   constraints.  Allocation proceeds in two phases per QoS priority level:
+%
+%     Phase 1 – OMA layer: each RB is assigned exclusively to one group at the
+%               highest achievable CQI.  Groups satisfied here are locked.
+%     Phase 2 – NOMA layer: remaining unsatisfied groups receive additional
+%               RBs superimposed on already-allocated OMA RBs, using the
+%               spare transmit power left by the OMA inner user.
+%
+%   Inputs:
+%     SIM_CONF    - Struct with simulation/grid parameters:
+%                     rbf_h       Number of RB fractions in the frequency axis.
+%                     rbf_w       Number of RB fractions in the time axis
+%                                 (= number of timeslots).
+%                     max_pwr_dBm Maximum BS transmit power (dBm).
+%     QoS_GP_CONF - Cell array of cell arrays, ordered by QoS priority (lower
+%                   index = higher priority).  Each inner cell contains structs
+%                   with per-group parameters:
+%                     gid          Group identifier.
+%                     qos          QoS level integer.
+%                     rbf_w        Required RB width in the time domain.
+%                     rbf_h        Required RB height in the frequency domain.
+%                     sinr_max     Maximum received SINR of the group (dB).
+%                     pwr_req_dBm  Minimum transmit power required (dBm).
+%                     pwr_ext_dBm  Spare (excess) transmit power available for
+%                                  NOMA outer user (dBm).
+%                     rem_bits     Remaining bits to be delivered.
+%                     mem_num      Number of group members.
+%                     eager_rate   Priority weight for objective function.
+%
+%   Outputs:
+%     GID_REQ_RES - Struct indexed by group ID (field "g<gid>").  Each group
+%                   field contains timeslot substruct ("t<ts>") with CQI-keyed
+%                   RB counts ("c<cqi>"), e.g. GID_REQ_RES.g0.t1.c15 = 3.
+%     ExitFlag    - intlinprog exit flag from the final optimization call
+%                   (1 or 2 = feasible solution found).
+
     for qos_i = 1:length(QoS_GP_CONF)
         QoS_GP_CONF{qos_i} = [QoS_GP_CONF{qos_i}{:}];
     end
-    
+
 %The entry point for optimization
 %     SIM_CONF = struct("rbf_h",4,...
 %                       "rbf_w",2,...

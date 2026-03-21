@@ -34,8 +34,59 @@
 %  interference increase
 
 function [ CQI_out,  Max_SINR_rx_dB_10, min_tx_p_dBm, PL_dB, INTF_dBm, DS_intf_dBm, Min_SINR_rx_dB_10, Min_INTF_dBm, Min_Spare_dBm] = SINR_Channel_Model_5G( D2D_dist, h_BS, h_MS, fc, tx_p_dBm, bandwidth, Intf_h_BS, Intf_h_MS, Intf_dist, Intf_pwr_dBm, DS_Desired, CP, UMA_notUMI_Model, tx_delta_dBm, min_tx_pwr_dBm, SINR_model, NOMA_Dir)
-%UNTITLED2 Summary of this function goes here
-%   Detailed explanation goes here
+% SINR_Channel_Model_5G  Compute 5G downlink SINR, CQI, and minimum transmit
+%   power using 3GPP TR 38.901 path-loss models (UMa/UMi) and a Tapped Delay
+%   Line TDL-C multipath fading model.
+%
+%   [ CQI_out, Max_SINR_rx_dB_10, min_tx_p_dBm, PL_dB, INTF_dBm,
+%     DS_intf_dBm, Min_SINR_rx_dB_10, Min_INTF_dBm, Min_Spare_dBm ] =
+%     SINR_Channel_Model_5G( D2D_dist, h_BS, h_MS, fc, tx_p_dBm, bandwidth,
+%       Intf_h_BS, Intf_h_MS, Intf_dist, Intf_pwr_dBm, DS_Desired, CP,
+%       UMA_notUMI_Model, tx_delta_dBm, min_tx_pwr_dBm, SINR_model, NOMA_Dir )
+%
+%   The function first computes path loss (LOS/NLOS probabilistic selection)
+%   and TDL-C delay-spread interference for both the desired BS and the
+%   interfering BSs, then calculates SINR at the receiver.  It also sweeps
+%   transmit power downward in steps of tx_delta_dBm to find the minimum
+%   power that still achieves the same CQI — useful for NOMA power allocation.
+%
+%   Inputs (main BS):
+%     D2D_dist          - 2D horizontal distance from BS to UE (m).
+%     h_BS              - BS antenna height (m).
+%     h_MS              - UE antenna height (m).
+%     fc                - Carrier frequency (GHz).
+%     tx_p_dBm          - Transmit power (dBm).
+%     bandwidth         - Channel bandwidth (Hz), used for thermal noise.
+%
+%   Inputs (interfering BSs):
+%     Intf_h_BS         - Interfering BS antenna heights (m, vector).
+%     Intf_h_MS         - Interfering UE antenna heights (m, vector).
+%     Intf_dist         - 2D distances to interfering BSs (m, vector).
+%     Intf_pwr_dBm      - Transmit powers of interfering BSs (dBm, vector).
+%
+%   Inputs (common):
+%     DS_Desired        - Delay spread observed by the UE (us).
+%     CP                - Cyclic prefix duration (us); TDL-C taps beyond CP
+%                         are treated as inter-symbol interference.
+%     UMA_notUMI_Model  - 1 → use UMa path-loss model; 0 → use UMi model.
+%     tx_delta_dBm      - Step size for minimum-power search (dB, default 0.10).
+%     min_tx_pwr_dBm    - Lower bound for minimum-power search (dBm).
+%     SINR_model        - 1: delay-spread loss subtracted from signal power
+%                         (cancellation model); 0: delay-spread loss added to
+%                         interference (accumulation model).
+%     NOMA_Dir          - 0: power reduction of inner UE does not become
+%                         interference for outer UE; 1: it does.
+%
+%   Outputs:
+%     CQI_out           - CQI index (0 = outage) at maximum transmit power.
+%     Max_SINR_rx_dB_10 - SINR (dB) at maximum transmit power.
+%     min_tx_p_dBm      - Minimum transmit power (dBm) that sustains CQI_out.
+%     PL_dB             - Path loss of the desired signal (dB).
+%     INTF_dBm          - Total received interference + noise (dBm).
+%     DS_intf_dBm       - Delay-spread self-interference from the main BS (dBm).
+%     Min_SINR_rx_dB_10 - SINR (dB) at min_tx_p_dBm.
+%     Min_INTF_dBm      - Total interference at min_tx_p_dBm (dBm).
+%     Min_Spare_dBm     - Spare power available for NOMA outer user (dBm).
 CQI_out = 0;
 Max_SINR_rx_dB_10 = -100;
 min_tx_p_dBm = -100;
@@ -281,9 +332,22 @@ end
 end
 
 function [sum_DS_intf_MP_mW] = Calc_DS_Inteference(tx_p_dBm, TDL_C_SCALED, CP, PL_tot_sig)
-%This function determine the multipath loss experienced by a single.
-%This loss is modeled as interference
-%Assume frequency flat fading
+% Calc_DS_Inteference  Compute total multipath inter-symbol interference power.
+%
+%   Sums the received power of all TDL-C taps whose delay exceeds the cyclic
+%   prefix CP (i.e., taps not filtered by the CP guard interval).  Each such
+%   tap causes inter-symbol interference modelled as additive noise.
+%
+%   Inputs:
+%     tx_p_dBm     - Transmit power (dBm, scalar or vector).
+%     TDL_C_SCALED - Nx2 matrix [delay_s, power_dB] of TDL-C taps scaled by DS.
+%     CP           - Cyclic prefix duration (s); taps with delay > CP contribute.
+%     PL_tot_sig   - Path loss (dB) of the desired signal.
+%
+%   Output:
+%     sum_DS_intf_MP_mW - Total inter-symbol interference power (mW).
+%
+%   Assume frequency flat fading
  
     list_DS_intf_MP_mW = zeros(1,length(tx_p_dBm));
     %Worst Case attenuation SINR_model   
@@ -300,6 +364,13 @@ end
 
 
 function [sig] = UMA_Model(fc, D3D_dist, BS_t, MS_t, d_bp_pl, pLOS)
+% UMA_Model  Urban Macro (UMa) probabilistic path-loss model per TR 38.901.
+%
+%   Returns total path loss (dB) for a given 3D distance, randomly selecting
+%   LOS or NLOS based on probability pLOS.  LOS uses a two-slope model
+%   (PL1/PL2 separated by breakpoint d_bp_pl); NLOS is the worst-case envelope.
+%
+%   Shadow fading is sampled from N(0,4) dB for LOS and N(0,6) dB for NLOS.
     
     SF_UMA_LOS = normrnd(0, 4, size(D3D_dist)); %log10(normrnd(0, 7)); %7dB std deviation, random normal, mean 0
     %SF = 0;    
@@ -338,6 +409,10 @@ function [sig] = UMA_Model(fc, D3D_dist, BS_t, MS_t, d_bp_pl, pLOS)
 end
 
 function [sig] = UMI_Model(fc, D3D_dist, BS_t, MS_t, d_bp_pl, pLOS)
+% UMI_Model  Urban Micro (UMi) probabilistic path-loss model per TR 38.901.
+%
+%   Mirrors UMA_Model but applies UMi-specific coefficients (Table 7.4.1-1).
+%   Shadow fading is sampled from N(0,4) dB for LOS and N(0,7.82) dB for NLOS.
     
     SF_UMi_LOS = normrnd(0, 4, size(D3D_dist)); %log10(normrnd(0, 7)); %7dB std deviation, random normal, mean 0
     %SF = 0;    
@@ -377,6 +452,11 @@ end
 
 
 function [Prob_LOS_sig] = PrLOS(D2D_dist_out,MS_t,UMA_notUMi)
+% PrLOS  Compute the LOS probability per TR 38.901 Table 7.4.2-1.
+%
+%   Returns the probability that the link is line-of-sight given the 2D
+%   distance and UE height.  UMa and UMi use different formulas: UMa adds a
+%   height-dependent correction term C for UE heights above 13 m.
     if(UMA_notUMi)
         if(D2D_dist_out <= 18)
             Pr_LOS_sig = 1;

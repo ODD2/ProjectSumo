@@ -1,6 +1,18 @@
 function [min_sinr] = CqiMinSINR(CQI,BLER_UPPERBOUND)
-%CQI_MIN_SINR Summary of this function goes here
-%   Detailed explanation goes here
+% CqiMinSINR  Return the minimum SINR required for a CQI at a given BLER target.
+%
+%   MIN_SINR = CqiMinSINR(CQI, BLER_UPPERBOUND) scans the SNR-BLER lookup
+%   table (SNR_BLER_CQI.mat) for the CQI entry and returns the lowest SNR
+%   value at which BLER <= BLER_UPPERBOUND.  Used by PlannerV1 to compute
+%   required receive power for NOMA outer-user allocation.
+%
+%   Inputs:
+%     CQI            - CQI index (1–15).
+%     BLER_UPPERBOUND - Maximum tolerable BLER (e.g. 0.1 for 10% BLER target).
+%
+%   Output:
+%     min_sinr - Minimum required SINR (dB).  Returns -7 dB if no table entry
+%                satisfies the BLER constraint.
 
 %  persistent CQI_TO_SINR;
 %  if isempty(CQI_TO_SINR)
