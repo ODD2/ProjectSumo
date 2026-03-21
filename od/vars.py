@@ -1,3 +1,14 @@
+"""
+od/vars.py - Global simulation state registry.
+
+All simulation-wide singleton objects (network controllers, caches, loggers,
+SUMO info, statistics recorder, etc.) live here as module-level variables.
+They are initialised by InitializeSimulationVariables() at the start of each
+run and torn down by TerminateSimulationVariables() at the end.
+
+Using a dedicated globals module avoids circular imports and gives every
+submodule a single, consistent import path: ``import od.vars as GV``.
+"""
 # Custom
 from od.engine import TerminateMatlabEngine
 import od.network.controller as onc
@@ -63,6 +74,17 @@ ALLOC_FAILURE_COUNTER = 0
 
 
 def InitializeSimulationVariables(interest_config: omi.InterestConfig):
+    """Initialize all global simulation objects for a single run.
+
+    Must be called once after InitializeSimulationContext() (MATLAB) and
+    before entering the main simulation loop.  Sets up the network
+    controllers, loggers, SUMO info tracker, statistic recorder, RNG seed,
+    base station settings, and social group manager according to the
+    scenario parameters in *interest_config*.
+
+    Args:
+        interest_config: InterestConfig instance describing the scenario.
+    """
     global NET_CORE_CONTROLLER, NET_STATUS_CACHE, NET_STATION_CONTROLLER
     global DEBUG, ERROR, STATISTIC, RESULT
     global INTEREST_CONFIG
@@ -140,6 +162,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
 
 
 def TerminateSimulationVariables():
+    """Flush and close all log file handles at the end of a simulation run."""
     global DEBUG, ERROR, STATISTIC, RESULT
     DEBUG.Encapsulate()
     ERROR.Encapsulate()
@@ -148,6 +171,12 @@ def TerminateSimulationVariables():
 
 
 def ExceptionalExit():
+    """Perform an emergency shutdown: flush logs, stop MATLAB, and exit.
+
+    Called when an unrecoverable error occurs (e.g. MATLAB allocation failure
+    limit reached) to ensure that log files are properly closed before the
+    process terminates.
+    """
     TerminateSimulationVariables()
     TerminateMatlabEngine()
     exit(0)

@@ -1,3 +1,25 @@
+"""
+od/network/application.py - Application-layer data handling for vehicles and
+base stations.
+
+Application (base class)
+  Tracks incoming AppData fragments per social group and reassembles them.
+  Calls DataIntact() once the complete data unit has been received.
+
+VehicleApplication (extends Application)
+  Generates outgoing data via SpawnData() using a Poisson arrival model and
+  queues it for uplink transmission.  Ignores data it originally sent.
+
+BaseStationApplicationUMA / BaseStationApplicationUMI (extend Application)
+  Handle fully received uplink data and trigger propagation:
+    - UMA: broadcasts to in-range vehicles and forwards GENERAL data to
+      the core for UMA-to-UMA distribution.
+    - UMI: broadcasts CRITICAL data locally and forwards all data to the
+      core for UMI-to-UMA backhaul.
+
+BaseStationApplication() is a factory function that returns the correct
+Application subclass for a given base station type.
+"""
 from __future__ import annotations
 from numpy import random
 from od import social
@@ -12,6 +34,14 @@ import od.vars as GV
 
 
 class Application:
+    """Base class for application-layer data reception and reassembly.
+
+    Maintains an inbox (sg_data_inbox) organised as:
+        social_group → sender_name → serial → AppData (deform data)
+
+    RecvData() is the entry point for all incoming AppData fragments.
+    Subclasses override DataIntact() to act when full data is reconstructed.
+    """
     def __init__(self, owner):
         self.sg_data_inbox = {}
         self.owner = owner
@@ -87,6 +117,18 @@ class Application:
 
 
 class VehicleApplication(Application):
+    """Application running on a vehicle node.
+
+    Generates uplink data at a Poisson rate (SpawnData) and reassembles
+    downlink broadcast data from base stations.  Data spawned by this vehicle
+    is not reprocessed when received back from a broadcast.
+
+    Attributes:
+        veh_social_groups: Social groups the vehicle belongs to.
+        data_stack:  Fractional accumulator of pending data units per group.
+        sg_data_queue: List of AppData waiting for uplink transmission per group.
+        data_counter:  Monotonically increasing serial number for spawned data.
+    """
     def __init__(self, vehicle):
         super().__init__(vehicle)
         # The social groups vehicles are interest in.
@@ -125,8 +167,15 @@ class VehicleApplication(Application):
             appdata.header
         )
 
-    # Send application data
     def SpawnData(self):
+        """Generate new application data units for uplink transmission.
+
+        Uses a Poisson process to determine the number of data units to create
+        this network step.  Each unit has a random size drawn from the
+        configured range for its QoS level and is appended to sg_data_queue.
+        Groups marked as reader-only (sg.reader == True) do not generate data
+        at the vehicle level (data originates centrally for those groups).
+        """
         current_time = GV.SUMO_SIM_INFO.getTime()
         for sg in self.veh_social_groups:
             # ignore data spawn if social group has a centralized source.(no edge sources)
@@ -220,6 +269,14 @@ class VehicleApplication(Application):
 
 
 class BaseStationApplicationUMA(Application):
+    """Application running on a UMA macro cell.
+
+    On receiving intact data:
+      - GENERAL QoS: forwards to NetworkCoreController for UMA-to-UMA
+        distribution, then broadcasts locally to subscribed vehicles.
+      - CRITICAL QoS: broadcasts locally only (no core forwarding from UMA
+        for CRITICAL — that path is handled by UMI).
+    """
     def __init__(self, owner):
         super().__init__(owner)
 
@@ -249,6 +306,14 @@ class BaseStationApplicationUMA(Application):
 
 
 class BaseStationApplicationUMI(Application):
+    """Application running on a UMI small cell.
+
+    On receiving intact data:
+      - CRITICAL QoS: broadcasts locally to subscribed vehicles, then
+        forwards to NetworkCoreController for UMI→UMA backhaul.
+      - GENERAL QoS: forwards to NetworkCoreController only (UMI does not
+        broadcast general data locally).
+    """
     def __init__(self, owner):
         super().__init__(owner)
 

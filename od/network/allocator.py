@@ -1,3 +1,28 @@
+"""
+od/network/allocator.py - Downlink resource block allocation algorithms.
+
+Two allocator implementations are provided:
+
+  ResourceAllocatorOMA
+      Orthogonal Multiple Access.  Resource blocks (RBs) are assigned
+      exclusively to one group per timeslot.  Supports 1×2 (1 RB wide,
+      2 timeslots) and 2×1 (2 RBs wide, 1 timeslot) geometries.
+
+  ResourceAllocatorNomaApprox
+      Non-Orthogonal Multiple Access approximation for a 2-timeslot frame.
+      Groups can share RBs through power-domain multiplexing.  Inner users
+      (better channel) receive their signal first; outer users (weaker channel)
+      are superimposed using the remaining transmit power.  Allocation
+      proceeds through three procedures in priority order:
+        1. CheckValidSymetricGeo – pair an outer group onto an existing spare
+           inner RB using symmetric geometry.
+        2. CheckValidSpareInner  – allocate a fresh inner RB for a group.
+        3. CheckValidSpareOuter  – build an asymmetric hybrid RB by pairing
+           two inner RBs and allocating the outer group onto the weaker one.
+
+ExternAllocParam holds the persistent time-value (tval) that accumulates
+across network steps to encode each group's urgency for prioritisation.
+"""
 # Custom
 from math import log10
 from od.env.config import (NET_TS_PER_NET_STEP, NET_RB_BW_UNIT, NET_RB_BW_REQ_TS,
@@ -9,8 +34,12 @@ import od.engine as GE
 import sys
 
 
-# allocation parameters provided by external system.
 class ExternAllocParam:
+    """Persistent allocation state carried between network steps for one group.
+
+    tval is a low-pass-filtered accumulator of pending bits, used as an
+    urgency metric when sorting groups for resource allocation.
+    """
     def __init__(self):
         self.reset()
 
@@ -30,6 +59,11 @@ class ExternAllocParam:
 #             pass
 
 class AsymNomaRbConfig:
+    """Asymmetric NOMA resource block: two inner RBs paired with outer RBs.
+
+    Used in hybrid configurations where two inner-user RBs share their excess
+    power budget with one or more outer-user groups.
+    """
     def __init__(self, inner_rbs, outer_rbs, outer_pwr_mW):
         self.inner_rbs = inner_rbs
         self.outer_rbs = outer_rbs
@@ -40,6 +74,7 @@ class AsymNomaRbConfig:
 
 
 class SymNomaRbConfig:
+    """Symmetric NOMA resource block: one inner RB paired with one outer RB."""
     def __init__(self, inner_rb, outer_rb):
         self.inner_rb = inner_rb
         self.outer_rb = outer_rb
@@ -49,6 +84,7 @@ class SymNomaRbConfig:
 
 
 class NomaRbConfig:
+    """Base class for a NOMA resource block assignment (group + CQI)."""
     def __init__(self, owner, cqi):
         self.cqi = cqi
         self.owner = owner
@@ -61,6 +97,11 @@ class NomaRbConfig:
 
 
 class InnerRbConfig(NomaRbConfig):
+    """NOMA RB config for an inner user (better channel, decoded first).
+
+    rem_pwr_mW is the transmit power remaining after the inner user's
+    allocation that can be donated to an outer user via superposition.
+    """
     def __init__(self, owner, cqi, rem_pwr_mW):
         self.rem_pwr_mW = rem_pwr_mW
         super().__init__(owner, cqi)
@@ -70,11 +111,23 @@ class InnerRbConfig(NomaRbConfig):
 
 
 class OuterRbConfig(NomaRbConfig):
+    """NOMA RB config for an outer user (weaker channel, decoded via SIC)."""
     def __init__(self, owner, cqi):
         super().__init__(owner, cqi)
 
 
 class ResourceAllocatorNomaApprox:
+    """NOMA approximation allocator for a 2-timeslot resource block frame.
+
+    Internally maintains four RB pools per geometry (2×1 and 1×2):
+      spare_inner_rb  – inner-user RBs not yet paired with an outer user.
+      spare_hybrid_rb – asymmetric RBs with an inner pair but outer slot open.
+      solid_hybrid_rb – fully assigned asymmetric RBs.
+      solid_normal_rb – fully assigned symmetric RBs.
+
+    Callable: ResourceAllocatorNomaApprox(RES_CONF, QoS_GP_CONF)() returns
+    an alloc_report dict consumed by BaseStationController.DeployAllocationReport().
+    """
     def __init__(self, RES_CONF, QoS_GP_CONF):
         self.RES_CONF = RES_CONF
         self.QoS_GP_CONF = QoS_GP_CONF
@@ -362,8 +415,20 @@ class ResourceAllocatorNomaApprox:
         alloc_report[key_gid][key_ofs_ts][key_cqi] += 1
 
 
-# Resource Allocator for OMA
 class ResourceAllocatorOMA:
+    """Orthogonal Multiple Access resource allocator.
+
+    Models the frequency-time resource frame as a 2D rectangle:
+      - Height axis: total available bandwidth.
+      - Width axis:  timeslots (currently exactly 2 per network step).
+
+    Supports two RB geometries:
+      - 1 × NET_RB_BW_UNIT bandwidth, 2 timeslots (1×2): normal CP.
+      - 2 × NET_RB_BW_UNIT bandwidth, 1 timeslot  (2×1): extended CP / wider SCS.
+
+    Each call to Allocate() reserves the requested bandwidth and returns the
+    offset timeslot, or -1 if the frame is full.
+    """
     # like a 2d rectangle:
     # height - the total bandwidth available
     # width - the total timeslots

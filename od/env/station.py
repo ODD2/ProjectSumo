@@ -1,3 +1,17 @@
+"""
+od/env/station.py - Static base station deployment map.
+
+BS_PRESET defines the physical properties of every base station in the NTUST
+campus scenario.  Each entry maps a unique name to a dict with:
+  - pos:    (x, y) coordinates in the SUMO network coordinate system (metres).
+  - color:  RGBA tuple for the POI icon.
+  - img:    Absolute path to the icon image shown in the SUMO GUI.
+  - width / height: Displayed icon size in SUMO units.
+  - type:   BaseStationType (UMA or UMI).
+
+The BS_SETTING dict used at runtime is derived from BS_PRESET in od/vars.py,
+filtered by whether UMI cells are enabled for the current scenario.
+"""
 from od.network.types import BaseStationType
 import os
 import sys

@@ -1,3 +1,15 @@
+"""
+od/network/model.py - 5G channel estimation and network status cache.
+
+NetStatusCache stores per-(vehicle, base-station, social-group) channel quality
+results so that MATLAB is only queried once per SUMO step per unique triplet.
+The cache is flushed at the start of each SUMO step after vehicle positions
+have been updated.
+
+GET_BS_CQI_SINR_5G_FUTURE() builds the MATLAB call arguments from simulation
+state and issues the call asynchronously, returning a future whose result
+contains CQI, SINR, and power values.
+"""
 from socket import timeout
 from od.network.types import BaseStationType
 from od.env.config import (BS_HEIGHT, BS_TRANS_PWR, BS_FREQ,
@@ -12,8 +24,16 @@ import matlab
 import math
 
 
-# Container to save network status
 class NetStatus:
+    """Cached channel quality result for one (vehicle, BS, social group) triplet.
+
+    Attributes:
+        cached:      True once the MATLAB result has been retrieved.
+        max_cqi:     Best achievable CQI index (0–15).
+        max_sinr:    Corresponding SINR in dB.
+        pwr_req_dBm: Minimum transmit power (dBm) required to reach max_cqi.
+        pwr_ext_dBm: Available excess power after serving the inner NOMA user.
+    """
     def __init__(self):
         self.cached = False
         self.max_cqi = 0
@@ -22,13 +42,31 @@ class NetStatus:
         self.pwr_ext_dBm = 0
 
 
-# Container to cache status results
 class NetStatusCache:
+    """Three-level cache: vehicle → base station serial → social group → NetStatus.
+
+    MATLAB channel estimation calls are expensive.  This cache ensures each
+    (vehicle, BS, social group) triplet is computed at most once per SUMO step.
+    Parallel futures are issued for all uncached entries in a batch query to
+    maximise MATLAB engine throughput.
+    """
     def __init__(self):
         self._map = {}
 
-    # param [(vehicle,bs_ctrlr,social_group)]
     def GetMultiNetStatus(self, query_tuples):
+        """Return NetStatus objects for a batch of (vehicle, BS, SocialGroup) tuples.
+
+        Uncached entries have their MATLAB futures issued in parallel; results
+        are then retrieved sequentially.  Cached entries are returned directly
+        without a MATLAB call.
+
+        Args:
+            query_tuples: List of (VehicleRecorder, BaseStationController,
+                          SocialGroup) tuples.
+
+        Returns:
+            List of NetStatus objects in the same order as *query_tuples*.
+        """
         results = []
         netstat_futures = []
         # error detection
@@ -75,12 +113,17 @@ class NetStatusCache:
         # return
         return results
 
-    # param [(vehicle,bs_ctrlr,social_group)]
     def GetNetStatus(self, query_tuple):
+        """Return the NetStatus for a single (vehicle, BS, SocialGroup) tuple."""
         return self.GetMultiNetStatus([query_tuple])[0]
 
-    # clean
     def Flush(self):
+        """Invalidate all cached results for the new SUMO step.
+
+        Removes entries for vehicles that have left the map, adds empty
+        entries for newly arrived vehicles, and resets the ``cached`` flag on
+        all existing entries so MATLAB is re-queried with updated positions.
+        """
         # remove ghosts
         for veh_id in GV.SUMO_SIM_INFO.ghost_veh_ids:
             self._map.pop(veh_id)
@@ -94,8 +137,26 @@ class NetStatusCache:
                     veh_bs_sg_status.cached = False
 
 
-# (VehicleRecorder, BaseStationController, SocialGroup)
 def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, qos: QoSLevel):
+    """Issue an async MATLAB call to compute 5G channel quality.
+
+    Builds the parameter vectors required by SINR_Channel_Model_5G_mex,
+    including interference contributions from all co-type base stations,
+    and returns a MATLAB future.  Calling future.result(timeout) yields a
+    9-element tuple: (max_cqi, max_sinr, pwr_req_dBm, ..., pwr_ext_dBm).
+
+    Path loss and multipath fading follow 3GPP TR 38.901.  UMI uses a wider
+    subcarrier spacing (2 × NET_RB_BW_UNIT) for CRITICAL QoS traffic.
+
+    Args:
+        vehicle:    VehicleRecorder providing the current (x, y) position.
+        bs_ctrlr:   Target BaseStationController.
+        qos:        QoSLevel determining subcarrier spacing for UMI cells.
+
+    Returns:
+        A MATLAB background future whose result() call blocks until the
+        channel model computation completes.
+    """
     # Vehicle's position
     Intf_dist = [5000]  # dummy base station for work around
     Intf_pwr_dBm = [BS_TRANS_PWR[bs_ctrlr.type]]

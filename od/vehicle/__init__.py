@@ -1,3 +1,17 @@
+"""
+od/vehicle/__init__.py - Vehicle simulation entity.
+
+VehicleRecorder represents one vehicle throughout its lifetime in the
+simulation.  It is created when SUMO reports a new vehicle and destroyed
+when the vehicle leaves the map.
+
+Per time-scale responsibilities:
+  UpdateSS()  (SUMO step)    – refresh position, select best base station
+                               per social group, update connection visuals.
+  UpdateNS()  (network step) – run the vehicle application (spawn data) and
+                               submit uplink resource requests.
+  UpdateT()   (timeslot)     – advance in-progress uplink/downlink packages.
+"""
 from .connection import ConnectionState, ConnectionRecorder, SharedConnection
 from .monitor import NetworkStatusMonitor
 from od.network.types import BaseStationType, LinkType
@@ -14,6 +28,19 @@ tc = traci.constants
 
 
 class VehicleRecorder():
+    """Tracks and manages all network interactions for a single SUMO vehicle.
+
+    Attributes:
+        name:        SUMO vehicle ID string.
+        pos:         Current (x, y) position from SUMO subscription.
+        chk_pos:     Position at the last base station re-selection check.
+        social_groups: List of SocialGroup instances this vehicle belongs to.
+        sub_sg_bs:   sub_sg_bs[bs_type][sg] → currently subscribed BS or None.
+        app:         VehicleApplication managing data generation and reception.
+        pkg_in_proc: [uplink_packages, downlink_packages] currently transmitting.
+        net_status:  NetworkStatusMonitor tracking aggregate packet counts.
+        con_state:   Dict mapping BS name → SharedConnection for SUMO GUI lines.
+    """
     # Constructor
     def __init__(self, name):
         # Vehicle ID
@@ -90,8 +117,14 @@ class VehicleRecorder():
     def UpdateVehicleInfo(self):
         self.pos = vehicle.getSubscriptionResults(self.name)[tc.VAR_POSITION]
 
-    # Check if the latest subscription base stations still provide services
     def CheckSubscribeBSValidity(self):
+        """Verify that all currently subscribed base stations are still in range.
+
+        Unsubscribes from any BS whose distance exceeds its coverage radius.
+
+        Returns:
+            True if all subscriptions are valid; False if any was removed.
+        """
         invalid_bs = []
         for bs_type in BaseStationType:
             for social_group in self.social_groups:
@@ -423,8 +456,15 @@ class VehicleRecorder():
         for appdata in package.appdatas:
             self.app.RecvData(package.social_group, appdata)
 
-    # Select the service base station according to the social type provided.
     def SelectSocialBS(self, sg: SocialGroup):
+        """Return the best uplink base station for the given social group.
+
+        CRITICAL QoS: prefers UMI (lower latency); falls back to UMA.
+        GENERAL QoS:  always uses UMA.
+
+        Returns:
+            BaseStationController, or None if no suitable BS is subscribed.
+        """
         # 2021/1/11 Scenario:
         # UMIs are spcificly for time critical data, only critical datas select UMI
         # as a type of upload destination. Any other social datas never select a UMI.

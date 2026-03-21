@@ -1,3 +1,16 @@
+"""
+od/vehicle/connection.py - Vehicle-to-BS connection state and SUMO GUI lines.
+
+ConnectionRecorder draws and updates a coloured line in the SUMO GUI between
+a vehicle and a base station, encoding the current link state as a colour:
+  black  – idle / connected but no traffic.
+  orange – actively transmitting.
+  green  – transmission just completed successfully.
+
+SharedConnection wraps a ConnectionRecorder with a reference count so that
+the line is kept alive as long as at least one social group subscription
+exists for that vehicle–BS pair, and removed when the last subscription ends.
+"""
 from enum import IntEnum
 from od.layer import NetObjLayer
 from od.env.config import SUMO_SIM_GUI
@@ -6,6 +19,11 @@ from od import traci
 
 
 class ConnectionState(IntEnum):
+    """Ordered link states used to drive connection-line colour in the SUMO GUI.
+
+    Higher values take priority: a Transmit state will not be overwritten by
+    a Connect state within the same timeslot.
+    """
     Unknown = 0
     Connect = 1,
     Deny = 2,
@@ -14,12 +32,21 @@ class ConnectionState(IntEnum):
 
 
 class SharedConnection:
+    """Reference-counted wrapper for a ConnectionRecorder.
+
+    share counts how many active social group subscriptions share this
+    vehicle–BS connection line.  The line is removed when share reaches 0.
+    """
     def __init__(self, rec):
         self.share = 0
         self.rec = rec
 
 
 class ConnectionRecorder:
+    """Manages the SUMO GUI polygon line representing one vehicle–BS connection.
+
+    Only active when SUMO_SIM_GUI is True; all methods are no-ops otherwise.
+    """
     def __init__(self, s1, s2):
         if(SUMO_SIM_GUI):
             self.s1 = s1

@@ -1,9 +1,29 @@
+"""
+od/network/package.py - Network transmission unit.
+
+A NetworkPackage bundles one or more AppData fragments that are transmitted
+together in a single radio resource allocation.
+"""
 from typing import List
 from od.social.group import SocialGroup
 from od.network.appdata import AppData
 
 
 class NetworkPackage:
+    """A single transmission unit carrying application data fragments.
+
+    Attributes:
+        src:          Sender (VehicleRecorder or BaseStationController).
+        dest:         Receiver (VehicleRecorder, BaseStationController, or
+                      CastObject for broadcast).
+        social_group: The SocialGroup this package belongs to.
+        bits:         Total payload size in bits.
+        appdatas:     List of AppData fragments included in this package.
+        offset_ts:    Timeslot index at which transmission starts.
+        trans_ts:     Number of timeslots the transmission occupies.
+        end_ts:       Timeslot index at which transmission completes
+                      (offset_ts + trans_ts).
+    """
     def __init__(self,
                  src, dest,
                  social_group: SocialGroup,

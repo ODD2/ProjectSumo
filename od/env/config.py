@@ -1,3 +1,13 @@
+"""
+od/env/config.py - Central simulation configuration.
+
+All tunable simulation parameters are defined here as module-level constants,
+grouped by subsystem: SUMO timing, network timing, base station RF settings,
+vehicle parameters, event scheduling, and directory paths.
+
+Parameter interdependencies are validated at import time; an exception is
+raised if the timing hierarchy is violated (e.g. SUMO step < network step).
+"""
 from . import *
 from od.network.types import BaseStationType
 from od.social.group import SocialGroup, QoSLevel

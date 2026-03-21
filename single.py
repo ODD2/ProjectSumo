@@ -1,3 +1,16 @@
+"""
+single.py - Single simulation entry point.
+
+Initializes and runs one complete V2X simulation session by coordinating
+SUMO traffic simulation, 5G network steps, and per-timeslot resource
+allocation.  Intended for direct execution or to be called from multi.py
+as a subprocess target.
+
+Simulation loop structure (per SUMO step):
+  SUMO step (0.1 s)
+    └─ Network steps  (1 ms each, NET_STEPS_PER_SUMO_STEP iterations)
+         └─ Timeslots (0.5 ms each, NET_TS_PER_NET_STEP iterations)
+"""
 from time import sleep
 import od.engine as GE
 import od.vars as GV
@@ -26,6 +39,14 @@ from od.social.manager import DynamicSocialGroupBehaviour
 
 # Base Station Indicator Creator
 def CreateBaseStationIndicator(name, setting):
+    """Add a POI icon and a hexagonal coverage-radius polygon to the SUMO GUI
+    for the given base station.
+
+    Args:
+        name:    Unique identifier string for the base station (e.g. "UMA-1").
+        setting: Dict containing the base station configuration including pos,
+                 color, img, width, height and type (from od/env/station.py).
+    """
     # Bs Info
     bs_type = setting["type"]
     x = setting["pos"][0]
@@ -52,27 +73,44 @@ def CreateBaseStationIndicator(name, setting):
 
 
 def UpdateSS(objs):
-    # Debug
+    """Trigger the per-SUMO-step update on every object in *objs*."""
     for obj in objs:
         obj.UpdateSS()
     return
 
 
 def UpdateNS(objs, ns):
-    # Debug
+    """Trigger the per-network-step update on every object in *objs*.
+
+    Args:
+        ns: Current network-step index within the parent SUMO step.
+    """
     for obj in objs:
         obj.UpdateNS(ns)
     return
 
 
 def UpdateT(objs, ts):
-    # Debug
+    """Trigger the per-timeslot update on every object in *objs*.
+
+    Args:
+        ts: Current timeslot index within the parent network step.
+    """
     for obj in objs:
         obj.UpdateT(ts)
     return
 
 
 def InitTraci(interest_config):
+    """Start the SUMO/TraCI process with all required launch arguments.
+
+    Launches sumo or sumo-gui depending on SUMO_SIM_GUI, sets the step length,
+    traffic scale and network configuration file.
+
+    Args:
+        interest_config: InterestConfig instance whose traffic_scale field
+                         controls the vehicle departure rate scaling factor.
+    """
     traci.start([
         "sumo-gui" if SUMO_SIM_GUI else "sumo",
         "-c",
@@ -88,6 +126,18 @@ def InitTraci(interest_config):
 
 
 def main(interest_config):
+    """Run a complete simulation session.
+
+    Initializes SUMO/TraCI, the MATLAB engine, global variables, base station
+    controllers, and then runs the tri-level simulation loop (SUMO step →
+    network step → timeslot).  Saves statistics and tears down all resources
+    on completion.
+
+    Args:
+        interest_config: InterestConfig instance carrying all scenario
+                         parameters (allocator type, traffic density, RNG seed,
+                         RSU flag, QoS reclassification flag, etc.).
+    """
     # Prepare Simulation
     # - start traci
     InitTraci(interest_config)

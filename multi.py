@@ -1,3 +1,17 @@
+"""
+multi.py - Parallel simulation manager.
+
+Generates a grid of InterestConfig scenarios (allocator types, RSU modes,
+QoS flags, traffic densities, RNG seeds) and schedules them as separate
+OS processes.  A weighted memory model limits the number of concurrent
+processes so that total RAM usage stays within a configurable budget.
+
+Usage:
+    python multi.py
+
+Results are written to data/REGNA/<scenario_path>/report.pickle.
+Failed scenarios are recorded in scheme_fail_report.txt.
+"""
 from od.misc.interest import InterestConfig
 from od.network.types import ResourceAllocatorType
 from od.social.manager import DynamicSocialGroupBehaviour
@@ -19,6 +33,13 @@ WEIGHT_INTCONFS = []
 
 
 class WeightInterestConfig:
+    """Pairs an InterestConfig with a relative memory-cost estimate.
+
+    The weight is proportional to the expected memory footprint of the
+    simulation, taking into account traffic density, RSU presence, and
+    allocator type.  Heavier configurations are scheduled first so that
+    lighter ones can fill the remaining budget at the end.
+    """
     def __init__(self, interest_config):
         self.interest_config = interest_config
         self.weight = (4 / 1.4 * interest_config.traffic_scale)
@@ -29,6 +50,11 @@ class WeightInterestConfig:
 
 
 class WeightProcess:
+    """Wraps an mp.Process together with its WeightInterestConfig.
+
+    Provides helpers to start the process, look up its PID, and verify
+    whether the simulation produced a result file after it exits.
+    """
     def __init__(self, weight_conf, process: mp.Process):
         self.weight_conf = weight_conf
         self.process = process
@@ -56,6 +82,11 @@ class WeightProcess:
 
 
 def Worker(s: mp.Semaphore, target, args):
+    """Process target that runs a simulation and releases the semaphore when done.
+
+    Catches any exception so that a single failed run does not crash the
+    whole batch; the missing report file will be logged as a failure.
+    """
     try:
         target(*args)
     except Exception as e:
@@ -64,6 +95,15 @@ def Worker(s: mp.Semaphore, target, args):
 
 
 def ParallelSimulationManager():
+    """Schedule and execute all weighted simulation configurations in parallel.
+
+    Processes are launched greedily: heaviest configurations first, then the
+    lightest, so the memory budget (VALID_MEMORY) is consumed as efficiently
+    as possible.  When no slots are left the manager blocks on the semaphore
+    until a process finishes, reclaims its memory weight, and resumes
+    scheduling.  Configurations whose report.pickle is missing after the
+    process exits are written to scheme_fail_report.txt.
+    """
     global VALID_MEMORY, LIMIT, WEIGHT_INTCONFS
     # begin memory monitor for accurate memory estimation
     s = mp.Semaphore(0)
@@ -119,6 +159,12 @@ def ParallelSimulationManager():
 
 
 def SimulationSettings(fn):
+    """Decorator that expands a factory function over the full scenario grid.
+
+    Iterates over all combinations of resource-allocator type, RSU mode,
+    QoS reclassification flag, traffic scale, and random seed, calling *fn*
+    once for each combination and collecting the results in a list.
+    """
     def wrapper(**args):
         result = []
         seed_range = [i + 1 for i in range(20)]

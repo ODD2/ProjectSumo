@@ -1,3 +1,17 @@
+"""
+od/network/controller.py - Base station resource scheduling and propagation.
+
+BaseStationController manages one 5G cell.  Each network step it:
+  1. Arranges uplink resource blocks for pending vehicle upload requests (OMA).
+  2. Arranges downlink resource blocks for queued broadcast app data
+     (OMA, NOMA_APR, or NOMA_OPT via MATLAB PlannerV1).
+  3. Per timeslot: advances package transmission state and triggers delivery
+     callbacks when packages finish transmitting.
+
+NetworkCoreController acts as the backhaul between UMI and UMA cells,
+forwarding CRITICAL data received by a UMI to the nearest UMA, optionally
+reclassifying it as GENERAL QoS in the process.
+"""
 from od import social
 from od.social.group import SocialGroup, QoSLevel
 from od.network.misc import CastObject
@@ -25,6 +39,23 @@ import io
 
 
 class BaseStationController:
+    """Controls resource allocation and packet processing for one base station.
+
+    Attributes:
+        name:         Unique identifier string (e.g. "UMA-1").
+        pos:          (x, y) position in the SUMO coordinate system.
+        type:         BaseStationType (UMA or UMI).
+        radius:       Coverage radius in metres.
+        serial:       Integer index into GV.NET_STATION_CONTROLLER list.
+        app:          BaseStationApplication handling data receipt logic.
+        sg_sub_vehs:  Dict mapping SocialGroup → list of subscribed vehicles.
+        pkg_in_proc:  Two-element list [uplink_pkgs, downlink_pkgs] currently
+                      in transmission.
+        sg_upload_req: Pending uplink UploadRequests per social group.
+        sg_send_req:  Queued broadcast AppData per social group for downlink.
+        sg_alloc_param: Persistent ExternAllocParam per social group, carrying
+                        the time-value (tval) used to prioritise allocation.
+    """
     def __init__(self, name, pos, bs_type, serial):
         # Base station paremeters
         self.name = name
@@ -314,6 +345,12 @@ class BaseStationController:
         self.DeployAllocationReport(alloc_report)
 
     def ArrangeDownlinkNomaOptimal(self):
+        """Arrange downlink resources using MATLAB PlannerV1 optimal solver.
+
+        Calls MATLAB asynchronously with a 60 s timeout.  On failure the
+        allocation is skipped and the failure counter is incremented.  If the
+        counter reaches ALLOC_FAIL_LIMIT the simulation is terminated.
+        """
         # acquire resource and qos group configuration
         RES_CONF, QoS_GP_CONF = self.PreprocessDownlinkRequest()
 
@@ -362,8 +399,19 @@ class BaseStationController:
         # create packages.
         self.DeployAllocationReport(alloc_report)
 
-    # Organize informations for downlink allocation process
     def PreprocessDownlinkRequest(self):
+        """Collect radio resource and group configuration dicts for the allocator.
+
+        Returns a (RES_CONF, QoS_GP_CONF) pair where:
+          - RES_CONF holds the per-frame resource block dimensions and max power.
+          - QoS_GP_CONF is a nested list [[critical_groups], [general_groups]]
+            containing one dict per social group with CQI, power, pending bits,
+            member count, and eager-rate fields.
+
+        Social groups with no subscribers or no pending data are dropped.
+        Groups whose worst-case CQI is zero are also excluded since no data
+        could be delivered to all members.
+        """
         # Radio resource configuration
         RES_CONF = {
             "rbf_h": float(round(BS_TOTAL_BAND[self.type] / NET_RB_BW_UNIT * 0.9)),
@@ -655,14 +703,28 @@ class BaseStationController:
 
     # Helper functions
     def RequiredBandwidth(self, social_group: SocialGroup):
+        """Return the per-RB bandwidth (Hz) required by *social_group* on this BS.
+
+        UMA always uses BS_UMA_RB_BW (1 × NET_RB_BW_UNIT).
+        UMI uses a wider subcarrier spacing (2 ×) for CRITICAL traffic to
+        reduce latency, and a normal subcarrier spacing for GENERAL traffic.
+        """
         if (self.type == BaseStationType.UMA):
             return BS_UMA_RB_BW
         elif (self.type == BaseStationType.UMI):
             return BS_UMI_RB_BW_QoS[social_group.qos]
 
 
-# The Central controller of the base station network
 class NetworkCoreController:
+    """Backhaul controller linking UMI small cells to the UMA macro network.
+
+    Handles two propagation paths:
+      - UMI → UMA: CRITICAL data received by a UMI is forwarded to the
+        closest UMA.  If NET_QoS_RE_CLS is enabled the data is reclassified
+        as GENERAL QoS so it can benefit from UMA broadcast range.
+      - UMA → UMA: GENERAL data received by one UMA is propagated to all
+        other UMAs so that all vehicles in the coverage area can receive it.
+    """
     def __init__(self):
         self.name = "core"
         self.umi_approx_uma = {}
