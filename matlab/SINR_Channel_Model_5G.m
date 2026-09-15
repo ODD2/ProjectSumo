@@ -147,7 +147,7 @@ if(UMA_notUMI_Model)
     %SINR_model selection distance
     %fc is in GHZ, so c = 3.0 * 10^8
     c = 0.3; %3.0 * 10^8;
-    d_bp_pl = 4*h_BS.*h_MS.*fc/c; %20/3 = 2.0 Ghz / 3.0 * 10^8, footnote 2 in winner+ SINR_model, Table 4.1, see TR 38.901 table 7.4.1.-1 note 1
+    d_bp_pl = 4*h_BS.*h_MS.*fc/c; %footnote 2 in winner+ SINR_model, Table 4.1, see TR 38.901 table 7.4.1.-1 note 1
     
     D3D_dist = sqrt(D2D_dist.^2 + (MS_t - BS_t)^2); %Since we are outside, always, we consider D2D_dist = D2D_dist_out
     [Prob_LOS_sig] = PrLOS(D2D_dist,MS_t,UMA_notUMI_Model);
@@ -163,7 +163,7 @@ else
     %SINR_model selection distance
     %fc is in GsHZ, so c = 3.0 * 10^8
     c = 0.3; %3.0 * 10^8;    
-    d_bp_pl = 4*h_BS.*h_MS.*fc/c; %20/3 = 2.0 Ghz / 3.0 * 10^8, footnote 2 in winner+ SINR_model, Table 4.1, see TR 38.901 table 7.4.1.-1 note 1
+    d_bp_pl = 4*h_BS.*h_MS.*fc/c; %footnote 2 in winner+ SINR_model, Table 4.1, see TR 38.901 table 7.4.1.-1 note 1
 
     D3D_dist = sqrt(D2D_dist.^2 + (MS_t - BS_t).^2); %Since we are outside, always, we consider D2D_dist = D2D_dist_out
     [Prob_LOS_sig] = PrLOS(D2D_dist,MS_t,UMA_notUMI_Model);

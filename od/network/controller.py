@@ -3,8 +3,10 @@ od/network/controller.py - Base station resource scheduling and propagation.
 
 BaseStationController manages one 5G cell.  Each network step it:
   1. Arranges uplink resource blocks for pending vehicle upload requests (OMA).
-  2. Arranges downlink resource blocks for queued broadcast app data
-     (OMA, NOMA_APR, or NOMA_OPT via MATLAB PlannerV1).
+  2. Arranges downlink resource blocks for queued broadcast app data:
+     NOMA_APR uses the fast approximation allocator, while OMA and NOMA_OPT
+     are both solved via MATLAB PlannerV1 (OMA constrains the solver to
+     orthogonal power allocation).
   3. Per timeslot: advances package transmission state and triggers delivery
      callbacks when packages finish transmitting.
 
@@ -265,7 +267,8 @@ class BaseStationController:
                         )
                         req_rbsize_pairs.append((req, rbsize))
 
-                    # sort with resource block size (the larger size the higher priority)
+                    # sort by starvation time first (longest-waiting request first), then by
+                    # RB count needed (requests needing fewer RBs served first as tiebreaker)
                     req_rbsize_pairs.sort(
                         key=(
                             lambda req_rbsize_pair: (
@@ -345,11 +348,13 @@ class BaseStationController:
         self.DeployAllocationReport(alloc_report)
 
     def ArrangeDownlinkNomaOptimal(self):
-        """Arrange downlink resources using MATLAB PlannerV1 optimal solver.
+        """Arrange downlink resources using MATLAB PlannerV1.
 
-        Calls MATLAB asynchronously with a 60 s timeout.  On failure the
-        allocation is skipped and the failure counter is incremented.  If the
-        counter reaches ALLOC_FAIL_LIMIT the simulation is terminated.
+        Also used for OMA (PreprocessDownlinkRequest constrains group power
+        so PlannerV1 falls back to orthogonal allocation).  Calls MATLAB
+        asynchronously with a 60 s timeout; on failure the allocation is
+        skipped and the failure counter is incremented, terminating the
+        simulation once it reaches ALLOC_FAIL_LIMIT.
         """
         # acquire resource and qos group configuration
         RES_CONF, QoS_GP_CONF = self.PreprocessDownlinkRequest()
@@ -460,14 +465,12 @@ class BaseStationController:
                     # clear all broadcast appdatas of this social group
                     # cause there's no receiver
                     self.sg_send_req[sg].clear()
-                    # reset time value in ExterAllocParam for the next allocation process
                     continue
 
-                # find the lowest cqi in the social group subscribers
+                # find the subscriber with the lowest cqi (bottleneck for broadcast)
                 list_net_status = GV.NET_STATUS_CACHE.GetMultiNetStatus([
                     (veh, self, sg) for veh in self.sg_sub_vehs[sg]
                 ])
-                # find the minimum cqi among all members
                 netstatus = min(list_net_status, key=lambda x: x.max_cqi)
                 #  the minimum cqi is zero! this social group is unable to serve!
                 #  or else some vehicle will not receive data.

@@ -71,7 +71,7 @@ class StatisticRecorder:
         self.nft_traffic = {}
     # ============= RECORD UTILITIES ==============
 
-    # record the amount of vehicles in the system throughout the whole simulation
+    # accumulate the total count of vehicles that have joined over the whole simulation
     def VehiclesJoin(self, veh_num):
         self.sys_veh_num += veh_num
 
@@ -85,7 +85,7 @@ class StatisticRecorder:
         if(header.id not in self.raw_sg_header[sg]):
             self.raw_sg_header[sg][header.id] = AppdataStatistic(header)
 
-    # call by vehicle while createing new data.
+    # call by vehicle while creating new data.
     def VehicleCreateAppdata(self, sg, header):
         record = self.GetAppdataRecord(sg, header)
 
@@ -211,7 +211,7 @@ class StatisticRecorder:
     def RecordDuration(self):
         return self.interval[1] - self.interval[0]
 
-    # extract specific network traffic from self.sg_headers
+    # extract specific network traffic from self.sg_header
     def ExtractNetworkTraffic(self, nft, fresh=False):
         if(fresh or not nft in self.nft_traffic):
             traffic = {}
@@ -360,24 +360,21 @@ class StatisticRecorder:
             for nft in [NetFlowType.CRITICAL, NetFlowType.GENERAL]:
                 total_count += sum_bst_thrput[nft][bst]["count"]
 
-            # prevent deviding 0
+            # prevent dividing by 0
             total_count = max(total_count, 1)
 
             # create report
             for nft in NetFlowType:
                 rep_bst_sg_rate[bst.name][nft.name] = sum_bst_thrput[nft][bst]["count"] / total_count
 
-        # end to end time
         rep_e2e_time = {
             x.name: sum_e2e_time[x]
             for x in NetFlowType
         }
-        # end to bs time
         rep_e2b_time = {
             x.name: sum_e2b_time[x]
             for x in NetFlowType
         }
-        # wait time
         rep_wait_time = {
             x.name: sum_wait_time[x]
             for x in NetFlowType
@@ -386,24 +383,20 @@ class StatisticRecorder:
             x.name: sum_tx_time[x]
             for x in NetFlowType
         }
-        # bs wait time
         rep_bs_wait_time = {
             x.name: sum_bs_wait_time[x]
             for x in NetFlowType
         }
-        # transmit time
         rep_bs_tx_time = {
             x.name: sum_bs_tx_time[x]
             for x in NetFlowType
         }
-        # timeout ratio
         rep_timeout_ratio = {
             x.name: sum_timeout_ratio[x]
             for x in NetFlowType
         }
 
-        # little's law variables
-        # . base station
+        # little's law variables (arrival rate, arrival size, departure rate) per vehicle and per base station
         rep_veh_arv_rate = {
             x.name: sum_veh_avg_arv_rate[x]
             for x in NetFlowType
@@ -461,7 +454,7 @@ class StatisticRecorder:
 
         return report
 
-    # print report function
+    # recursively print the (possibly nested) report dict, indenting by depth
     def PrintReport(self, report, depth):
         for key, value in report.items():
             text = "[{}]".format(str(key).upper())
@@ -544,7 +537,7 @@ class StatisticRecorder:
             record_max_trip_time = float('-inf')
             record_min_trip_time = float('inf')
             for serve_at in record.time_bs_serv:
-                # the data never complete tramission by this base station, ignore.
+                # the data never complete transmission by this base station, ignore.
                 if(serve_at < 0):
                     continue
                 serve_time = serve_at + NET_SECONDS_PER_STEP - record.at
@@ -683,7 +676,7 @@ class StatisticRecorder:
             for bs in GV.NET_STATION_CONTROLLER:
                 bs_total_tx_time = 0
 
-                # the data never complete tramission by this base station, ignore.
+                # the data never complete transmission by this base station, ignore.
                 if(record.time_bs_serv[bs] < 0):
                     continue
                 # sum up all the base station tx time
@@ -751,7 +744,7 @@ class StatisticRecorder:
                 # if(len(record.time_bs_txq[bs]) == 0):
                 #     continue
 
-                # the data never complete tramission by this base station, ignore.
+                # the data never complete transmission by this base station, ignore.
                 if(record.time_bs_serv[bs] < 0):
                     continue
 
@@ -823,7 +816,7 @@ class StatisticRecorder:
             for bs in GV.NET_STATION_CONTROLLER:
                 bs_total_tx_time = 0
 
-                # the data never complete tramission by this base station, ignore.
+                # the data never complete transmission by this base station, ignore.
                 if(record.time_bs_serv[bs] < 0):
                     continue
                 # sum up all the base station tx time
@@ -1167,7 +1160,7 @@ class StatisticRecorder:
             print("Skipping Preprocess...")
             return
 
-        # save the social groups generated during simulation
+        # snapshot all social groups (predefined + any created dynamically during simulation)
         self.social_group = [sg for sg in SocialGroup]
 
         # create empty dataset for social groups without data during simulation.
@@ -1200,7 +1193,7 @@ class StatisticRecorder:
                                 record.time_bs_txq[bs][-1][1] = record.time_bs_drop[bs]
                             elif(record.time_bs_serv[bs] >= 0):
                                 # if it's unset because it had been completely served
-                                # no dequeue time is not required, so is the enqueue time.
+                                # no dequeue time is required, so is the enqueue time.
                                 record.time_bs_txq[bs].pop()
                             else:
                                 # if it's unset because the simulation ended (not dropped also not served)
@@ -1217,7 +1210,7 @@ class StatisticRecorder:
                     if(record.time_veh_txq[-1][1] == -1):
                         if(record.time_veh_serv >= 0):
                             # if it's unset because it had been completely served
-                            # no dequeue time is required, so as the enqueue time.
+                            # no dequeue time is required, so is the enqueue time.
                             record.time_veh_txq.pop()
                         else:
                             # if it's unset because the simulation ended (not dropped/served)

@@ -157,7 +157,8 @@ def GET_BS_CQI_SINR_5G_FUTURE(vehicle, bs_ctrlr, qos: QoSLevel):
         A MATLAB background future whose result() call blocks until the
         channel model computation completes.
     """
-    # Vehicle's position
+    # Interference vectors, seeded with a dummy far-away entry (index 0) that
+    # the co-type interferer loop below appends real stations onto.
     Intf_dist = [5000]  # dummy base station for work around
     Intf_pwr_dBm = [BS_TRANS_PWR[bs_ctrlr.type]]
     Intf_h_BS = [BS_HEIGHT[bs_ctrlr.type]]

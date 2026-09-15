@@ -2,8 +2,10 @@ function [bler] = SNR_to_BLER(cqi, snr_bound)
 % SNR_to_BLER  Look up the achievable BLER for a given CQI and received SNR.
 %
 %   BLER = SNR_to_BLER(CQI, SNR_BOUND) walks the SNR-BLER curve for the
-%   specified CQI index and returns the BLER at the first table entry whose
-%   SNR does not exceed SNR_BOUND.  Returns 1.0 (worst case) if no such entry.
+%   specified CQI index (from the highest SNR entry downward) and returns
+%   the BLER at the first table entry whose SNR does not exceed SNR_BOUND.
+%   If no entry qualifies, returns the BLER of the lowest-SNR table entry
+%   (typically close to 1.0, the worst case).
 %
 %   Inputs:
 %     cqi       - CQI index (1–15).

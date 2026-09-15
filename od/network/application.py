@@ -46,9 +46,7 @@ class Application:
         self.sg_data_inbox = {}
         self.owner = owner
 
-    # function called by application owner
-    # executes DataIntact() if the whole data became "intact"
-    # after receiving this appdata segment.
+    # Called by the owner to feed in one received appdata fragment.
     def RecvData(self, social_group: SocialGroup, appdata: AppData):
         # receive the first data of the social group
         if (social_group not in self.sg_data_inbox):
@@ -133,7 +131,7 @@ class VehicleApplication(Application):
         super().__init__(vehicle)
         # The social groups vehicles are interest in.
         self.veh_social_groups = vehicle.social_groups
-        # The last time when this vehicle recorder generates upload request
+        # Fractional accumulator of pending data units awaiting spawn, per group.
         self.data_stack = {sg: 0 for sg in self.veh_social_groups}
         # The social group upload data list
         self.sg_data_queue = {sg: [] for sg in self.veh_social_groups}
@@ -148,7 +146,6 @@ class VehicleApplication(Application):
         # if the appdata was sent by this application, don't receive it.
         if(appdata.header.owner == self.owner):
             return
-        # if the appdata became intact
         Application.RecvData(self, social_group, appdata)
 
     def DataIntact(self, social_group: SocialGroup, appdata: AppData):

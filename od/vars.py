@@ -4,7 +4,7 @@ od/vars.py - Global simulation state registry.
 All simulation-wide singleton objects (network controllers, caches, loggers,
 SUMO info, statistics recorder, etc.) live here as module-level variables.
 They are initialised by InitializeSimulationVariables() at the start of each
-run and torn down by TerminateSimulationVariables() at the end.
+run; TerminateSimulationVariables() flushes and closes the log files at the end.
 
 Using a dedicated globals module avoids circular imports and gives every
 submodule a single, consistent import path: ``import od.vars as GV``.
@@ -41,7 +41,7 @@ NET_STATION_CONTROLLER = None
 NET_RES_ALLOC_TYPE = None
 # - qos social group reclass selector.
 NET_QoS_RE_CLS = None
-# - applcation social group random request modifier.(scale by emergency events)
+# - application social group random request modifier.(scale by emergency events)
 NET_QoS_RND_REQ_MOD = None
 
 
@@ -101,7 +101,7 @@ def InitializeSimulationVariables(interest_config: omi.InterestConfig):
     # Directories
     datadir = oec.ROOT_DIR + interest_config.folder()
 
-    # Consistant random seed for consistant random number generator
+    # Seed RNG for reproducible runs
     random.seed(interest_config.rng_seed)
 
     # Network

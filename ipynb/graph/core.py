@@ -9,7 +9,6 @@ import random
 import numpy as np
 from numpy import random
 # ============== Enter Project Directory ================
-# enter project directory
 while(not os.getcwd() == "/"):
     if(".gitignore" in os.listdir()):
         break

@@ -17,8 +17,10 @@ Two allocator implementations are provided:
         1. CheckValidSymetricGeo – pair an outer group onto an existing spare
            inner RB using symmetric geometry.
         2. CheckValidSpareInner  – allocate a fresh inner RB for a group.
-        3. CheckValidSpareOuter  – build an asymmetric hybrid RB by pairing
-           two inner RBs and allocating the outer group onto the weaker one.
+        3. CheckValidSpareOuter  – attach an outer group to an existing spare
+           hybrid RB if one is open, otherwise pair two spare inner RBs into a
+           new hybrid RB (capped by the weaker/lower-power RB of the pair)
+           and attach the outer group to it.
 
 ExternAllocParam holds the persistent time-value (tval) that accumulates
 across network steps to encode each group's urgency for prioritisation.
@@ -170,7 +172,7 @@ class ResourceAllocatorNomaApprox:
 
         # remove target RB from spare inner resource block list, it's no longer a spare RB.
         self.spare_inner_rb[rbf_h][rbf_w] = valid_spare_inner_rb[1:] + defect_spare_inner_rb
-        # add target RB to solid inner resource block list.
+        # add target RB to solid symmetric (normal) resource block list.
         rb_cqi = GE.SelectCQI_BLER10P(
             10 * log10(target_rb.rem_pwr_mW * gp_pwr_conf["max_sinr_noise_reciprocal"])
         )
@@ -223,7 +225,7 @@ class ResourceAllocatorNomaApprox:
             self.spare_inner_rb[rbf_w][rbf_h].sort(key=lambda x: x.rem_pwr_mW, reverse=True)
             # fetch the required inner RB
             inner_rbs = self.spare_inner_rb[rbf_w][rbf_h][:2]
-            # calculate maximum valid power
+            # outer's usable power is capped by the weaker (lower remaining-power) of the pair
             valid_pwr_mW = min([x.rem_pwr_mW for x in inner_rbs])
             # no valid power in current condition, end procedure.
             if(valid_pwr_mW < gp_pwr_conf["min_sinr_req_pwr_mW"]):
@@ -315,7 +317,7 @@ class ResourceAllocatorNomaApprox:
         for gp_confs in self.QoS_GP_CONF:
             if(len(gp_confs) == 0):
                 continue
-            # sort group configs according to its eager rate, higer rate indicates higher priority.
+            # sort by eager_rate weighted by max SINR; higher combined score = higher priority.
             sort_gp_confs = sorted(
                 gp_confs,
                 # key=lambda x: x["eager_rate"] * (pow(10, x["sinr_max"] / 10) / (pow(10, x["pwr_req_dBm"] / 10))),
@@ -395,7 +397,7 @@ class ResourceAllocatorNomaApprox:
             pair_rbs.sort(key=lambda x: x.owner["gid"])
             for ofs_ts, rb in enumerate(pair_rbs):
                 all_2_1_rbs[ofs_ts].append(rb)
-        # add 1x2 geo resource blocks into report
+        # add 2x1 geo resource blocks into report
         for ofs_ts, rbs in enumerate(all_2_1_rbs):
             for rb in rbs:
                 # record the resource assignment
@@ -429,9 +431,6 @@ class ResourceAllocatorOMA:
     Each call to Allocate() reserves the requested bandwidth and returns the
     offset timeslot, or -1 if the frame is full.
     """
-    # like a 2d rectangle:
-    # height - the total bandwidth available
-    # width - the total timeslots
     def __init__(self, max_bandwidth, max_timeslots):
         if(NET_TS_PER_NET_STEP != 2):
             msg = "Error!! This allocator only works on 2 timeslots per network step condition."
@@ -444,8 +443,6 @@ class ResourceAllocatorOMA:
             max_bandwidth for i in range(self.max_timeslots)
         ]
 
-    # returns the offset timeslots of this resource block
-    # returns negative value indicates unable to allocate
     def Allocate(self, bandwidth, timeslots):
         offset_timeslot = -1
         if(bandwidth == NET_RB_BW_UNIT * 1 and timeslots == 2):

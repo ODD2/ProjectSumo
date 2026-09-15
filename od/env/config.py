@@ -28,7 +28,7 @@ DEBUG_MSG_FLAGS = (
     # DebugMsgType.SUMO_VEH_INFO
 )
 # Sumo Simulation Settings
-# . simulation sumo type
+# . whether to launch sumo-gui instead of headless sumo
 SUMO_SIM_GUI = False
 # . simulation scaler
 SUMO_SIM_TIME_SCALER = 1
@@ -141,7 +141,7 @@ EVENT_CONFIGS = [
 EVENT_MAX_SECONDS = max(map(lambda x: (x.dur_sec + x.ofs_sec), EVENT_CONFIGS))
 
 # Timing Settings
-# . total sumo simulation seconds (network warmup + event + inspect duration.)
+# . total sumo simulation seconds (network warmup + event + request timeout duration.)
 SUMO_SIM_SECONDS = (
     SUMO_NET_WARMUP_SECONDS +
     EVENT_MAX_SECONDS +

@@ -2,9 +2,10 @@
 multi.py - Parallel simulation manager.
 
 Generates a grid of InterestConfig scenarios (allocator types, RSU modes,
-QoS flags, traffic densities, RNG seeds) and schedules them as separate
-OS processes.  A weighted memory model limits the number of concurrent
-processes so that total RAM usage stays within a configurable budget.
+QoS flags, traffic densities, RNG seeds, and dynamic social-group
+behaviour/config) and schedules them as separate OS processes.  A weighted
+memory model limits the number of concurrent processes so that total RAM
+usage stays within a configurable budget.
 
 Usage:
     python multi.py
@@ -108,15 +109,17 @@ def ParallelSimulationManager():
     """
     global VALID_MEMORY, LIMIT, WEIGHT_INTCONFS
     # begin memory monitor for accurate memory estimation
+    # semaphore a worker releases when its simulation finishes
     s = mp.Semaphore(0)
     WEIGHT_INTCONFS.sort(key=lambda x: x.weight, reverse=True)
     weight_process_list = []
     with open("scheme_fail_report.txt", "w") as scheme_fail_report:
         while True:
             # start simulations to drain valid memory space.
+            # direction 0 takes the heaviest remaining config (front of the
+            # sorted list), -1 the lightest (back), to fill leftover budget.
             for direction in [0, -1]:
                 while (len(WEIGHT_INTCONFS) > 0 and VALID_MEMORY > WEIGHT_INTCONFS[direction].weight):
-                    # arrange weighted interest configs to let heavier ones to have higher precedence.
                     weight_process = WeightProcess(
                         WEIGHT_INTCONFS[direction],
                         mp.Process(
@@ -143,14 +146,14 @@ def ParallelSimulationManager():
             remain_weight_process_list = []
             for wp in weight_process_list:
                 if (not wp.process.is_alive()):
-                    # if process is not alive, meaning it has ended, do result check.
+                    # process ended: log it as failed if no report.pickle was produced.
                     if (not wp.CheckResult()):
                         # WEIGHT_INTCONFS.append(wp.weight_conf)
                         time_text = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
                         scheme_fail_report.write("[{}]{}\n".format(time_text, wp))
-                        # release resource limit
+                    # reclaim memory weight regardless of success/failure
                     VALID_MEMORY += wp.weight_conf.weight
-                    # join process to prevent existance of zombie process
+                    # join to prevent a zombie process
                     wp.process.join()
                 else:
                     remain_weight_process_list.append(wp)
@@ -163,9 +166,10 @@ def ParallelSimulationManager():
 def SimulationSettings(fn):
     """Decorator that expands a factory function over the full scenario grid.
 
-    Iterates over all combinations of resource-allocator type, RSU mode,
-    QoS reclassification flag, traffic scale, and random seed, calling *fn*
-    once for each combination and collecting the results in a list.
+    Runs two grids and concatenates the results: one sweeping allocator type,
+    RSU mode, QoS reclassification flag, traffic scale and seed (with social
+    group settings fixed); another sweeping social-group behaviour and config
+    (with allocator/RSU/traffic fixed).  Calls *fn* once per combination.
     """
     def wrapper(**args):
         result = []

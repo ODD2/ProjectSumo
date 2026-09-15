@@ -109,11 +109,11 @@ class SocialGroupMeta(type):
                 )
                 dct[key] = sg_attrs[-1]
                 gserial += 1
-        # __sg__attrs__ for iterability
+        # __sg_attrs__ for iterability
         dct["__sg_attrs__"] = sg_attrs
         # __gserial__ for unique gid
         dct["__gserial__"] = gserial
-        # __cname__ for SocailGroupAttr initialization
+        # __cname__ for SocialGroupAttr initialization
         dct["__cname__"] = cname
 
         return super(SocialGroupMeta, cls).__new__(cls, name, bases, dct)
@@ -125,7 +125,7 @@ class SocialGroupMeta(type):
             name:  Attribute name for the new group (e.g. "DYN_SG_0").
             value: SocialGroupConfig describing the new group's properties.
         """
-        # append to __sg__attrs__ for iterability.
+        # append to __sg_attrs__ for iterability.
         cls.__sg_attrs__.append(
             SocialGroupAttr(
                 cls.__cname__,

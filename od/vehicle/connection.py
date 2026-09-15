@@ -55,7 +55,6 @@ class ConnectionRecorder:
             self.state_color = (0, 0, 0, 255)
             self.name = "con_{}_{}".format(s1.name, s2.name)
             GV.TRACI_LOCK.acquire()
-            # # Create line
             traci.polygon.add(self.name, [(0, 0), (0, 0)], (0, 0, 0, 255), False,
                               "Line", NetObjLayer.CON_LINE, 0.1)
             GV.TRACI_LOCK.release()
@@ -84,7 +83,6 @@ class ConnectionRecorder:
 
     def Clean(self):
         if(SUMO_SIM_GUI):
-            # pass
             GV.TRACI_LOCK.acquire()
             traci.polygon.remove(self.name)
             GV.TRACI_LOCK.release()

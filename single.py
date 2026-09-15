@@ -9,7 +9,7 @@ as a subprocess target.
 Simulation loop structure (per SUMO step):
   SUMO step (0.1 s)
     └─ Network steps  (1 ms each, NET_STEPS_PER_SUMO_STEP iterations)
-         └─ Timeslots (0.5 ms each, NET_TS_PER_NET_STEP iterations)
+         └─ Timeslots (0.5 ms each, NET_TS_PER_NET_STEP + 1 iterations)
 """
 from time import sleep
 import od.engine as GE
@@ -142,7 +142,7 @@ def main(interest_config):
     # - start traci
     InitTraci(interest_config)
 
-    # - skipping until desire vehicle network condition.
+    # - skip until desired vehicle network condition.
     for _ in range(SUMO_SKIP_STEPS):
         traci.simulationStep()
     # - initialize matlab context for simulation
@@ -170,11 +170,11 @@ def main(interest_config):
     vehicle_recorders = {}
     # - run
     for _ in range(SUMO_SIM_STEPS):
-        # fetch the newest sumo simulation informations
+        # fetch the newest sumo simulation information
         UpdateSS([GV.SUMO_SIM_INFO])
         UpdateSS(GV.SUMO_SIM_EVENTS)
 
-        # remove ghost(non-exist) vehicles
+        # remove ghost (non-existent) vehicles
         for ghost_vid in GV.SUMO_SIM_INFO.ghost_veh_ids:
             GV.DEBUG.Log(
                 "[{}]: left the map.",

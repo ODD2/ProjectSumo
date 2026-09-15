@@ -16,7 +16,7 @@ function [out] = GetThroughputPerRB(UsedCQI, SymbolPerSlot)
 %     UsedCQI       - CQI index (0-15, scalar or array).
 %                     CQI 0 is treated as unusable and returns 0 bits.
 %     SymbolPerSlot - Number of OFDM symbols per slot (typically 14 for
-%                     normal cyclic prefix, or 7 for extended CP).
+%                     normal cyclic prefix, or 12 for extended CP).
 %
 %   Output:
 %     out - Number of bits per resource block (scalar or array matching

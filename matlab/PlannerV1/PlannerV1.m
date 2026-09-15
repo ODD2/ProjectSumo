@@ -297,7 +297,7 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
     for gp_conf = SOL_GP_CONF
         gname = "g"+gp_conf.gid;
         GID_REQ_RES.(gname) = struct();
-%       collect oma layer resource blocks
+%       collect allocated resource blocks from both OMA and NOMA layers
         for ts = 0: (gp_conf.x_max-1)
             ts_name  = "t"+ts;
             GID_REQ_RES.(gname).(ts_name) = struct();
@@ -338,7 +338,7 @@ function [GID_REQ_RES,ExitFlag] = PlannerV1(SIM_CONF,QoS_GP_CONF)
         else
             ln = "noma";
         end
-%       update group status according to optimized allocation in NOMA layer
+%       update group status according to the optimized allocation in this layer (ln)
         for idx = alloc_gidx
             new_cqi_list = [];
             new_cqi_req_rb_list = [];

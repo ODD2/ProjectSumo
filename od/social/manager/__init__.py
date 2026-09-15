@@ -9,9 +9,8 @@ social groups at simulation start:
       randomly assigned to one of them.
 
   MaxMemberSGM (MAX_N_MEMBER behaviour)
-      Creates a new dynamic group every dyn_sg_conf vehicles.  Each new group
-      starts with three pre-allocated groups and a new one is added whenever
-      the current groups would exceed the per-group member limit.
+      Starts with three pre-allocated groups; a new one is created every
+      dyn_sg_conf vehicles so no group exceeds that member limit.
 
 Both managers also assign every vehicle to the static CRASH and RCWS groups.
 CreateSocialGroupManager() is the factory function used by od/vars.py.

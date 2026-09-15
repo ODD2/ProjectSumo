@@ -28,10 +28,11 @@ function [ CQI_out,  SINR_rx_dB_10] = SINR_Channel_Model_Multi_Var_BS( D2D_dist,
 %     CQI_out       - CQI index (minimum 1, clamped via max(...,1)).
 %     SINR_rx_dB_10 - Received SINR (dB).
 %
-%   Limitations:  DS_Desired is not per BS (we assume flat interference from
-%   neighboring BS, i.e. DS = 0 as they are assumed to always be transmitting;
+%   Limitations:  DS_Desired is not modeled per interfering BS; interference
+%   is assumed flat (DS = 0), since neighboring BSs are assumed to always be
+%   transmitting.
 
-%Per T% 38.901, table 7.7.2-3 (normalized) (Normalized Delay, power in dB)
+%Per TR 38.901, table 7.7.2-3 (normalized) (Normalized Delay, power in dB)
 TDL_C = [0     , -4.4 ; ...
          0.2099, -1.2 ; ...
          0.2219, -3.5 ; ...

@@ -17,8 +17,9 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
 %                 currently-allocating groups.
 %     Inequality (≤ 1 per RB fraction) - Each physical RB fraction may be
 %                 occupied by at most one OMA allocation and one NOMA allocation.
-%     Inequality (power budget) - Total allocated power across all RB fractions
-%                 must not exceed max_pwr_mw.
+%     Inequality (power budget) - For each individual RB fraction, the power
+%                 drawn by any OMA/NOMA allocation occupying it must not
+%                 exceed max_pwr_mw.
 %     Inequality (per-group overlap) - A group may not reuse the same RB
 %                 fractions in both OMA and NOMA layers.
 %     Inequality (redundancy) - Total allocated bits must not exceed
@@ -141,7 +142,7 @@ function [x,fval,exitflag,output] = Optimize(SIM_CONF,OPT_GP_CONF,OMA_LAYER)
         BEQ_ALLOC_OMA_REQ_RB = zeros(oma_cqi_req_rb_alloc_grp_num,1);
         cpos_alloc_oma_req_rb = 1;
         for gp_conf = OPT_GP_CONF(alloc_grp_logi)
-    %       fix group oma layer - required RB allocation for specific cqi constraint
+    %       alloc group oma layer - required RB allocation for specific cqi constraint
             if(gp_conf.oma_cqi_num > 0)
                 for cqi_i = 1: gp_conf.oma_cqi_num
                     AEQ_ALLOC_OMA_REQ_RB(cpos_alloc_oma_req_rb, ...

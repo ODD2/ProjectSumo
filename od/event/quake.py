@@ -20,7 +20,7 @@ class EarthQuake(SumoSimEvent):
     """
     def __init__(self, config: SumoSimEventConf):
         super().__init__(config)
-        # the modifier of ciritical social group net requests.
+        # the modifier of critical social group net requests.
         self.sg_crit_net_req_mod = 5
 
     def Begin(self):
