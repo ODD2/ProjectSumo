@@ -9,7 +9,7 @@ processes so that total RAM usage stays within a configurable budget.
 Usage:
     python multi.py
 
-Results are written to data/REGNA/<scenario_path>/report.pickle.
+Results are written to data/<scenario_path>/report.pickle.
 Failed scenarios are recorded in scheme_fail_report.txt.
 """
 from od.misc.interest import InterestConfig
@@ -40,6 +40,7 @@ class WeightInterestConfig:
     allocator type.  Heavier configurations are scheduled first so that
     lighter ones can fill the remaining budget at the end.
     """
+
     def __init__(self, interest_config):
         self.interest_config = interest_config
         self.weight = (4 / 1.4 * interest_config.traffic_scale)
@@ -55,6 +56,7 @@ class WeightProcess:
     Provides helpers to start the process, look up its PID, and verify
     whether the simulation produced a result file after it exits.
     """
+
     def __init__(self, weight_conf, process: mp.Process):
         self.weight_conf = weight_conf
         self.process = process
@@ -113,7 +115,7 @@ def ParallelSimulationManager():
         while True:
             # start simulations to drain valid memory space.
             for direction in [0, -1]:
-                while(len(WEIGHT_INTCONFS) > 0 and VALID_MEMORY > WEIGHT_INTCONFS[direction].weight):
+                while (len(WEIGHT_INTCONFS) > 0 and VALID_MEMORY > WEIGHT_INTCONFS[direction].weight):
                     # arrange weighted interest configs to let heavier ones to have higher precedence.
                     weight_process = WeightProcess(
                         WEIGHT_INTCONFS[direction],
@@ -126,23 +128,23 @@ def ParallelSimulationManager():
                             )
                         )
                     )
-                    if(not RUN_MISS_ONLY or not weight_process.CheckResult()):
+                    if (not RUN_MISS_ONLY or not weight_process.CheckResult()):
                         weight_process.Start()
                         weight_process_list.append(weight_process)
                         VALID_MEMORY -= WEIGHT_INTCONFS[direction].weight
                     WEIGHT_INTCONFS = WEIGHT_INTCONFS[1:] if direction == 0 else WEIGHT_INTCONFS[:-1]
 
             # if there're no remaining interest configs, begin to wait all process to end.
-            if(len(WEIGHT_INTCONFS) == 0):
+            if (len(WEIGHT_INTCONFS) == 0):
                 break
             # wait until at least one simulation ends
             s.acquire()
             # remove terminated simulations
             remain_weight_process_list = []
             for wp in weight_process_list:
-                if(not wp.process.is_alive()):
+                if (not wp.process.is_alive()):
                     # if process is not alive, meaning it has ended, do result check.
-                    if(not wp.CheckResult()):
+                    if (not wp.CheckResult()):
                         # WEIGHT_INTCONFS.append(wp.weight_conf)
                         time_text = datetime.now().strftime("%Y-%m-%d %H-%M-%S")
                         scheme_fail_report.write("[{}]{}\n".format(time_text, wp))
@@ -209,7 +211,7 @@ def SimulationSettings(fn):
     return wrapper
 
 
-@ SimulationSettings
+@SimulationSettings
 def CreateWeightIntConfs(**kargs):
     return WeightInterestConfig(
         InterestConfig(

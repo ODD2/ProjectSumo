@@ -70,7 +70,7 @@ The simulation operates across three interleaved time scales:
 
 | Dependency | Purpose |
 |---|---|
-| Python 3.x | Core simulation logic |
+| Python 3.8 | Core simulation logic |
 | [Eclipse SUMO](https://eclipse.dev/sumo/) | Road traffic simulation |
 | MATLAB | 5G channel modeling and optimization |
 | MATLAB Engine API for Python | Python–MATLAB bridge |
@@ -178,12 +178,14 @@ The `EarthQuake` event increases the critical group's network request rate by 5x
 
 ## Output
 
-Simulation results are saved to `data/report.pickle` and include per-packet statistics:
+Each scenario run writes to `data/<scenario_path>/report.pickle`, where `<scenario_path>` is derived from the `InterestConfig` (allocator type, RSU mode, QoS flag, traffic scale, seed, etc.). Reports include per-packet statistics:
 
 - Application data delivery rate and latency
 - Queue wait times and transmission times per base station
 - Timeout and drop counts
 - Resource allocation failure rates
+
+Scenarios that fail to produce a report are logged to `scheme_fail_report.txt` by `multi.py`.
 
 Use the Jupyter notebooks in `ipynb/graph/` to visualize results.
 
